@@ -72,14 +72,34 @@ elysia-ecom/
    bun run dev
    ```
 
-## Environment Variables
+## Database Setup in .env
 
 Create a `.env` file in the root directory with the following variables:
 
 ```
-DATABASE_URL=your_database_url
-JWT_SECRET=your_jwt_secret
 PORT=3000
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=postgres
+DB_PASSWORD=your_password
+DB_NAME=your_database_name
+JWT_SECRET=change_this_to_a_strong_secret
+```
+The application will automatically create database tables when it starts up in development mode. In production, it will run pending migrations. The database connection automatically pulls configuration from your .env file:
+
+- Tables are automatically synchronized in development (when `NODE_ENV=development`)
+- Migrations are run in production or non-development environments
+
+For manual migration management:
+ ```bash
+# Run migrations (for production environments)
+ bun run typeorm:run-migrations
+ ```
+## API Documentation
+
+The API is documented using Swagger UI, accessible at:
+```
+http://localhost:3000/swagger
 ```
 
 ## API Endpoints
@@ -152,13 +172,6 @@ All API endpoints (except public ones like product listings) require authenticat
 - **Logging**: Winston for comprehensive application logging
 - **Validation**: Zod for schema validation
 
-## API Documentation
-
-The API is documented using Swagger UI, accessible at:
-```
-http://localhost:3000/swagger
-```
-
 ## Development
 
 This project follows a modular architecture with clear separation of concerns:
@@ -187,14 +200,6 @@ We welcome contributions from the community! Here's how you can help:
 - Follow the existing code style and conventions
 - Keep commits atomic and well-described
 
-### Running Tests
-
-To run the test suite:
-
-```bash
-bun run test
-```
-
 ### Code Quality
 
 This project follows TypeScript and Elysia.js best practices:
@@ -204,37 +209,6 @@ This project follows TypeScript and Elysia.js best practices:
 - Write comprehensive unit tests for all business logic
 - Maintain clean, readable, and well-documented code
 - Use proper error handling and logging
-
-## Database Setup
-
-Make sure PostgreSQL is installed and running on your system. Create a `.env` file in the root directory with the following variables:
-
-```
-PORT=3000
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=postgres
-DB_PASSWORD=your_password
-DB_NAME=your_database_name
-JWT_SECRET=change_this_to_a_strong_secret
-```
-
-The application will automatically create database tables when it starts up in development mode. In production, it will run pending migrations. The database connection automatically pulls configuration from your .env file:
-
-- Tables are automatically synchronized in development (when `NODE_ENV=development`)
-- Migrations are run in production or non-development environments
-
-To start the application:
-```bash
-# Start the application (tables will be auto-created in development)
-bun run dev
-```
-
-For manual migration management:
-```bash
-# Run migrations (for production environments)
-bun run typeorm:run-migrations
-```
 
 ## 👨 Developed By
 
