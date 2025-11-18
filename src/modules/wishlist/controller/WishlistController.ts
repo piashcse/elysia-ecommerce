@@ -12,7 +12,7 @@ import { isAuthenticated } from '../../../utils/jwt';
 
 const wishlistService = new WishlistService();
 
-export const wishlistController = new Elysia({ prefix: '/wishlist' })
+export const wishlistController = new Elysia({ prefix: '/wishlist', tags: ['Wishlist'] })
   // Get user's wishlist
   .get(
     '/',
@@ -23,14 +23,17 @@ export const wishlistController = new Elysia({ prefix: '/wishlist' })
           set.status = 401;
           return errorResponse('Authentication required');
         }
-        
+
         const wishlist = await wishlistService.getWishlistForUser(jwt.sub);
-        
+
         return successResponse(wishlist, 'Wishlist retrieved successfully', 200);
       } catch (error: any) {
         set.status = error.statusCode || 500;
         return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
       }
+    },
+    {
+      detail: { tags: ['Wishlist'] }
     }
   )
   
@@ -58,7 +61,8 @@ export const wishlistController = new Elysia({ prefix: '/wishlist' })
     {
       body: t.Object({
         productId: t.String()
-      })
+      }),
+      detail: { tags: ['Wishlist'] }
     }
   )
   
@@ -87,10 +91,11 @@ export const wishlistController = new Elysia({ prefix: '/wishlist' })
     {
       params: t.Object({
         id: t.String()
-      })
+      }),
+      detail: { tags: ['Wishlist'] }
     }
   )
-  
+
   // Remove item from wishlist by product ID
   .delete(
     '/products/:id',
@@ -116,10 +121,11 @@ export const wishlistController = new Elysia({ prefix: '/wishlist' })
     {
       params: t.Object({
         id: t.String()
-      })
+      }),
+      detail: { tags: ['Wishlist'] }
     }
   )
-  
+
   // Check if product is in user's wishlist
   .get(
     '/products/:id',
@@ -145,10 +151,11 @@ export const wishlistController = new Elysia({ prefix: '/wishlist' })
     {
       params: t.Object({
         id: t.String()
-      })
+      }),
+      detail: { tags: ['Wishlist'] }
     }
   )
-  
+
   // Get wishlist count for user
   .get(
     '/count',
@@ -167,5 +174,8 @@ export const wishlistController = new Elysia({ prefix: '/wishlist' })
         set.status = error.statusCode || 500;
         return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
       }
+    },
+    {
+      detail: { tags: ['Wishlist'] }
     }
   );

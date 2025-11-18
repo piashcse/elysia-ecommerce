@@ -13,7 +13,7 @@ import { isAuthenticated, hasRole } from '../../../utils/jwt';
 
 const categoryService = new CategoryService();
 
-export const categoryController = new Elysia({ prefix: '/categories' })
+export const categoryController = new Elysia({ prefix: '/categories', tags: ['Category'] })
   // Create a new category (admin only)
   .post(
     '/',
@@ -41,10 +41,11 @@ export const categoryController = new Elysia({ prefix: '/categories' })
         description: t.Optional(t.String()),
         image: t.Optional(t.String()),
         isActive: t.Optional(t.Boolean()),
-      })
+      }),
+      detail: { tags: ['Category'] }
     }
   )
-  
+
   // Get all categories with filters and pagination
   .get(
     '/',
@@ -89,10 +90,11 @@ export const categoryController = new Elysia({ prefix: '/categories' })
         isActive: t.Optional(t.BooleanString()),
         page: t.Optional(t.String()),
         limit: t.Optional(t.String()),
-      })
+      }),
+      detail: { tags: ['Category'] }
     }
   )
-  
+
   // Get category by ID
   .get(
     '/:id',
@@ -118,10 +120,11 @@ export const categoryController = new Elysia({ prefix: '/categories' })
     {
       params: t.Object({
         id: t.String()
-      })
+      }),
+      detail: { tags: ['Category'] }
     }
   )
-  
+
   // Get category with its products
   .get(
     '/:id/products',
@@ -149,10 +152,11 @@ export const categoryController = new Elysia({ prefix: '/categories' })
       query: t.Object({
         page: t.Optional(t.String()),
         limit: t.Optional(t.String()),
-      })
+      }),
+      detail: { tags: ['Category'] }
     }
   )
-  
+
   // Update category by ID (admin only)
   .put(
     '/:id',
@@ -187,10 +191,11 @@ export const categoryController = new Elysia({ prefix: '/categories' })
         description: t.Optional(t.String()),
         image: t.Optional(t.String()),
         isActive: t.Optional(t.Boolean()),
-      })
+      }),
+      detail: { tags: ['Category'] }
     }
   )
-  
+
   // Delete category by ID (admin only)
   .delete(
     '/:id',
@@ -218,6 +223,7 @@ export const categoryController = new Elysia({ prefix: '/categories' })
     {
       params: t.Object({
         id: t.String()
-      })
+      }),
+      detail: { tags: ['Category'] }
     }
   );
