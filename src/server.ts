@@ -30,12 +30,12 @@ app.use(
             info: {
                 title: "Elysia E-commerce API",
                 version: "1.0.0",
-                description: "High-performance eCommerce backend built with Elysia.js and TypeORM."
-            },
-            contact: {
-                name: "Mehedi Hassan Piash",
-                email: "piash599@gmail.com",
-                url: "https://piashcse.github.io"
+                description: "High-performance eCommerce backend built with Elysia.js and TypeORM.",
+                contact: {
+                    name: "Mehedi Hassan Piash",
+                    email: "piash599@gmail.com",
+                    url: "https://piashcse.github.io"
+                }
             },
             servers: [
                 {
