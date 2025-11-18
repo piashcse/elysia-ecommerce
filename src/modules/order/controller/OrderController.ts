@@ -13,7 +13,7 @@ import { isAuthenticated, hasRole } from '../../../utils/jwt';
 
 const orderService = new OrderService();
 
-export const orderController = new Elysia({ prefix: '/orders' })
+export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] })
   // Create a new order
   .post(
     '/',
@@ -24,10 +24,10 @@ export const orderController = new Elysia({ prefix: '/orders' })
           set.status = 401;
           return errorResponse('Authentication required');
         }
-        
+
         const validatedData = validate(createOrderSchema, body);
         const order = await orderService.createOrder(jwt.sub, validatedData);
-        
+
         set.status = 201;
         return successResponse(order, 'Order created successfully', 201);
       } catch (error: any) {
@@ -62,7 +62,8 @@ export const orderController = new Elysia({ prefix: '/orders' })
           country: t.String()
         })),
         notes: t.Optional(t.String())
-      })
+      }),
+      detail: { tags: ['Order'] }
     }
   )
   
@@ -121,7 +122,8 @@ export const orderController = new Elysia({ prefix: '/orders' })
         dateFrom: t.Optional(t.String()),
         dateTo: t.Optional(t.String()),
         userId: t.Optional(t.String()),
-      })
+      }),
+      detail: { tags: ['Order'] }
     }
   )
   
@@ -161,10 +163,11 @@ export const orderController = new Elysia({ prefix: '/orders' })
     {
       params: t.Object({
         id: t.String()
-      })
+      }),
+      detail: { tags: ['Order'] }
     }
   )
-  
+
   // Update order (admin only)
   .put(
     '/:id',
@@ -195,7 +198,8 @@ export const orderController = new Elysia({ prefix: '/orders' })
       body: t.Object({
         status: t.Optional(t.String()),
         notes: t.Optional(t.String())
-      })
+      }),
+      detail: { tags: ['Order'] }
     }
   )
   
@@ -237,7 +241,8 @@ export const orderController = new Elysia({ prefix: '/orders' })
     {
       params: t.Object({
         id: t.String()
-      })
+      }),
+      detail: { tags: ['Order'] }
     }
   )
   
@@ -251,17 +256,20 @@ export const orderController = new Elysia({ prefix: '/orders' })
           set.status = 401;
           return errorResponse('Authentication required');
         }
-        
+
         // Check if user has admin role to view overall stats
         const isAdmin = jwt.role === 'admin';
         const userId = isAdmin ? undefined : jwt.sub;
-        
+
         const stats = await orderService.getOrderStats(userId);
-        
+
         return successResponse(stats, 'Order statistics retrieved successfully', 200);
       } catch (error: any) {
         set.status = error.statusCode || 500;
         return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
       }
+    },
+    {
+      detail: { tags: ['Order'] }
     }
   );

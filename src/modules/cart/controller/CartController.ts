@@ -14,7 +14,7 @@ import { isAuthenticated } from '../../../utils/jwt';
 
 const cartService = new CartService();
 
-export const cartController = new Elysia({ prefix: '/cart' })
+export const cartController = new Elysia({ prefix: '/cart', tags: ['Cart'] })
   // Get user's cart
   .get(
     '/',
@@ -25,18 +25,21 @@ export const cartController = new Elysia({ prefix: '/cart' })
           set.status = 401;
           return errorResponse('Authentication required');
         }
-        
+
         const cart = await cartService.getCartForUser(jwt.sub);
-        
+
         if (!cart) {
           return successResponse(null, 'Cart is empty');
         }
-        
+
         return successResponse(cart, 'Cart retrieved successfully', 200);
       } catch (error: any) {
         set.status = error.statusCode || 500;
         return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
       }
+    },
+    {
+      detail: { tags: ['Cart'] }
     }
   )
   
@@ -64,7 +67,8 @@ export const cartController = new Elysia({ prefix: '/cart' })
       body: t.Object({
         productId: t.String(),
         quantity: t.Number()
-      })
+      }),
+      detail: { tags: ['Cart'] }
     }
   )
   
@@ -97,7 +101,8 @@ export const cartController = new Elysia({ prefix: '/cart' })
       }),
       body: t.Object({
         quantity: t.Number()
-      })
+      }),
+      detail: { tags: ['Cart'] }
     }
   )
   
@@ -126,7 +131,8 @@ export const cartController = new Elysia({ prefix: '/cart' })
     {
       params: t.Object({
         id: t.String()
-      })
+      }),
+      detail: { tags: ['Cart'] }
     }
   )
   
@@ -140,19 +146,22 @@ export const cartController = new Elysia({ prefix: '/cart' })
           set.status = 401;
           return errorResponse('Authentication required');
         }
-        
+
         const cart = await cartService.getCartForUser(jwt.sub);
-        
+
         if (!cart) {
           return successResponse(null, 'Cart is already empty', 200);
         }
-        
+
         await cartService.clearCart(cart.id);
-        
+
         return successResponse(null, 'Cart cleared successfully', 200);
       } catch (error: any) {
         set.status = error.statusCode || 500;
         return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
       }
+    },
+    {
+      detail: { tags: ['Cart'] }
     }
   );

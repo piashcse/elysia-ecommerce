@@ -14,7 +14,7 @@ import { isAuthenticated, hasRole } from '../../../utils/jwt';
 
 const paymentService = new PaymentService();
 
-export const paymentController = new Elysia({ prefix: '/payments' })
+export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payment'] })
   // Create a new payment
   .post(
     '/',
@@ -25,10 +25,10 @@ export const paymentController = new Elysia({ prefix: '/payments' })
           set.status = 401;
           return errorResponse('Authentication required');
         }
-        
+
         const validatedData = validate(createPaymentSchema, body);
         const payment = await paymentService.createPayment(validatedData);
-        
+
         set.status = 201;
         return successResponse(payment, 'Payment created successfully', 201);
       } catch (error: any) {
@@ -42,7 +42,8 @@ export const paymentController = new Elysia({ prefix: '/payments' })
         method: t.String(),
         amount: t.Number(),
         metadata: t.Optional(t.Record(t.String(), t.Unknown()))
-      })
+      }),
+      detail: { tags: ['Payment'] }
     }
   )
   
@@ -78,7 +79,8 @@ export const paymentController = new Elysia({ prefix: '/payments' })
           cardHolderName: t.Optional(t.String()),
           paypalEmail: t.Optional(t.String())
         })
-      })
+      }),
+      detail: { tags: ['Payment'] }
     }
   )
   
@@ -141,7 +143,8 @@ export const paymentController = new Elysia({ prefix: '/payments' })
         dateTo: t.Optional(t.String()),
         orderId: t.Optional(t.String()),
         userId: t.Optional(t.String()),
-      })
+      }),
+      detail: { tags: ['Payment'] }
     }
   )
   
@@ -181,10 +184,11 @@ export const paymentController = new Elysia({ prefix: '/payments' })
     {
       params: t.Object({
         id: t.String()
-      })
+      }),
+      detail: { tags: ['Payment'] }
     }
   )
-  
+
   // Update payment (admin only)
   .put(
     '/:id',
@@ -216,7 +220,8 @@ export const paymentController = new Elysia({ prefix: '/payments' })
         status: t.String(),
         transactionId: t.Optional(t.String()),
         metadata: t.Optional(t.Record(t.String(), t.Unknown()))
-      })
+      }),
+      detail: { tags: ['Payment'] }
     }
   )
   
@@ -245,7 +250,8 @@ export const paymentController = new Elysia({ prefix: '/payments' })
     {
       params: t.Object({
         id: t.String()
-      })
+      }),
+      detail: { tags: ['Payment'] }
     }
   )
   
@@ -259,17 +265,20 @@ export const paymentController = new Elysia({ prefix: '/payments' })
           set.status = 401;
           return errorResponse('Authentication required');
         }
-        
+
         // Check if user has admin role to view overall stats
         const isAdmin = jwt.role === 'admin';
         const userId = isAdmin ? undefined : jwt.sub;
-        
+
         const stats = await paymentService.getPaymentStats(userId);
-        
+
         return successResponse(stats, 'Payment statistics retrieved successfully', 200);
       } catch (error: any) {
         set.status = error.statusCode || 500;
         return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
       }
+    },
+    {
+      detail: { tags: ['Payment'] }
     }
   );

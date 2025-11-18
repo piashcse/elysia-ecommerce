@@ -14,7 +14,7 @@ import { isAuthenticated, hasRole } from '../../../utils/jwt';
 
 const productService = new ProductService();
 
-export const productController = new Elysia({ prefix: '/products' })
+export const productController = new Elysia({ prefix: '/products', tags: ['Product'] })
   // Create a new product (admin only)
   .post(
     '/',
@@ -46,7 +46,8 @@ export const productController = new Elysia({ prefix: '/products' })
         isActive: t.Optional(t.Boolean()),
         attributes: t.Optional(t.Record(t.String(), t.Unknown())),
         categoryId: t.String()
-      })
+      }),
+      detail: { tags: ['Product'] }
     }
   )
   
@@ -107,7 +108,8 @@ export const productController = new Elysia({ prefix: '/products' })
         isActive: t.Optional(t.BooleanString()),
         page: t.Optional(t.String()),
         limit: t.Optional(t.String()),
-      })
+      }),
+      detail: { tags: ['Product'] }
     }
   )
   
@@ -136,10 +138,11 @@ export const productController = new Elysia({ prefix: '/products' })
     {
       params: t.Object({
         id: t.String()
-      })
+      }),
+      detail: { tags: ['Product'] }
     }
   )
-  
+
   // Update product by ID (admin only)
   .put(
     '/:id',
@@ -178,10 +181,11 @@ export const productController = new Elysia({ prefix: '/products' })
         isActive: t.Optional(t.Boolean()),
         attributes: t.Optional(t.Record(t.String(), t.Unknown())),
         categoryId: t.Optional(t.String())
-      })
+      }),
+      detail: { tags: ['Product'] }
     }
   )
-  
+
   // Delete product by ID (admin only)
   .delete(
     '/:id',
@@ -209,10 +213,11 @@ export const productController = new Elysia({ prefix: '/products' })
     {
       params: t.Object({
         id: t.String()
-      })
+      }),
+      detail: { tags: ['Product'] }
     }
   )
-  
+
   // Get products by category
   .get(
     '/category/:categoryId',
@@ -250,6 +255,7 @@ export const productController = new Elysia({ prefix: '/products' })
       query: t.Object({
         page: t.Optional(t.String()),
         limit: t.Optional(t.String()),
-      })
+      }),
+      detail: { tags: ['Product'] }
     }
   );
