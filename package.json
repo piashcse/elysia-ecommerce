@@ -1,0 +1,52 @@
+{
+  "name": "elysia-ecommerce",
+  "version": "1.0.0",
+  "description": "A modern e-commerce platform built with Elysia.js",
+  "main": "src/index.ts",
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "dev": "bun --watch run src/index.ts",
+    "test": "bun test",
+    "build": "bun build src/index.ts --outfile dist/app.js",
+    "typeorm": "typeorm",
+    "typeorm:run-migrations": "typeorm-ts-node-commonjs migration:run -d ormconfig.js",
+    "typeorm:generate-migration": "typeorm migration:create ./src/database/migrations/"
+  },
+  "keywords": [
+    "elysia",
+    "ecommerce",
+    "typescript",
+    "bun",
+    "api"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@elysiajs/cors": "^latest",
+    "@elysiajs/eden": "^latest",
+    "@elysiajs/jwt": "^latest",
+    "@elysiajs/openapi": "^1.4.11",
+    "@elysiajs/swagger": "^latest",
+    "bcryptjs": "^2.4.3",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1",
+    "dotenv": "^17.2.3",
+    "elysia": "^latest",
+    "pg": "^8.11.3",
+    "rate-limiter-flexible": "^4.0.1",
+    "reflect-metadata": "^0.2.1",
+    "typeorm": "^0.3.20",
+    "winston": "^3.11.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/dotenv": "^8.2.3",
+    "@types/node": "^latest",
+    "@types/pg": "^8.10.9",
+    "@types/validator": "^13.11.7",
+    "bun-types": "^latest",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  }
+}
