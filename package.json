@@ -22,6 +22,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@bogeychan/elysia-logger": "^0.1.10",
     "@elysiajs/cors": "^latest",
     "@elysiajs/eden": "^latest",
     "@elysiajs/jwt": "^latest",
@@ -36,7 +37,6 @@
     "rate-limiter-flexible": "^4.0.1",
     "reflect-metadata": "^0.2.1",
     "typeorm": "^0.3.20",
-    "winston": "^3.11.0",
     "zod": "^3.22.4"
   },
   "devDependencies": {

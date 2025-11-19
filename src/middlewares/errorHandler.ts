@@ -1,5 +1,4 @@
 import { Elysia } from 'elysia';
-import { logger } from './logging';
 import { errorResponse } from '../core/responses';
 import { AppError } from '../core/errors';
 
@@ -8,8 +7,8 @@ export const errorHandler = new Elysia({ name: 'errorHandler' })
     APP_ERROR: AppError,
   })
   .onError(({ code, error, set }) => {
-    // Log the error
-    logger.error('Application error occurred:', {
+    // Log the error using console.error since elysia-logger may not provide logger in onError hook
+    console.error('Application error occurred:', {
       code,
       message: error.message,
       stack: error.stack,

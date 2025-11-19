@@ -4,26 +4,38 @@ A modern, high-performance eCommerce backend built with Elysia.js (Bun) and Type
 Designed with clean architecture, modular structure, and production-ready best practices.
 Includes authentication, product management, carts, orders, payments, wishlists, and more.
 
-## Features
+## 🚀 Features
 
-- RESTful API endpoints
-- Product management
-- User authentication
-- Shopping cart functionality
-- Order processing
-- Payment integration
-- Inventory management
+- **RESTful API endpoints** for complete e-commerce functionality
+- **Product management** with categories and inventory tracking
+- **User authentication** with JWT tokens and role-based access (admin/customer)
+- **Shopping cart** functionality with persistent storage
+- **Wishlist** functionality for saving favorite products
+- **Order processing** system with order management
+- **Payment processing** module (implementation in progress)
+- **Inventory management** with stock tracking
+- **Comprehensive logging** with Winston logger
+- **Rate limiting** to prevent API abuse
+- **Security headers** with Helmet middleware
+- **API documentation** with Swagger UI
+- **Type-safe validation** with Zod schemas
+- **Database migrations** support for production deployments
 
-## Tech Stack
+## 🛠 Tech Stack
 
-- **Framework**: [Elysia.js](https://elysiajs.com/) - Bun-first TypeScript framework
 - **Runtime**: [Bun](https://bun.sh/) - Fast JavaScript runtime
-- **Database**: TBD (to be updated based on requirements)
-- **ORM**: TBD (to be updated based on requirements)
-- **Authentication**: TBD
-- **Payment Processing**: TBD
+- **Framework**: [Elysia.js](https://elysiajs.com/) - Bun-first TypeScript framework
+- **Database**: [PostgreSQL](https://www.postgresql.org/) - Advanced open-source database
+- **ORM**: [TypeORM](https://typeorm.io/) - TypeScript ORM for database operations
+- **Authentication**: JWT (JSON Web Tokens) with role-based access control
+- **API Documentation**: Swagger UI for interactive API documentation
+- **Logging**: [Winston](https://github.com/winstonjs/winston) for comprehensive application logging
+- **Validation**: [Zod](https://zod.dev/) for schema validation and [class-validator](https://github.com/typestack/class-validator) for entity validation
+- **Security**: Helmet middleware with various security headers
+- **Rate Limiting**: [rate-limiter-flexible](https://github.com/animir/node-rate-limiter-flexible) for API protection
+- **Password Hashing**: [bcryptjs](https://github.com/dcodeIO/bcrypt.js/) for secure password storage
 
-## Project Structure
+## 📦 Project Structure
 
 ```
 elysia-ecom/
@@ -57,61 +69,169 @@ elysia-ecom/
 ├── README.md              # Project documentation
 └── tsconfig.json          # TypeScript configuration
 ```
+## 📋 Prerequisites
 
-## Getting Started
+Before you begin, ensure you have the following installed on your system:
 
-1. Install dependencies:
-   ```bash
-   bun install
-   ```
+- [Bun](https://bun.sh/) v1.0 or higher (installation guide below)
+- [Node.js](https://nodejs.org/) v18 or higher (optional, but recommended for compatibility)
+- [PostgreSQL](https://www.postgresql.org/) database server
+- Git (for cloning the repository)
 
-2. Set up environment variables (see `.env.example`)
+### Installing Bun
 
-3. Run the development server:
-   ```bash
-   bun run dev
-   ```
+Choose your preferred installation method:
 
-## Database Setup in .env
+**macOS/Linux:**
+```bash
+curl -fsSL https://bun.sh/install | bash
+```
+
+**Using npm:**
+```bash
+npm install -g bun
+```
+
+**Using Homebrew (macOS):**
+```bash
+brew tap oven-sh/bun
+brew install bun
+```
+
+Verify your installation:
+```bash
+bun --version
+```
+
+### Setting up PostgreSQL
+
+You'll need a PostgreSQL database to run this application. You can:
+
+1. **Install PostgreSQL locally:**
+   - **macOS:** `brew install postgresql`
+   - **Ubuntu/Debian:** `sudo apt install postgresql postgresql-contrib`
+   - **Windows:** Download from [PostgreSQL official website](https://www.postgresql.org/download/windows/)
+
+2. **Or use a cloud database service:**
+   - [Railway](https://railway.app/)
+   - [Supabase](https://supabase.com/)
+   - [AWS RDS](https://aws.amazon.com/rds/)
+
+## 🚀 Getting Started
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/piashcse/elysia-ecom.git
+cd elysia-ecom
+```
+
+### 2. Install Dependencies
+
+```bash
+bun install
+```
+
+### 3. Set up Environment Variables
 
 Create a `.env` file in the root directory with the following variables:
 
-```
+```env
+# Server configuration
 PORT=3000
+NODE_ENV=development
+
+# Database configuration
 DB_HOST=localhost
 DB_PORT=5432
 DB_USER=postgres
-DB_PASSWORD=your_password
-DB_NAME=your_database_name
-JWT_SECRET=change_this_to_a_strong_secret
-```
-The application will automatically create database tables when it starts up in development mode. In production, it will run pending migrations. The database connection automatically pulls configuration from your .env file:
+DB_PASSWORD=your_postgres_password
+DB_NAME=elysia_ecommerce_dev
 
-- Tables are automatically synchronized in development (when `NODE_ENV=development`)
-- Migrations are run in production or non-development environments
+# JWT configuration (required)
+JWT_SECRET=your_super_secret_jwt_key_change_this_in_production
 
-For manual migration management:
- ```bash
-# Run migrations (for production environments)
- bun run typeorm:run-migrations
- ```
-## API Documentation
-
-The API is documented using Swagger UI, accessible at:
-```
-http://localhost:3000/swagger
+# Logging configuration
+LOG_LEVEL=info
 ```
 
-## API Endpoints
+> **Note:** The `JWT_SECRET` variable is required and must be set.
+
+### 4. Start PostgreSQL Service
+
+Make sure your PostgreSQL service is running:
+
+- **macOS (with Homebrew):** `brew services start postgresql`
+- **Ubuntu/Debian:** `sudo systemctl start postgresql`
+- **Windows:** Start PostgreSQL service through Services panel
+
+### 5. Create Database
+
+Connect to PostgreSQL and create the database:
+
+```bash
+# Connect to PostgreSQL (using default postgres user)
+psql -U postgres
+
+# Create database
+CREATE DATABASE elysia_ecommerce_dev;
+
+# Create user (optional, for security)
+CREATE USER ecommerce_user WITH PASSWORD 'secure_password';
+GRANT ALL PRIVILEGES ON DATABASE elysia_ecommerce_dev TO ecommerce_user;
+
+# Exit psql
+\q
+```
+
+Alternatively, if you're using your own database user, make sure the database exists.
+
+### 6. Run the Application
+
+Start the development server:
+
+```bash
+bun run dev
+```
+
+The application will be available at: http://localhost:3000
+
+> **Note:** In development mode (NODE_ENV=development), the application automatically synchronizes database tables based on your entities. In production mode, it runs pending migrations instead.
+
+### 7. API Documentation
+
+Once the server is running, you can access the API documentation at:
+- Swagger UI: http://localhost:3000/swagger
+- OpenAPI JSON: http://localhost:3000/swagger/json
+
+## 🛠 Development Scripts
+
+The project includes several useful scripts:
+
+- `bun run dev` - Start development server with auto-reload
+- `bun run start` - Start production server
+- `bun run build` - Build the application for production
+- `bun run test` - Run tests
+- `bun run typeorm:run-migrations` - Run database migrations manually
+- `bun run typeorm:generate-migration` - Generate a new migration
+
+
+## 🌐 API Endpoints
 
 The application provides a comprehensive REST API with the following main endpoints:
 
 ### User Management
 - `POST /users/register` - Register a new user
-- `POST /users/login` - User login
-- `GET /users/me` - Get current user profile
-- `PUT /users/me` - Update user profile
-- `DELETE /users/me` - Delete user account
+- `POST /users/login` - User login (returns JWT token)
+- `GET /users/me` - Get current user profile (requires authentication)
+- `PUT /users/me` - Update user profile (requires authentication)
+- `DELETE /users/me` - Delete user account (requires authentication)
+- `GET /users` - Get all users (admin only)
+- `GET /users/:id` - Get user by ID (admin only or self)
+- `PUT /users/:id` - Update user by ID (admin only)
+- `DELETE /users/:id` - Delete user by ID (admin only)
+
+> **Note**: The system includes role-based access control with ADMIN and CUSTOMER roles. Admin users have additional permissions to manage other users and system resources.
 
 ### Product Management
 - `GET /products` - Get all products
@@ -146,42 +266,47 @@ The application provides a comprehensive REST API with the following main endpoi
 ### Payment Processing
 - `POST /payments` - Process payment for an order
 
-All API endpoints (except public ones like product listings) require authentication via JWT tokens. Detailed API documentation is available through Swagger UI when the application is running.
+All API endpoints (except public ones like product listings) require authentication via JWT tokens.
 
-## Features
+### Health Check
+- `GET /health` - Check server health status (no authentication required)
 
-- **User Management**: Complete user registration, authentication, and profile management
-- **Product Catalog**: Comprehensive product management with categorization
-- **Shopping Cart**: Full-featured cart with add, update, and remove operations
-- **Wishlist**: Product wishlist functionality for users
-- **Order Processing**: Complete order management system
-- **Payment Integration**: Support for multiple payment methods
-- **Inventory Management**: Real-time stock tracking and management
-- **API Documentation**: Auto-generated API documentation via Swagger UI
-- **Security**: JWT-based authentication and authorization
-- **Rate Limiting**: Built-in API rate limiting to prevent abuse
 
-## Technology Stack
+## 🐛 Troubleshooting
 
-- **Runtime**: [Bun](https://bun.sh/) - Fast JavaScript runtime
-- **Framework**: [Elysia.js](https://elysiajs.com/) - Bun-first TypeScript framework
-- **Database**: [PostgreSQL](https://www.postgresql.org/) - Advanced open-source database
-- **ORM**: [TypeORM](https://typeorm.io/) - TypeScript ORM for database operations
-- **Authentication**: JWT (JSON Web Tokens) for secure authentication
-- **API Documentation**: Swagger UI for interactive API documentation
-- **Logging**: Winston for comprehensive application logging
-- **Validation**: Zod for schema validation
+### Common Issues
 
-## Development
+**1. Database Connection Issues:**
+- Ensure PostgreSQL is running: `brew services start postgresql` (macOS)
+- Verify your `.env` file has correct database credentials
+- Check that the database exists: `psql -U postgres -c "\l"` to list databases
 
-This project follows a modular architecture with clear separation of concerns:
+**2. Bun Installation Issues:**
+- Make sure you're using a compatible system (macOS, Linux, or Windows WSL)
+- Try installing via npm if direct installation fails: `npm install -g bun`
 
-- **Modular Design**: Each feature is organized in its own module with dedicated controllers, services, DTOs, and entities
-- **Type Safety**: Full TypeScript support with comprehensive type definitions
-- **Testing Ready**: Structured to support comprehensive unit and integration tests
-- **Scalability**: Designed with scalability in mind for both code and infrastructure
+**3. Missing Environment Variables:**
+- Ensure you have a `.env` file with required variables
+- The `JWT_SECRET` variable is mandatory and will cause the app to crash if not set
 
-## Contributing
+**4. Port Already in Use:**
+- Change the `PORT` variable in your `.env` file
+- Kill processes using the port: `lsof -ti:3000 | xargs kill -9` (macOS/Linux)
+
+**5. Migration Issues:**
+- Run migrations manually if auto-sync fails: `bun run typeorm:run-migrations`
+
+### Development Tips
+
+- Use `bun run dev` for development with auto-reload
+- Check the logs in the `logs/` directory for detailed error information
+- The application will automatically synchronize database tables in development mode (when NODE_ENV=development)
+- In production, database migrations are automatically run on startup
+- You can manually run migrations with: `bun run typeorm:run-migrations`
+- Use the `.env.example` file as a reference for required environment variables
+
+
+## 🤝 Contributing
 
 We welcome contributions from the community! Here's how you can help:
 
@@ -210,7 +335,7 @@ This project follows TypeScript and Elysia.js best practices:
 - Maintain clean, readable, and well-documented code
 - Use proper error handling and logging
 
-## 👨 Developed By
+## 👨‍💻 Developed By
 
 <a href="https://twitter.com/piashcse" target="_blank">
   <img src="https://avatars.githubusercontent.com/piashcse" width="90" align="left">
@@ -224,7 +349,7 @@ This project follows TypeScript and Elysia.js best practices:
 [![Web](https://img.shields.io/badge/-Web-0073E6?logo=appveyor&logoColor=white&style=for-the-badge)](https://piashcse.github.io/)
 [![Blog](https://img.shields.io/badge/-Blog-0077B5?logo=readme&logoColor=white&style=for-the-badge)](https://piashcse.blogspot.com)
 
-# License
+## 📄 License
 
 ```
 Copyright 2024 piashcse (Mehedi Hassan Piash)
