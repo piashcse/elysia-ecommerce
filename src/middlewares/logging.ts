@@ -31,9 +31,12 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 export const loggingMiddleware = new Elysia({ name: 'logging' })
-  .derive(async ({ request, set }) => {
+  .derive(({ request }) => {
     const startTime = Date.now();
-    
+
+    // Store start time in request context for duration calculation
+    (request as any).startTime = startTime;
+
     // Log incoming request
     logger.info('Incoming request', {
       method: request.method,
@@ -43,18 +46,18 @@ export const loggingMiddleware = new Elysia({ name: 'logging' })
         'x-forwarded-for': request.headers.get('x-forwarded-for'),
       },
     });
-    
-    // Continue with the request
-    const response = await new Response('OK');
-    
-    // Log outgoing response
+
+    return { logger, startTime };
+  })
+  .onAfterHandle(({ request, set }) => {
+    const startTime = (request as any).startTime || Date.now();
     const duration = Date.now() - startTime;
+
+    // Log outgoing response
     logger.info('Request completed', {
       method: request.method,
       url: request.url,
       statusCode: set.status || 200,
       duration: `${duration}ms`,
     });
-    
-    return { logger };
   });

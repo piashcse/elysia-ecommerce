@@ -30,7 +30,7 @@ export const AppDataSource = new DataSource({
     OrderItem,
     Payment
   ],
-  migrations: ['./src/database/migrations/*.ts'],
+  migrations: ['./src/database/migrations/*.ts', './src/database/migrations/*.js'],
   subscribers: [],
 });
 
