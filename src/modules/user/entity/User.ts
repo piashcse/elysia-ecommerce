@@ -8,6 +8,12 @@ export enum UserRole {
   CUSTOMER = 'customer',
 }
 
+export enum UserStatus {
+  PENDING_VERIFICATION = 'pending_verification',
+  VERIFIED = 'verified',
+  SUSPENDED = 'suspended',
+}
+
 @Entity('users')
 export class User {
   @PrimaryGeneratedColumn('uuid')
@@ -15,6 +21,9 @@ export class User {
 
   @Column({ unique: true })
   email: string;
+
+  @Column({ nullable: true })
+  phone: string;
 
   @Column()
   password: string;
@@ -28,8 +37,21 @@ export class User {
   @Column({ type: 'enum', enum: UserRole, default: UserRole.CUSTOMER })
   role: UserRole;
 
+  @Column({
+    type: 'enum',
+    enum: UserStatus,
+    default: UserStatus.PENDING_VERIFICATION
+  })
+  status: UserStatus;
+
   @Column({ default: true })
   isActive: boolean;
+
+  @Column({ nullable: true })
+  emailVerifiedAt: Date;
+
+  @Column({ nullable: true })
+  phoneVerifiedAt: Date;
 
   @CreateDateColumn({ type: 'timestamp' })
   createdAt: Date;

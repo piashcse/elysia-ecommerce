@@ -4,6 +4,7 @@ import { User } from '../entity/User';
 export interface CreateUserDto {
   email: string;
   password: string;
+  phone?: string;
   firstName?: string;
   lastName?: string;
 }
@@ -12,6 +13,7 @@ export interface UpdateUserDto {
   firstName?: string;
   lastName?: string;
   email?: string;
+  phone?: string;
 }
 
 export interface LoginUserDto {

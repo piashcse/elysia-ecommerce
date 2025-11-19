@@ -1,9 +1,7 @@
 import { Elysia, t } from 'elysia';
 import { UserService } from '../service/UserService';
 import {
-  createUserSchema,
   updateUserSchema,
-  loginUserSchema,
   changePasswordSchema
 } from '../validators/UserValidator';
 import { validate } from '../../../utils/validation';
@@ -15,87 +13,6 @@ import { comparePassword, hashPassword } from '../../../utils/auth';
 const userService = new UserService();
 
 export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
-  // Register a new user
-  .post(
-    '/register',
-    async ({ body, set }) => {
-      try {
-        const validatedData = validate(createUserSchema, body);
-        const user = await userService.createUser(validatedData);
-
-        // Don't return password in response
-        const { password, ...userWithoutPassword } = user;
-
-        set.status = 201;
-        return successResponse(userWithoutPassword, 'User registered successfully', 201);
-      } catch (error: any) {
-        set.status = error.statusCode || 500;
-        return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
-      }
-    },
-    {
-      body: t.Object({
-        email: t.String(),
-        password: t.String(),
-        firstName: t.Optional(t.String()),
-        lastName: t.Optional(t.String()),
-      }),
-      detail: { tags: ['User'] }
-    }
-  )
-  
-  // Login user
-  .post(
-    '/login',
-    async ({ body, set, jwt }) => {
-      try {
-        const validatedData = validate(loginUserSchema, body);
-        const { email, password } = validatedData;
-
-        const user = await userService.findUserByEmail(email);
-        if (!user) {
-          set.status = 401;
-          return errorResponse('Invalid email or password');
-        }
-
-        const isPasswordValid = await comparePassword(password, user.password);
-        if (!isPasswordValid) {
-          set.status = 401;
-          return errorResponse('Invalid email or password');
-        }
-
-        if (!user.isActive) {
-          set.status = 401;
-          return errorResponse('User account is deactivated');
-        }
-
-        // Generate JWT token
-        const token = await jwt.sign({
-          sub: user.id,
-          email: user.email,
-          role: user.role,
-        });
-
-        // Don't return password in response
-        const { password: _, ...userWithoutPassword } = user;
-
-        return successResponse(
-          { user: userWithoutPassword, token },
-          'Login successful'
-        );
-      } catch (error: any) {
-        set.status = error.statusCode || 500;
-        return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
-      }
-    },
-    {
-      body: t.Object({
-        email: t.String(),
-        password: t.String(),
-      }),
-      detail: { tags: ['User'] }
-    }
-  )
   
   // Get current user profile
   .get(
@@ -155,6 +72,7 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
     {
       body: t.Object({
         email: t.Optional(t.String()),
+        phone: t.Optional(t.String()),
         firstName: t.Optional(t.String()),
         lastName: t.Optional(t.String()),
       }),
@@ -315,6 +233,7 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
       }),
       body: t.Object({
         email: t.Optional(t.String()),
+        phone: t.Optional(t.String()),
         firstName: t.Optional(t.String()),
         lastName: t.Optional(t.String()),
       }),
@@ -322,9 +241,9 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
     }
   )
   
-  // Delete user by ID (admin only)
-  .delete(
-    '/:id',
+  // Deactivate user by ID (admin only) - soft delete
+  .put(
+    '/:id/deactivate',
     async ({ params, set, jwt }) => {
       try {
         const token = jwt;
@@ -335,9 +254,38 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
 
         const { id } = params;
 
-        await userService.deleteUser(id);
+        await userService.deactivateUser(id);
 
-        return successResponse(null, 'User deleted successfully');
+        return successResponse(null, 'User deactivated successfully');
+      } catch (error: any) {
+        set.status = error.statusCode || 500;
+        return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
+      }
+    },
+    {
+      params: t.Object({
+        id: t.String()
+      }),
+      detail: { tags: ['User'] }
+    }
+  )
+
+  // Activate user by ID (admin only)
+  .put(
+    '/:id/activate',
+    async ({ params, set, jwt }) => {
+      try {
+        const token = jwt;
+        if (!token || token.role !== 'admin') {
+          set.status = 403;
+          return errorResponse('Access denied. Admin role required.');
+        }
+
+        const { id } = params;
+
+        await userService.activateUser(id);
+
+        return successResponse(null, 'User activated successfully');
       } catch (error: any) {
         set.status = error.statusCode || 500;
         return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);

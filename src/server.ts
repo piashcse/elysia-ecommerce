@@ -10,6 +10,7 @@ import {helmetMiddleware} from './middlewares/helmet';
 import {defaultRateLimiter} from './middlewares/rateLimiter';
 import {errorHandler} from './middlewares/errorHandler';
 import {userController} from './modules/user/controller/UserController';
+import {authController} from './modules/auth/controller/AuthController';
 import {productController} from './modules/product/controller/ProductController';
 import {categoryController} from './modules/category/controller/CategoryController';
 import {cartController} from './modules/cart/controller/CartController';
@@ -48,6 +49,7 @@ app.use(
                 }
             ],
             tags: [
+                { name: 'Auth' },
                 { name: 'User' },
                 { name: 'Product' },
                 { name: 'Category' },
@@ -88,6 +90,7 @@ app.use(
 
 // Register controllers
 app.use(userController)
+    .use(authController)
     .use(productController)
     .use(categoryController)
     .use(cartController)

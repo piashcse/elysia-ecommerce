@@ -1,4 +1,4 @@
-import { createHash } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 
 /**
  * Hash a password using bcrypt
@@ -17,25 +17,6 @@ export const comparePassword = async (password: string, hashedPassword: string):
 };
 
 /**
- * Generate a random string of specified length
- */
-export const generateRandomString = (length: number): string => {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let result = '';
-  for (let i = 0; i < length; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
-};
-
-/**
- * Generate a hash from a string using SHA-256
- */
-export const sha256Hash = (input: string): string => {
-  return createHash('sha256').update(input).digest('hex');
-};
-
-/**
  * Validate email format
  */
 export const isValidEmail = (email: string): boolean => {
@@ -44,8 +25,9 @@ export const isValidEmail = (email: string): boolean => {
 };
 
 /**
- * Generate a unique identifier
+ * Generate a cryptographically secure random token of specified length
  */
-export const generateId = (): string => {
-  return Date.now().toString(36) + Math.random().toString(36).substr(2);
+export const generateRandomToken = (length: number = 32): string => {
+  // Generate random bytes and convert to hex string
+  return randomBytes(Math.ceil(length / 2)).toString('hex').slice(0, length);
 };

@@ -8,22 +8,34 @@ export class UserService {
   private userRepository = AppDataSource.getRepository(User);
 
   async createUser(createUserDto: CreateUserDto): Promise<User> {
-    // Check if user already exists
-    const existingUser = await this.userRepository.findOne({
+    // Check if user already exists by email
+    const existingUserByEmail = await this.userRepository.findOne({
       where: { email: createUserDto.email },
     });
 
-    if (existingUser) {
+    if (existingUserByEmail) {
       throw new ConflictError('User with this email already exists');
     }
 
+    // Check if user already exists by phone (if phone is provided)
+    if (createUserDto.phone) {
+      const existingUserByPhone = await this.userRepository.findOne({
+        where: { phone: createUserDto.phone },
+      });
+
+      if (existingUserByPhone) {
+        throw new ConflictError('User with this phone number already exists');
+      }
+    }
+
     const hashedPassword = await hashPassword(createUserDto.password);
-    
+
     const user = new User();
     user.email = createUserDto.email;
     user.password = hashedPassword;
     user.firstName = createUserDto.firstName;
     user.lastName = createUserDto.lastName;
+    user.phone = createUserDto.phone;
 
     return this.userRepository.save(user);
   }
@@ -41,7 +53,7 @@ export class UserService {
 
   async updateUser(id: string, updateUserDto: UpdateUserDto): Promise<User> {
     const user = await this.findUserById(id);
-    
+
     if (!user) {
       throw new NotFoundError('User not found');
     }
@@ -51,9 +63,20 @@ export class UserService {
       const existingUser = await this.userRepository.findOne({
         where: { email: updateUserDto.email }
       });
-      
+
       if (existingUser) {
         throw new ConflictError('User with this email already exists');
+      }
+    }
+
+    // Check if phone is being updated and if it's already taken by another user
+    if (updateUserDto.phone && updateUserDto.phone !== user.phone) {
+      const existingUser = await this.userRepository.findOne({
+        where: { phone: updateUserDto.phone }
+      });
+
+      if (existingUser) {
+        throw new ConflictError('User with this phone number already exists');
       }
     }
 
@@ -61,14 +84,26 @@ export class UserService {
     return this.userRepository.save(user);
   }
 
-  async deleteUser(id: string): Promise<void> {
+  async deactivateUser(id: string): Promise<void> {
     const user = await this.findUserById(id);
-    
+
     if (!user) {
       throw new NotFoundError('User not found');
     }
 
-    await this.userRepository.remove(user);
+    user.isActive = false;
+    await this.userRepository.save(user);
+  }
+
+  async activateUser(id: string): Promise<void> {
+    const user = await this.findUserById(id);
+
+    if (!user) {
+      throw new NotFoundError('User not found');
+    }
+
+    user.isActive = true;
+    await this.userRepository.save(user);
   }
 
   async getAllUsers(page: number = 1, limit: number = 10): Promise<{ users: User[]; total: number }> {

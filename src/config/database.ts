@@ -1,6 +1,7 @@
 import { DataSource } from 'typeorm';
 import envConfig from './env';
 import { User } from '../modules/user/entity/User';
+import { VerificationCode } from '../modules/auth/entity/VerificationCode';
 import { Product } from '../modules/product/entity/Product';
 import { Category } from '../modules/category/entity/Category';
 import { Cart } from '../modules/cart/entity/Cart';
@@ -21,6 +22,7 @@ export const AppDataSource = new DataSource({
   logging: envConfig.NODE_ENV !== 'production' ? ['error', 'warn', 'schema'] : false, // Only log errors, warnings and schema changes, not queries
   entities: [
     User,
+    VerificationCode,
     Product,
     Category,
     Cart,
