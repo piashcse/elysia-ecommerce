@@ -18,7 +18,7 @@ export const AppDataSource = new DataSource({
   password: envConfig.DB_PASSWORD,
   database: envConfig.DB_NAME,
   synchronize: envConfig.NODE_ENV === 'development', // Auto-create tables in development
-  logging: envConfig.NODE_ENV !== 'production',
+  logging: envConfig.NODE_ENV !== 'production' ? ['error', 'warn', 'schema'] : false, // Only log errors, warnings and schema changes, not queries
   entities: [
     User,
     Product,

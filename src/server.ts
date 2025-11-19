@@ -3,11 +3,11 @@ import {Elysia} from 'elysia';
 import {swagger} from '@elysiajs/swagger';
 import {cors} from '@elysiajs/cors';
 import {jwt} from '@elysiajs/jwt';
+import {logger} from '@bogeychan/elysia-logger';
 import {connectDB} from './config/database';
 import envConfig from './config/env';
 import {helmetMiddleware} from './middlewares/helmet';
 import {defaultRateLimiter} from './middlewares/rateLimiter';
-import {loggingMiddleware} from './middlewares/logging';
 import {errorHandler} from './middlewares/errorHandler';
 import {userController} from './modules/user/controller/UserController';
 import {productController} from './modules/product/controller/ProductController';
@@ -61,7 +61,22 @@ app.use(
 )
     .use(cors())
     .use(helmetMiddleware)
-    .use(loggingMiddleware)
+    .use(logger({
+        level: 'info',
+        autoLogging: {
+            ignore: (ctx) => {
+                // Ignore health check and server-sent events endpoints from logging
+                return ctx.path === '/health' || ctx.path.includes('__server_sent_events__');
+            }
+        },
+        customProps: (ctx) => {
+            return {
+                path: ctx.path,
+                method: ctx.request.method,
+                userAgent: ctx.request.headers.get('user-agent'),
+            };
+        }
+    }))
     .use(defaultRateLimiter)
     .use(
         jwt({
