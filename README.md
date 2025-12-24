@@ -1,6 +1,6 @@
 # Elysia E-commerce
 
-A modern, high-performance eCommerce backend built with Elysia.js (Bun) and TypeORM.
+A modern, high-performance eCommerce backend built with Elysia.js (Bun) and Drizzle ORM.
 Designed with clean architecture, modular structure, and production-ready best practices.
 Includes authentication, product management, carts, orders, payments, wishlists, and more.
 
@@ -26,7 +26,7 @@ Includes authentication, product management, carts, orders, payments, wishlists,
 - **Runtime**: [Bun](https://bun.sh/) - Fast JavaScript runtime
 - **Framework**: [Elysia.js](https://elysiajs.com/) - Bun-first TypeScript framework
 - **Database**: [PostgreSQL](https://www.postgresql.org/) - Advanced open-source database
-- **ORM**: [TypeORM](https://typeorm.io/) - TypeScript ORM for database operations
+- **ORM**: [Drizzle ORM](https://orm.drizzle.team/) - TypeScript ORM for database operations
 - **Authentication**: JWT (JSON Web Tokens) with role-based access control
 - **API Documentation**: Swagger UI for interactive API documentation
 - **Logging**: [Winston](https://github.com/winstonjs/winston) for comprehensive application logging
@@ -212,8 +212,9 @@ The project includes several useful scripts:
 - `bun run start` - Start production server
 - `bun run build` - Build the application for production
 - `bun run test` - Run tests
-- `bun run typeorm:run-migrations` - Run database migrations manually
-- `bun run typeorm:generate-migration` - Generate a new migration
+- `bun run db:migrate` - Run database migrations
+- `bun run db:generate` - Generate database schema
+- `bun run db:studio` - Open Drizzle Studio for database management
 
 
 ## 🌐 API Endpoints
@@ -294,7 +295,7 @@ All API endpoints (except public ones like product listings) require authenticat
 - Kill processes using the port: `lsof -ti:3000 | xargs kill -9` (macOS/Linux)
 
 **5. Migration Issues:**
-- Run migrations manually if auto-sync fails: `bun run typeorm:run-migrations`
+- Run migrations manually if needed: `bun run db:migrate`
 
 ### Development Tips
 
@@ -302,7 +303,7 @@ All API endpoints (except public ones like product listings) require authenticat
 - Check the logs in the `logs/` directory for detailed error information
 - The application will automatically synchronize database tables in development mode (when NODE_ENV=development)
 - In production, database migrations are automatically run on startup
-- You can manually run migrations with: `bun run typeorm:run-migrations`
+- You can manually run migrations with: `bun run db:migrate`
 - Use the `.env.example` file as a reference for required environment variables
 
 

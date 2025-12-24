@@ -67,7 +67,8 @@ export const paginatedResponse = <T>(
   data: T[],
   paginationMeta: PaginationMeta,
   message: string,
-  statusCode: number = 200
+  statusCode: number = 200,
+  additionalMeta?: Record<string, any>
 ): PaginatedResponse<T> => {
   return {
     success: true,
@@ -75,7 +76,7 @@ export const paginatedResponse = <T>(
     message,
     data: {
       items: data,
-      meta: paginationMeta,
+      meta: { ...paginationMeta, ...additionalMeta },
     },
   };
 };

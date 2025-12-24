@@ -1,99 +1,124 @@
-import { AppDataSource } from '../../../config/database';
-import { Wishlist } from '../entity/Wishlist';
-import { User } from '../../user/entity/User';
-import { Product } from '../../product/entity/Product';
+import { db } from '../../../config/database';
+import { wishlists, users, products } from '../../../database/schema';
+import { eq, and, desc, sql } from 'drizzle-orm';
 import { CreateWishlistDto } from '../dto/WishlistDto';
 import { NotFoundError, ConflictError } from '../../../core/errors';
 
 export class WishlistService {
-  private wishlistRepository = AppDataSource.getRepository(Wishlist);
-  private userRepository = AppDataSource.getRepository(User);
-  private productRepository = AppDataSource.getRepository(Product);
-
-  async addToWishlist(userId: string, productId: string): Promise<Wishlist> {
+  async addToWishlist(userId: string, productId: string): Promise<any> {
     // Check if user exists
-    const user = await this.userRepository.findOne({ where: { id: userId } });
+    const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
     if (!user) {
       throw new NotFoundError('User not found');
     }
 
     // Check if product exists
-    const product = await this.productRepository.findOne({ where: { id: productId } });
+    const [product] = await db.select().from(products).where(eq(products.id, productId)).limit(1);
     if (!product) {
       throw new NotFoundError('Product not found');
     }
 
     // Check if item already exists in wishlist
-    const existingWishlistItem = await this.wishlistRepository.findOne({
-      where: { user: { id: userId }, product: { id: productId } }
-    });
+    const existingWishlistItem = await db
+      .select()
+      .from(wishlists)
+      .where(and(
+        eq(wishlists.userId, userId),
+        eq(wishlists.productId, productId)
+      ))
+      .limit(1);
 
-    if (existingWishlistItem) {
+    if (existingWishlistItem.length > 0) {
       throw new ConflictError('Product already exists in wishlist');
     }
 
-    const wishlistItem = new Wishlist();
-    wishlistItem.user = user;
-    wishlistItem.product = product;
+    const [newWishlistItem] = await db.insert(wishlists).values({
+      userId: userId,
+      productId: productId,
+    }).returning();
 
-    return this.wishlistRepository.save(wishlistItem);
+    return newWishlistItem;
   }
 
   async removeFromWishlist(wishlistId: string): Promise<void> {
-    const wishlistItem = await this.wishlistRepository.findOne({
-      where: { id: wishlistId }
-    });
+    const [wishlistItem] = await db.select().from(wishlists).where(eq(wishlists.id, wishlistId)).limit(1);
 
     if (!wishlistItem) {
       throw new NotFoundError('Wishlist item not found');
     }
 
-    await this.wishlistRepository.remove(wishlistItem);
+    await db.delete(wishlists).where(eq(wishlists.id, wishlistId));
   }
 
   async removeByUserAndProduct(userId: string, productId: string): Promise<void> {
-    const wishlistItem = await this.wishlistRepository.findOne({
-      where: { user: { id: userId }, product: { id: productId } }
-    });
+    const [wishlistItem] = await db
+      .select()
+      .from(wishlists)
+      .where(and(
+        eq(wishlists.userId, userId),
+        eq(wishlists.productId, productId)
+      ))
+      .limit(1);
 
     if (!wishlistItem) {
       throw new NotFoundError('Wishlist item not found');
     }
 
-    await this.wishlistRepository.remove(wishlistItem);
+    await db.delete(wishlists).where(eq(wishlists.id, wishlistItem.id));
   }
 
-  async getWishlistForUser(userId: string): Promise<Wishlist[]> {
-    return this.wishlistRepository
-      .createQueryBuilder('wishlist')
-      .leftJoinAndSelect('wishlist.product', 'product')
-      .leftJoinAndSelect('wishlist.user', 'user')
-      .where('wishlist.user.id = :userId', { userId })
-      .orderBy('wishlist.createdAt', 'DESC')
-      .getMany();
+  async getWishlistForUser(userId: string): Promise<any[]> {
+    const wishlistItems = await db
+      .select({
+        id: wishlists.id,
+        userId: wishlists.userId,
+        productId: wishlists.productId,
+        createdAt: wishlists.createdAt,
+        product: {
+          id: products.id,
+          name: products.name,
+          description: products.description,
+          price: products.price,
+          imageUrl: products.imageUrl,
+          stockQuantity: products.stockQuantity,
+          isActive: products.isActive,
+          categoryId: products.categoryId,
+          sku: products.sku,
+          createdAt: products.createdAt,
+          updatedAt: products.updatedAt,
+        }
+      })
+      .from(wishlists)
+      .leftJoin(products, eq(wishlists.productId, products.id))
+      .where(eq(wishlists.userId, userId))
+      .orderBy(desc(wishlists.createdAt));
+
+    return wishlistItems;
   }
 
   async isProductInWishlist(userId: string, productId: string): Promise<boolean> {
-    const wishlistItem = await this.wishlistRepository.findOne({
-      where: { user: { id: userId }, product: { id: productId } }
-    });
+    const wishlistItem = await db
+      .select()
+      .from(wishlists)
+      .where(and(
+        eq(wishlists.userId, userId),
+        eq(wishlists.productId, productId)
+      ))
+      .limit(1);
 
-    return !!wishlistItem;
+    return wishlistItem.length > 0;
   }
 
   async clearWishlist(userId: string): Promise<void> {
-    const wishlistItems = await this.wishlistRepository.find({
-      where: { user: { id: userId } }
-    });
-
-    if (wishlistItems.length > 0) {
-      await this.wishlistRepository.remove(wishlistItems);
-    }
+    await db.delete(wishlists).where(eq(wishlists.userId, userId));
   }
 
   async getWishlistCountForUser(userId: string): Promise<number> {
-    return this.wishlistRepository.count({
-      where: { user: { id: userId } }
-    });
+    const [result] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(wishlists)
+      .where(eq(wishlists.userId, userId));
+
+    return Number(result?.count || 0);
   }
 }

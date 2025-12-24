@@ -1,43 +1,31 @@
 import { z } from 'zod';
-import { PaymentMethod, PaymentStatus } from '../entity/Payment';
+
+export const paymentMethods = ['credit_card', 'debit_card', 'paypal', 'bank_transfer', 'cash_on_delivery'] as const;
+export const paymentStatuses = ['pending', 'completed', 'failed', 'refunded'] as const;
 
 // Payment validation schemas
 export const createPaymentSchema = z.object({
   orderId: z.string().uuid('Order ID must be a valid UUID'),
-  method: z.nativeEnum(PaymentMethod),
-  amount: z.number().positive('Amount must be a positive number'),
+  method: z.enum(paymentMethods),
+  amount: z.coerce.number().positive('Amount must be a positive number'),
   metadata: z.record(z.any()).optional(),
 });
 
 export const processPaymentSchema = z.object({
   orderId: z.string().uuid('Order ID must be a valid UUID'),
-  method: z.nativeEnum(PaymentMethod),
-  amount: z.number().positive('Amount must be a positive number'),
+  method: z.enum(paymentMethods),
+  amount: z.coerce.number().positive('Amount must be a positive number'),
   paymentDetails: z.object({
     cardNumber: z.string().min(13).max(19).optional(),
     cardExpiry: z.string().regex(/^(0[1-9]|1[0-2])\/?([0-9]{2})$/, 'Invalid expiry date format (MM/YY)').optional(),
     cardCvv: z.string().min(3).max(4).optional(),
     cardHolderName: z.string().min(1).optional(),
     paypalEmail: z.string().email().optional(),
-  }).refine(
-    (data) => {
-      // If payment method is credit card, require card details
-      if (data.cardNumber || data.cardExpiry || data.cardCvv) {
-        return data.cardNumber && data.cardExpiry && data.cardCvv;
-      }
-      // If payment method is PayPal, require email
-      if (data.paypalEmail) {
-        return true;
-      }
-      // At least one payment method details must be provided
-      return data.cardNumber || data.paypalEmail;
-    },
-    { message: 'Valid payment details required based on payment method' }
-  ),
+  })
 });
 
 export const updatePaymentSchema = z.object({
-  status: z.nativeEnum(PaymentStatus),
+  status: z.enum(paymentStatuses),
   transactionId: z.string().optional(),
   metadata: z.record(z.any()).optional(),
 });
@@ -47,8 +35,8 @@ export const paymentIdSchema = z.object({
 });
 
 export const paymentFilterSchema = z.object({
-  status: z.nativeEnum(PaymentStatus).optional(),
-  method: z.nativeEnum(PaymentMethod).optional(),
+  status: z.enum(paymentStatuses).optional(),
+  method: z.enum(paymentMethods).optional(),
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),
   orderId: z.string().uuid().optional(),

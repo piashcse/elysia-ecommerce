@@ -4,23 +4,25 @@ import { z } from 'zod';
 export const createProductSchema = z.object({
   name: z.string().min(1, 'Product name is required').max(255),
   description: z.string().max(1000).optional(),
-  price: z.number().positive('Price must be a positive number'),
-  image: z.string().url('Image must be a valid URL').optional(),
-  stock: z.number().int().nonnegative('Stock must be a non-negative integer'),
+  price: z.coerce.number().positive('Price must be a positive number'),
+  imageUrl: z.string().url('Image must be a valid URL').optional(),
+  stockQuantity: z.number().int().nonnegative('Stock must be a non-negative integer'),
+  sku: z.string().min(1, 'SKU is required').max(100),
   isActive: z.boolean().optional(),
-  attributes: z.record(z.any()).optional(),
   categoryId: z.string().uuid('Category ID must be a valid UUID'),
+  sellerId: z.string().uuid('Seller ID must be a valid UUID'),
 });
 
 export const updateProductSchema = z.object({
   name: z.string().min(1).max(255).optional(),
   description: z.string().max(1000).optional(),
-  price: z.number().positive().optional(),
-  image: z.string().url().optional(),
-  stock: z.number().int().nonnegative().optional(),
+  price: z.coerce.number().positive().optional(),
+  imageUrl: z.string().url().optional(),
+  stockQuantity: z.number().int().nonnegative().optional(),
+  sku: z.string().max(100).optional(),
   isActive: z.boolean().optional(),
-  attributes: z.record(z.any()).optional(),
   categoryId: z.string().uuid().optional(),
+  sellerId: z.string().uuid().optional(),
 });
 
 export const productIdSchema = z.object({

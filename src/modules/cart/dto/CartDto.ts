@@ -1,6 +1,3 @@
-import { Cart } from '../entity/Cart';
-import { CartItem } from '../entity/CartItem';
-
 // Cart DTOs (Data Transfer Objects)
 export interface CreateCartDto {
   userId?: string;
@@ -18,42 +15,21 @@ export interface UpdateCartItemDto {
 
 export interface CartResponseDto {
   id: string;
-  user?: {
-    id: string;
-    email: string;
-    firstName: string | null;
-    lastName: string | null;
-  };
+  userId: string | null;
   sessionId: string | null;
   items: Array<{
     id: string;
-    product: {
+    productId: string;
+    product?: {
       id: string;
       name: string;
       price: number;
-      image: string | null;
+      imageUrl: string | null;
     };
     quantity: number;
-    subtotal: number;
+    createdAt: Date;
+    updatedAt: Date;
   }>;
-  totalItems: number;
-  totalAmount: number;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface CartItemResponseDto {
-  id: string;
-  cartId: string;
-  productId: string;
-  product: {
-    id: string;
-    name: string;
-    price: number;
-    image: string | null;
-  };
-  quantity: number;
-  subtotal: number;
   createdAt: Date;
   updatedAt: Date;
 }

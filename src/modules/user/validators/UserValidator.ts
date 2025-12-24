@@ -1,18 +1,22 @@
 import { z } from 'zod';
-import { UserRole } from '../entity/User';
 
 // User validation schemas
+export const userRoles = ['admin', 'seller', 'customer'] as const;
+
 export const createUserSchema = z.object({
   email: z.string().email('Invalid email format'),
   password: z.string().min(6, 'Password must be at least 6 characters long'),
   firstName: z.string().min(1, 'First name is required').max(50).optional(),
   lastName: z.string().min(1, 'Last name is required').max(50).optional(),
+  role: z.enum(userRoles).optional().default('customer'),
 });
 
 export const updateUserSchema = z.object({
   firstName: z.string().min(1).max(50).optional(),
   lastName: z.string().min(1).max(50).optional(),
   email: z.string().email('Invalid email format').optional(),
+  role: z.enum(userRoles).optional(),
+  isActive: z.boolean().optional(),
 });
 
 export const loginUserSchema = z.object({
@@ -30,7 +34,7 @@ export const userIdSchema = z.object({
 });
 
 export const userRoleSchema = z.object({
-  role: z.nativeEnum(UserRole),
+  role: z.enum(userRoles),
 });
 
 export const forgotPasswordSchema = z.object({

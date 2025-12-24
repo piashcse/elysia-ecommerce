@@ -1,56 +1,66 @@
 import { Elysia, t } from 'elysia';
 import { WishlistService } from '../service/WishlistService';
-import { 
+import {
   addToWishlistSchema,
   wishlistIdSchema,
   productIdSchema
 } from '../validators/WishlistValidator';
 import { validate } from '../../../utils/validation';
 import { successResponse, errorResponse } from '../../../core/responses';
-import { NotFoundError, UnauthorizedError, ConflictError } from '../../../core/errors';
-import { isAuthenticated } from '../../../utils/jwt';
+import { jwt } from '@elysiajs/jwt';
+import envConfig from '../../../config/env';
+import { JwtPayload } from '../../../utils/jwt';
 
 const wishlistService = new WishlistService();
 
 export const wishlistController = new Elysia({ prefix: '/wishlist', tags: ['Wishlist'] })
+  .use(
+    jwt({
+      name: 'jwt',
+      secret: envConfig.JWT_SECRET,
+    })
+  )
+  .derive(async ({ jwt, headers }) => {
+    const authHeader = headers['authorization'];
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return { user: null };
+    }
+    const token = authHeader.split(' ')[1];
+    const payload = await jwt.verify(token);
+    if (!payload) return { user: null };
+    return { user: payload as unknown as JwtPayload };
+  })
+  .onBeforeHandle(({ user, set }) => {
+    if (!user) {
+      set.status = 401;
+      return errorResponse('Authentication required', 'UNAUTHORIZED', 401);
+    }
+    return;
+  })
   // Get user's wishlist
   .get(
     '/',
-    async ({ set, jwt }) => {
+    async ({ user, set }) => {
       try {
-        // Check if user is authenticated
-        if (!jwt) {
-          set.status = 401;
-          return errorResponse('Authentication required');
-        }
-
-        const wishlist = await wishlistService.getWishlistForUser(jwt.sub);
-
-        return successResponse(wishlist, 'Wishlist retrieved successfully', 200);
+        const wishlist = await wishlistService.getWishlistForUser(user?.sub as string);
+        return successResponse(wishlist, 'Wishlist retrieved successfully');
       } catch (error: any) {
         set.status = error.statusCode || 500;
         return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
       }
     },
     {
-      detail: { tags: ['Wishlist'] }
+      detail: { summary: "Get current user's wishlist" }
     }
   )
-  
+
   // Add item to wishlist
   .post(
     '/items',
-    async ({ body, set, jwt }) => {
+    async ({ body, set, user }) => {
       try {
-        // Check if user is authenticated
-        if (!jwt) {
-          set.status = 401;
-          return errorResponse('Authentication required');
-        }
-        
         const validatedData = validate(addToWishlistSchema, body);
-        const wishlistItem = await wishlistService.addToWishlist(jwt.sub, validatedData.productId);
-        
+        const wishlistItem = await wishlistService.addToWishlist(user?.sub as string, validatedData.productId);
         set.status = 201;
         return successResponse(wishlistItem, 'Item added to wishlist successfully', 201);
       } catch (error: any) {
@@ -62,27 +72,19 @@ export const wishlistController = new Elysia({ prefix: '/wishlist', tags: ['Wish
       body: t.Object({
         productId: t.String()
       }),
-      detail: { tags: ['Wishlist'] }
+      detail: { summary: 'Add product to wishlist' }
     }
   )
-  
+
   // Remove item from wishlist
   .delete(
     '/items/:id',
-    async ({ params, set, jwt }) => {
+    async ({ params, set }) => {
       try {
-        // Check if user is authenticated
-        if (!jwt) {
-          set.status = 401;
-          return errorResponse('Authentication required');
-        }
-        
         const { id } = params;
         validate(wishlistIdSchema, { id });
-        
         await wishlistService.removeFromWishlist(id);
-        
-        return successResponse(null, 'Item removed from wishlist successfully', 200);
+        return successResponse(null, 'Item removed from wishlist successfully');
       } catch (error: any) {
         set.status = error.statusCode || 500;
         return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
@@ -92,90 +94,23 @@ export const wishlistController = new Elysia({ prefix: '/wishlist', tags: ['Wish
       params: t.Object({
         id: t.String()
       }),
-      detail: { tags: ['Wishlist'] }
-    }
-  )
-
-  // Remove item from wishlist by product ID
-  .delete(
-    '/products/:id',
-    async ({ params, set, jwt }) => {
-      try {
-        // Check if user is authenticated
-        if (!jwt) {
-          set.status = 401;
-          return errorResponse('Authentication required');
-        }
-        
-        const { id } = params;
-        validate(productIdSchema, { id });
-        
-        await wishlistService.removeByUserAndProduct(jwt.sub, id);
-        
-        return successResponse(null, 'Item removed from wishlist successfully', 200);
-      } catch (error: any) {
-        set.status = error.statusCode || 500;
-        return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
-      }
-    },
-    {
-      params: t.Object({
-        id: t.String()
-      }),
-      detail: { tags: ['Wishlist'] }
-    }
-  )
-
-  // Check if product is in user's wishlist
-  .get(
-    '/products/:id',
-    async ({ params, set, jwt }) => {
-      try {
-        // Check if user is authenticated
-        if (!jwt) {
-          set.status = 401;
-          return errorResponse('Authentication required');
-        }
-        
-        const { id } = params;
-        validate(productIdSchema, { id });
-        
-        const isInWishlist = await wishlistService.isProductInWishlist(jwt.sub, id);
-        
-        return successResponse({ isInWishlist }, 'Wishlist status retrieved successfully', 200);
-      } catch (error: any) {
-        set.status = error.statusCode || 500;
-        return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
-      }
-    },
-    {
-      params: t.Object({
-        id: t.String()
-      }),
-      detail: { tags: ['Wishlist'] }
+      detail: { summary: 'Remove item from wishlist' }
     }
   )
 
   // Get wishlist count for user
   .get(
     '/count',
-    async ({ set, jwt }) => {
+    async ({ user, set }) => {
       try {
-        // Check if user is authenticated
-        if (!jwt) {
-          set.status = 401;
-          return errorResponse('Authentication required');
-        }
-        
-        const count = await wishlistService.getWishlistCountForUser(jwt.sub);
-        
-        return successResponse({ count }, 'Wishlist count retrieved successfully', 200);
+        const count = await wishlistService.getWishlistCountForUser(user?.sub as string);
+        return successResponse({ count }, 'Wishlist count retrieved successfully');
       } catch (error: any) {
         set.status = error.statusCode || 500;
         return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
       }
     },
     {
-      detail: { tags: ['Wishlist'] }
+      detail: { summary: 'Get total wishlist count' }
     }
   );

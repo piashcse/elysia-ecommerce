@@ -1,0 +1,135 @@
+import { Elysia, t } from 'elysia';
+import { NotificationService } from '../service/NotificationService';
+import {
+  notificationIdSchema,
+  updateNotificationSchema,
+} from '../validators/NotificationValidator';
+import { validate } from '../../../utils/validation';
+import { successResponse, errorResponse, paginatedResponse } from '../../../core/responses';
+import { jwt } from '@elysiajs/jwt';
+import envConfig from '../../../config/env';
+
+const notificationService = new NotificationService();
+
+export const notificationController = new Elysia({ prefix: '/notifications', tags: ['Notification'] })
+  .use(
+    jwt({
+      name: 'jwt',
+      secret: envConfig.JWT_SECRET,
+    })
+  )
+  .derive(async ({ jwt, headers }) => {
+    const authHeader = headers['authorization'];
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return { user: null };
+    }
+    const token = authHeader.split(' ')[1];
+    const payload = await jwt.verify(token);
+    return { user: payload };
+  })
+  .guard(
+    {
+      beforeHandle: ({ set, user }) => {
+        if (!user) {
+          set.status = 401;
+          return errorResponse('Unauthorized', 'UNAUTHORIZED', 401);
+        }
+      },
+    },
+    (app) =>
+      app
+        // Get all notifications for the authenticated user
+        .get(
+          '/',
+          async ({ query, set, user }) => {
+            try {
+              const page = parseInt(query.page as string) || 1;
+              const limit = parseInt(query.limit as string) || 10;
+              const { notifications, total } = await notificationService.getUserNotifications(user.id, page, limit);
+
+              return paginatedResponse(
+                notifications,
+                {
+                  page,
+                  limit,
+                  total,
+                  totalPages: Math.ceil(total / limit),
+                },
+                'Notifications retrieved successfully'
+              );
+            } catch (error: any) {
+              set.status = error.statusCode || 500;
+              return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
+            }
+          },
+          {
+            query: t.Object({
+              page: t.Optional(t.String()),
+              limit: t.Optional(t.String()),
+            }),
+            detail: { summary: "Get all notifications for the authenticated user" },
+          }
+        )
+        // Mark a notification as read
+        .patch(
+          '/:id/read',
+          async ({ params, set, user }) => {
+            try {
+              const { id } = params;
+              validate(notificationIdSchema, { id });
+
+              const updatedNotification = await notificationService.markAsRead(id, user.id);
+
+              return successResponse(updatedNotification, 'Notification marked as read', 200);
+            } catch (error: any) {
+              set.status = error.statusCode || 500;
+              return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
+            }
+          },
+          {
+            params: t.Object({
+              id: t.String(),
+            }),
+            detail: { summary: "Mark a notification as read" },
+          }
+        )
+        // Mark all notifications as read
+        .patch(
+          '/read/all',
+          async ({ set, user }) => {
+            try {
+              await notificationService.markAllAsRead(user.id);
+              return successResponse(null, 'All notifications marked as read', 200);
+            } catch (error: any) {
+              set.status = error.statusCode || 500;
+              return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
+            }
+          },
+          {
+            detail: { summary: "Mark all notifications as read" },
+          }
+        )
+        // Delete a notification
+        .delete(
+          '/:id',
+          async ({ params, set, user }) => {
+            try {
+              const { id } = params;
+              validate(notificationIdSchema, { id });
+
+              await notificationService.deleteNotification(id, user.id);
+
+              return successResponse(null, 'Notification deleted successfully', 200);
+            } catch (error: any) {
+              set.status = error.statusCode || 500;
+              return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
+            }
+          },
+          {
+            params: t.Object({
+              id: t.String(),
+            }),
+            detail: { summary: "Delete a notification" },
+          }
+        )
+  );

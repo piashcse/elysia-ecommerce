@@ -1,21 +1,27 @@
-import 'reflect-metadata';
-import {Elysia} from 'elysia';
-import {swagger} from '@elysiajs/swagger';
-import {cors} from '@elysiajs/cors';
-import {jwt} from '@elysiajs/jwt';
-import {logger} from '@bogeychan/elysia-logger';
-import {connectDB} from './config/database';
+import { Elysia } from 'elysia';
+import { swagger } from '@elysiajs/swagger';
+import { cors } from '@elysiajs/cors';
+import { jwt } from '@elysiajs/jwt';
+import { logger } from '@bogeychan/elysia-logger';
+import { connectDB } from './config/database';
 import envConfig from './config/env';
-import {helmetMiddleware} from './middlewares/helmet';
-import {defaultRateLimiter} from './middlewares/rateLimiter';
-import {errorHandler} from './middlewares/errorHandler';
-import {userController} from './modules/user/controller/UserController';
-import {productController} from './modules/product/controller/ProductController';
-import {categoryController} from './modules/category/controller/CategoryController';
-import {cartController} from './modules/cart/controller/CartController';
-import {wishlistController} from './modules/wishlist/controller/WishlistController';
-import {orderController} from './modules/order/controller/OrderController';
-import {paymentController} from './modules/payment/controller/PaymentController';
+import { helmetMiddleware } from './middlewares/helmet';
+import { defaultRateLimiter } from './middlewares/rateLimiter';
+import { errorHandler } from './middlewares/errorHandler';
+import { authController } from './modules/auth/controller/AuthController';
+import { sellerController } from './modules/seller/controller/SellerController';
+import { userController } from './modules/user/controller/UserController';
+import { productController } from './modules/product/controller/ProductController';
+import { categoryController } from './modules/category/controller/CategoryController';
+import { cartController } from './modules/cart/controller/CartController';
+import { wishlistController } from './modules/wishlist/controller/WishlistController';
+import { orderController } from './modules/order/controller/OrderController';
+import { paymentController } from './modules/payment/controller/PaymentController';
+import { reviewController } from './modules/review/controller/ReviewController';
+import { couponController } from './modules/coupon/controller/CouponController';
+import { notificationController } from './modules/notification/controller/NotificationController';
+import { shippingController } from './modules/shipping/controller/ShippingController';
+import { addressController } from './modules/address/controller/AddressController';
 
 const app = new Elysia();
 
@@ -30,7 +36,7 @@ app.use(
             info: {
                 title: "Elysia E-commerce API",
                 version: "1.0.0",
-                description: "High-performance eCommerce backend built with Elysia.js and TypeORM.",
+                description: "High-performance eCommerce backend built with Elysia.js and Drizzle ORM.",
                 contact: {
                     name: "Mehedi Hassan Piash",
                     email: "piash599@gmail.com",
@@ -87,13 +93,20 @@ app.use(
     .use(errorHandler);
 
 // Register controllers
-app.use(userController)
+app.use(authController)
+    .use(userController)
+    .use(sellerController)
     .use(productController)
     .use(categoryController)
     .use(cartController)
     .use(wishlistController)
     .use(orderController)
-    .use(paymentController);
+    .use(paymentController)
+    .use(reviewController)
+    .use(couponController)
+    .use(notificationController)
+    .use(shippingController)
+    .use(addressController);
 
 // Health check endpoint
 app.get('/health', () => ({
