@@ -1,215 +1,273 @@
-import { AppDataSource } from '../../../config/database';
-import { Cart } from '../entity/Cart';
-import { CartItem } from '../entity/CartItem';
-import { Product } from '../../product/entity/Product';
-import { User } from '../../user/entity/User';
+import { db } from '../../../config/database';
+import { carts, cartItems, products, users } from '../../../database/schema';
+import { eq, and, desc } from 'drizzle-orm';
 import { AddToCartDto, UpdateCartItemDto } from '../dto/CartDto';
 import { NotFoundError, ConflictError } from '../../../core/errors';
 
 export class CartService {
-  private cartRepository = AppDataSource.getRepository(Cart);
-  private cartItemRepository = AppDataSource.getRepository(CartItem);
-  private productRepository = AppDataSource.getRepository(Product);
-  private userRepository = AppDataSource.getRepository(User);
-
-  async createCart(userId?: string, sessionId?: string): Promise<Cart> {
+  async createCart(userId?: string, sessionId?: string): Promise<any> {
     // Check if user exists if userId is provided
-    let user: User | undefined;
     if (userId) {
-      user = await this.userRepository.findOne({ where: { id: userId } });
+      const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
       if (!user) {
         throw new NotFoundError('User not found');
       }
     }
 
     // Check if cart already exists for user or session
-    let existingCart: Cart | null = null;
+    let existingCart: any | null = null;
     if (userId) {
-      existingCart = await this.cartRepository.findOne({ where: { user: { id: userId } } });
+      const [cart] = await db.select().from(carts).where(eq(carts.userId, userId)).limit(1);
+      existingCart = cart;
     } else if (sessionId) {
-      existingCart = await this.cartRepository.findOne({ where: { sessionId } });
+      const [cart] = await db.select().from(carts).where(eq(carts.id, sessionId)).limit(1); // Assuming sessionId is treated as cart id
+      existingCart = cart;
     }
 
     if (existingCart) {
       return existingCart;
     }
 
-    const cart = new Cart();
-    cart.user = user;
-    cart.sessionId = sessionId;
-    return this.cartRepository.save(cart);
+    const [newCart] = await db.insert(carts).values({
+      userId: userId,
+    }).returning();
+
+    return newCart;
   }
 
-  async findCartByUserOrSession(userId?: string, sessionId?: string): Promise<Cart | null> {
+  async findCartByUserOrSession(userId?: string, sessionId?: string): Promise<any | null> {
     if (userId) {
-      return this.cartRepository.findOne({
-        where: { user: { id: userId } },
-        relations: ['items', 'items.product']
-      });
+      const cart = await db
+        .select()
+        .from(carts)
+        .leftJoin(cartItems, eq(carts.id, cartItems.cartId))
+        .leftJoin(products, eq(cartItems.productId, products.id))
+        .where(eq(carts.userId, userId));
+
+      if (cart.length > 0) {
+        return {
+          ...cart[0].carts,
+          items: cart.map(c => c.cartItems).filter(item => item !== null)
+        };
+      }
     } else if (sessionId) {
-      return this.cartRepository.findOne({
-        where: { sessionId },
-        relations: ['items', 'items.product']
-      });
+      const cart = await db
+        .select()
+        .from(carts)
+        .leftJoin(cartItems, eq(carts.id, cartItems.cartId))
+        .leftJoin(products, eq(cartItems.productId, products.id))
+        .where(eq(carts.id, sessionId)); // Assuming sessionId is treated as cart id
+
+      if (cart.length > 0) {
+        return {
+          ...cart[0].carts,
+          items: cart.map(c => c.cartItems).filter(item => item !== null)
+        };
+      }
     }
     return null;
   }
 
   async getCartWithItems(cartId: string): Promise<any> {
-    const cart = await this.cartRepository.findOne({
-      where: { id: cartId },
-      relations: ['items', 'items.product', 'user']
-    });
+    const cartItemsResult = await db
+      .select({
+        cart: carts,
+        cartItem: cartItems,
+        product: products,
+        user: users,
+      })
+      .from(carts)
+      .leftJoin(cartItems, eq(carts.id, cartItems.cartId))
+      .leftJoin(products, eq(cartItems.productId, products.id))
+      .leftJoin(users, eq(carts.userId, users.id))
+      .where(eq(carts.id, cartId));
 
-    if (!cart) {
+    if (cartItemsResult.length === 0) {
       throw new NotFoundError('Cart not found');
     }
 
+    const cart = cartItemsResult[0].cart;
+    
     // Calculate cart totals
     let totalItems = 0;
     let totalAmount = 0;
 
-    if (cart.items && cart.items.length > 0) {
-      for (const item of cart.items) {
-        totalItems += item.quantity;
-        totalAmount += item.quantity * parseFloat(item.product.price.toString());
-      }
-    }
+    const items = cartItemsResult
+      .filter(result => result.cartItem !== null)
+      .map(result => {
+        const itemTotal = Number(result.cartItem!.quantity) * Number(result.product!.price);
+        totalItems += result.cartItem!.quantity;
+        totalAmount += itemTotal;
+        
+        return {
+          ...result.cartItem,
+          subtotal: itemTotal,
+          product: result.product
+        };
+      });
 
     return {
       ...cart,
-      items: cart.items.map(item => ({
-        ...item,
-        subtotal: item.quantity * parseFloat(item.product.price.toString())
-      })),
+      items,
       totalItems,
       totalAmount,
     };
   }
 
   async addToCart(userId: string, addToCartDto: AddToCartDto): Promise<any> {
-    const product = await this.productRepository.findOne({ where: { id: addToCartDto.productId } });
+    const [product] = await db.select().from(products).where(eq(products.id, addToCartDto.productId)).limit(1);
     if (!product) {
       throw new NotFoundError('Product not found');
     }
 
-    if (product.stock < addToCartDto.quantity) {
+    if (Number(product.stockQuantity) < addToCartDto.quantity) {
       throw new Error('Insufficient stock for this product');
     }
 
     // Find or create user's cart
-    let cart = await this.cartRepository.findOne({
-      where: { user: { id: userId } },
-      relations: ['items']
-    });
+    let [cart] = await db.select().from(carts).where(eq(carts.userId, userId)).limit(1);
 
     if (!cart) {
-      cart = await this.createCart(userId, undefined);
+      [cart] = await this.createCart(userId, undefined);
     }
 
     // Check if product already exists in cart
-    let cartItem = cart.items?.find(item => item.product.id === addToCartDto.productId);
+    const [existingCartItem] = await db
+      .select()
+      .from(cartItems)
+      .where(and(
+        eq(cartItems.cartId, cart.id),
+        eq(cartItems.productId, addToCartDto.productId)
+      ))
+      .limit(1);
 
-    if (cartItem) {
+    if (existingCartItem) {
       // Update quantity if item exists
-      cartItem.quantity += addToCartDto.quantity;
-      if (product.stock < cartItem.quantity) {
+      const newQuantity = existingCartItem.quantity + addToCartDto.quantity;
+      if (Number(product.stockQuantity) < newQuantity) {
         throw new Error('Insufficient stock for the updated quantity');
       }
+      
+      const [updatedCartItem] = await db
+        .update(cartItems)
+        .set({ quantity: newQuantity })
+        .where(eq(cartItems.id, existingCartItem.id))
+        .returning();
     } else {
       // Create new cart item
-      cartItem = new CartItem();
-      cartItem.cart = cart;
-      cartItem.product = product;
-      cartItem.quantity = addToCartDto.quantity;
+      const [newCartItem] = await db.insert(cartItems).values({
+        cartId: cart.id,
+        productId: addToCartDto.productId,
+        quantity: addToCartDto.quantity,
+      }).returning();
     }
-
-    await this.cartItemRepository.save(cartItem);
 
     // Reload cart with updated items
     return this.getCartWithItems(cart.id);
   }
 
   async updateCartItem(cartItemId: string, updateCartItemDto: UpdateCartItemDto): Promise<any> {
-    const cartItem = await this.cartItemRepository.findOne({
-      where: { id: cartItemId },
-      relations: ['cart', 'product']
-    });
+    const [cartItem] = await db
+      .select({ 
+        cartItem: cartItems,
+        product: products,
+        cart: carts,
+      })
+      .from(cartItems)
+      .leftJoin(products, eq(cartItems.productId, products.id))
+      .leftJoin(carts, eq(cartItems.cartId, carts.id))
+      .where(eq(cartItems.id, cartItemId))
+      .limit(1);
 
     if (!cartItem) {
       throw new NotFoundError('Cart item not found');
     }
 
-    if (cartItem.product.stock < updateCartItemDto.quantity) {
+    if (Number(cartItem.product!.stockQuantity) < updateCartItemDto.quantity) {
       throw new Error('Insufficient stock for the updated quantity');
     }
 
-    cartItem.quantity = updateCartItemDto.quantity;
-    await this.cartItemRepository.save(cartItem);
+    const [updatedCartItem] = await db
+      .update(cartItems)
+      .set({ quantity: updateCartItemDto.quantity })
+      .where(eq(cartItems.id, cartItemId))
+      .returning();
 
     // Reload cart with updated items
-    return this.getCartWithItems(cartItem.cart.id);
+    return this.getCartWithItems(cartItem.cart!.id);
   }
 
   async removeCartItem(cartItemId: string): Promise<any> {
-    const cartItem = await this.cartItemRepository.findOne({
-      where: { id: cartItemId },
-      relations: ['cart', 'product']
-    });
+    const [cartItem] = await db
+      .select({ 
+        cartItem: cartItems,
+        cart: carts,
+      })
+      .from(cartItems)
+      .leftJoin(carts, eq(cartItems.cartId, carts.id))
+      .where(eq(cartItems.id, cartItemId))
+      .limit(1);
 
     if (!cartItem) {
       throw new NotFoundError('Cart item not found');
     }
 
-    const cartId = cartItem.cart.id;
-    await this.cartItemRepository.remove(cartItem);
+    const cartId = cartItem.cart!.id;
+    await db.delete(cartItems).where(eq(cartItems.id, cartItemId));
 
     // Reload cart with updated items
     return this.getCartWithItems(cartId);
   }
 
   async clearCart(cartId: string): Promise<void> {
-    const cart = await this.cartRepository.findOne({
-      where: { id: cartId },
-      relations: ['items']
-    });
+    const [cart] = await db.select().from(carts).where(eq(carts.id, cartId)).limit(1);
 
     if (!cart) {
       throw new NotFoundError('Cart not found');
     }
 
-    if (cart.items && cart.items.length > 0) {
-      await this.cartItemRepository.remove(cart.items);
-    }
+    await db.delete(cartItems).where(eq(cartItems.cartId, cartId));
   }
 
   async getCartForUser(userId: string): Promise<any> {
-    const cart = await this.cartRepository.findOne({
-      where: { user: { id: userId } },
-      relations: ['items', 'items.product', 'user']
-    });
+    const cartItemsResult = await db
+      .select({
+        cart: carts,
+        cartItem: cartItems,
+        product: products,
+      })
+      .from(carts)
+      .leftJoin(cartItems, eq(carts.id, cartItems.cartId))
+      .leftJoin(products, eq(cartItems.productId, products.id))
+      .where(eq(carts.userId, userId));
 
-    if (!cart) {
+    if (cartItemsResult.length === 0) {
       return null;
     }
 
+    const cart = cartItemsResult[0].cart;
+    
     // Calculate cart totals
     let totalItems = 0;
     let totalAmount = 0;
 
-    if (cart.items && cart.items.length > 0) {
-      for (const item of cart.items) {
-        totalItems += item.quantity;
-        totalAmount += item.quantity * parseFloat(item.product.price.toString());
-      }
-    }
+    const items = cartItemsResult
+      .filter(result => result.cartItem !== null)
+      .map(result => {
+        const itemTotal = Number(result.cartItem!.quantity) * Number(result.product!.price);
+        totalItems += result.cartItem!.quantity;
+        totalAmount += itemTotal;
+        
+        return {
+          ...result.cartItem,
+          subtotal: itemTotal,
+          product: result.product
+        };
+      });
 
     return {
       ...cart,
-      items: cart.items.map(item => ({
-        ...item,
-        subtotal: item.quantity * parseFloat(item.product.price.toString())
-      })),
+      items,
       totalItems,
       totalAmount,
     };

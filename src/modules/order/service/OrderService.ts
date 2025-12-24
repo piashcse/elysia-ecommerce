@@ -1,217 +1,225 @@
-import { AppDataSource } from '../../../config/database';
-import { Order } from '../entity/Order';
-import { OrderItem } from '../entity/OrderItem';
-import { User } from '../../user/entity/User';
-import { Product } from '../../product/entity/Product';
-import { CartService } from '../../../cart/service/CartService';
+import { db } from '../../../config/database';
+import { orders as ordersTable, orderItems as orderItemsTable, users, products } from '../../../database/schema';
+import { eq, and, desc, gte, lte, sql } from 'drizzle-orm';
 import { CreateOrderDto, UpdateOrderDto } from '../dto/OrderDto';
-import { NotFoundError, ConflictError, ValidationError } from '../../../core/errors';
-import { OrderStatus } from '../entity/Order';
+import { NotFoundError, ConflictError } from '../../../core/errors';
 
 export class OrderService {
-  private orderRepository = AppDataSource.getRepository(Order);
-  private orderItemRepository = AppDataSource.getRepository(OrderItem);
-  private userRepository = AppDataSource.getRepository(User);
-  private productRepository = AppDataSource.getRepository(Product);
-
-  async createOrder(userId: string, createOrderDto: CreateOrderDto): Promise<Order> {
+  async createOrder(userId: string, createOrderDto: CreateOrderDto): Promise<any> {
     // Check if user exists
-    const user = await this.userRepository.findOne({ where: { id: userId } });
+    const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
     if (!user) {
       throw new NotFoundError('User not found');
     }
 
     // Validate products and check stock
     let totalAmount = 0;
-    const products: Array<{
-      product: Product;
+    const productsData: Array<{
+      product: any;
       quantity: number;
       price: number;
     }> = [];
 
     for (const item of createOrderDto.items) {
-      const product = await this.productRepository.findOne({ where: { id: item.productId } });
+      const [product] = await db.select().from(products).where(eq(products.id, item.productId)).limit(1);
       if (!product) {
         throw new NotFoundError(`Product with ID ${item.productId} not found`);
       }
 
-      if (product.stock < item.quantity) {
+      if (Number(product.stockQuantity) < item.quantity) {
         throw new Error(`Insufficient stock for product ${product.name}`);
       }
 
-      products.push({
+      productsData.push({
         product,
         quantity: item.quantity,
-        price: parseFloat(product.price.toString())
+        price: Number(product.price)
       });
 
-      totalAmount += item.quantity * parseFloat(product.price.toString());
+      totalAmount += item.quantity * Number(product.price);
     }
 
     // Create order
-    const order = new Order();
-    order.user = user;
-    order.totalAmount = totalAmount;
-    order.status = OrderStatus.PENDING;
-    order.shippingAddress = createOrderDto.shippingAddress;
-    order.billingAddress = createOrderDto.billingAddress || createOrderDto.shippingAddress;
-    order.notes = createOrderDto.notes;
+    const [newOrder] = await db.insert(ordersTable).values({
+      userId: userId,
+      totalAmount: totalAmount.toString(),
+      status: 'pending',
+      shippingAddress: JSON.stringify(createOrderDto.shippingAddress),
+      billingAddress: JSON.stringify(createOrderDto.billingAddress || createOrderDto.shippingAddress),
+    }).returning();
 
-    const savedOrder = await this.orderRepository.save(order);
+    if (!newOrder) {
+      throw new Error('Failed to create order');
+    }
 
     // Create order items
-    const orderItems: OrderItem[] = [];
-    for (const item of products) {
-      const orderItem = new OrderItem();
-      orderItem.order = savedOrder;
-      orderItem.product = item.product;
-      orderItem.quantity = item.quantity;
-      orderItem.price = item.price;
-      orderItems.push(orderItem);
-    }
+    const orderItemsToInsert = productsData.map(item => ({
+      orderId: newOrder.id,
+      productId: item.product.id,
+      quantity: item.quantity,
+      price: item.price.toString(),
+    }));
 
-    await this.orderItemRepository.save(orderItems);
+    await db.insert(orderItemsTable).values(orderItemsToInsert);
 
     // Update product stock
-    for (const item of products) {
-      item.product.stock -= item.quantity;
-      await this.productRepository.save(item.product);
+    for (const item of productsData) {
+      const newStock = Number(item.product.stockQuantity) - item.quantity;
+      await db.update(products)
+        .set({ stockQuantity: newStock })
+        .where(eq(products.id, item.product.id));
     }
 
-    // Reload order with populated relations
-    return this.orderRepository.findOne({
-      where: { id: savedOrder.id },
-      relations: ['items', 'items.product', 'user']
-    });
+    // Return order with items
+    return this.getOrderById(newOrder.id);
   }
 
-  async getOrderById(orderId: string): Promise<Order | null> {
-    return this.orderRepository.findOne({
-      where: { id: orderId },
-      relations: ['items', 'items.product', 'user']
-    });
-  }
+  async getOrderById(orderId: string): Promise<any | null> {
+    const orderWithItems = await db
+      .select({
+        order: ordersTable,
+        orderItem: orderItemsTable,
+        product: products,
+        user: users,
+      })
+      .from(ordersTable)
+      .leftJoin(orderItemsTable, eq(ordersTable.id, orderItemsTable.orderId))
+      .leftJoin(products, eq(orderItemsTable.productId, products.id))
+      .leftJoin(users, eq(ordersTable.userId, users.id))
+      .where(eq(ordersTable.id, orderId));
 
-  async getOrdersByUser(userId: string, page: number = 1, limit: number = 10): Promise<{ orders: Order[]; total: number }> {
-    const [orders, total] = await this.orderRepository
-      .createQueryBuilder('order')
-      .leftJoinAndSelect('order.items', 'items')
-      .leftJoinAndSelect('items.product', 'product')
-      .where('order.user.id = :userId', { userId })
-      .orderBy('order.createdAt', 'DESC')
-      .skip((page - 1) * limit)
-      .take(limit)
-      .getManyAndCount();
-
-    return { orders, total };
-  }
-
-  async updateOrder(orderId: string, updateOrderDto: UpdateOrderDto): Promise<Order> {
-    const order = await this.orderRepository.findOne({
-      where: { id: orderId },
-      relations: ['items', 'items.product']
-    });
-
-    if (!order) {
-      throw new NotFoundError('Order not found');
+    if (orderWithItems.length === 0) {
+      return null;
     }
 
-    if (updateOrderDto.status) {
-      order.status = updateOrderDto.status;
-    }
+    const order = orderWithItems[0].order;
+    const items = orderWithItems
+      .filter(result => result.orderItem !== null)
+      .map(result => ({
+        ...result.orderItem,
+        product: result.product
+      }));
 
-    if (updateOrderDto.notes !== undefined) {
-      order.notes = updateOrderDto.notes;
-    }
-
-    return this.orderRepository.save(order);
-  }
-
-  async cancelOrder(orderId: string): Promise<Order> {
-    const order = await this.orderRepository.findOne({ where: { id: orderId } });
-    
-    if (!order) {
-      throw new NotFoundError('Order not found');
-    }
-
-    if (order.status !== OrderStatus.PENDING && order.status !== OrderStatus.CONFIRMED) {
-      throw new ConflictError('Cannot cancel an order that is already shipped or delivered');
-    }
-
-    order.status = OrderStatus.CANCELLED;
-    return this.orderRepository.save(order);
+    return {
+      ...order,
+      items,
+      user: orderWithItems[0].user,
+      shippingAddress: typeof order.shippingAddress === 'string' ? JSON.parse(order.shippingAddress) : order.shippingAddress,
+      billingAddress: typeof order.billingAddress === 'string' ? JSON.parse(order.billingAddress) : order.billingAddress,
+    };
   }
 
   async getOrders(
     page: number = 1,
     limit: number = 10,
     filters: {
-      status?: OrderStatus;
+      status?: string;
       dateFrom?: string;
       dateTo?: string;
       userId?: string;
     } = {}
-  ): Promise<{ orders: Order[]; total: number }> {
-    const queryBuilder = this.orderRepository
-      .createQueryBuilder('order')
-      .leftJoinAndSelect('order.items', 'items')
-      .leftJoinAndSelect('items.product', 'product')
-      .leftJoinAndSelect('order.user', 'user')
-      .orderBy('order.createdAt', 'DESC');
+  ): Promise<{ orders: any[]; total: number }> {
+    const offset = (page - 1) * limit;
 
-    // Apply filters
+    let whereClause = undefined;
+    const conditions = [];
+
     if (filters.status) {
-      queryBuilder.andWhere('order.status = :status', { status: filters.status });
+      conditions.push(eq(ordersTable.status, filters.status as any));
     }
-
     if (filters.dateFrom) {
-      queryBuilder.andWhere('order.createdAt >= :dateFrom', { dateFrom: new Date(filters.dateFrom) });
+      conditions.push(gte(ordersTable.createdAt, new Date(filters.dateFrom)));
     }
-
     if (filters.dateTo) {
-      queryBuilder.andWhere('order.createdAt <= :dateTo', { dateTo: new Date(filters.dateTo) });
+      conditions.push(lte(ordersTable.createdAt, new Date(filters.dateTo)));
     }
-
     if (filters.userId) {
-      queryBuilder.andWhere('order.user.id = :userId', { userId: filters.userId });
+      conditions.push(eq(ordersTable.userId, filters.userId));
     }
 
-    const [orders, total] = await queryBuilder
-      .skip((page - 1) * limit)
-      .take(limit)
-      .getManyAndCount();
+    if (conditions.length > 0) {
+      whereClause = and(...conditions);
+    }
 
-    return { orders, total };
+    const ordersResult = await db
+      .select()
+      .from(ordersTable)
+      .where(whereClause)
+      .orderBy(desc(ordersTable.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    const [countResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(ordersTable)
+      .where(whereClause);
+
+    const total = countResult ? Number(countResult.count) : 0;
+
+    // Process orders to parse addresses
+    const formattedOrders = ordersResult.map(order => ({
+      ...order,
+      shippingAddress: typeof order.shippingAddress === 'string' ? JSON.parse(order.shippingAddress) : order.shippingAddress,
+      billingAddress: typeof order.billingAddress === 'string' ? JSON.parse(order.billingAddress) : order.billingAddress,
+    }));
+
+    return { orders: formattedOrders, total };
+  }
+
+  async updateOrder(orderId: string, updateOrderDto: UpdateOrderDto): Promise<any> {
+    const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId)).limit(1);
+
+    if (!order) {
+      throw new NotFoundError('Order not found');
+    }
+
+    const updateData: any = {};
+    if (updateOrderDto.status) {
+      updateData.status = updateOrderDto.status;
+    }
+
+    if (updateOrderDto.notes !== undefined) {
+      updateData.notes = updateOrderDto.notes;
+    }
+
+    await db.update(ordersTable)
+      .set(updateData)
+      .where(eq(ordersTable.id, orderId));
+
+    return this.getOrderById(orderId);
+  }
+
+  async cancelOrder(orderId: string): Promise<any> {
+    const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId)).limit(1);
+
+    if (!order) {
+      throw new NotFoundError('Order not found');
+    }
+
+    if (order.status !== 'pending' && order.status !== 'processing') {
+      throw new ConflictError('Cannot cancel an order that is already shipped or delivered');
+    }
+
+    const [updatedOrder] = await db.update(ordersTable)
+      .set({ status: 'cancelled' })
+      .where(eq(ordersTable.id, orderId))
+      .returning();
+
+    return updatedOrder;
   }
 
   async getOrderStats(userId?: string) {
-    const queryBuilder = this.orderRepository.createQueryBuilder('order');
-    
-    if (userId) {
-      queryBuilder.where('order.user.id = :userId', { userId });
-    }
+    let whereClause = userId ? eq(ordersTable.userId, userId) : undefined;
+    const ordersResult = await db.select().from(ordersTable).where(whereClause);
 
-    const [totalOrders, totalRevenue, avgOrderValue] = await Promise.all([
-      // Total orders
-      queryBuilder.getCount(),
-      
-      // Total revenue
-      queryBuilder
-        .select('SUM(order.totalAmount)', 'total')
-        .getRawOne()
-        .then(result => result.total || 0),
-        
-      // Average order value
-      queryBuilder
-        .select('AVG(order.totalAmount)', 'avg')
-        .getRawOne()
-        .then(result => result.avg || 0)
-    ]);
+    const totalOrders = ordersResult.length;
+    const totalRevenue = ordersResult.reduce((sum, order) => sum + Number(order.totalAmount), 0);
+    const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
     return {
       totalOrders,
-      totalRevenue: parseFloat(totalRevenue),
-      avgOrderValue: parseFloat(avgOrderValue),
+      totalRevenue,
+      avgOrderValue,
     };
   }
 }

@@ -1,368 +1,329 @@
-# Elysia E-commerce
+# Elysia E-commerce API
 
-A modern, high-performance eCommerce backend built with Elysia.js (Bun) and TypeORM.
-Designed with clean architecture, modular structure, and production-ready best practices.
-Includes authentication, product management, carts, orders, payments, wishlists, and more.
+A modern, high-performance eCommerce backend built with Elysia.js, Bun, and Drizzle ORM. This project is designed with a clean, modular architecture and production-ready best practices, providing a complete solution for e-commerce platforms.
 
-## 🚀 Features
+## 🚀 Core Features
 
-- **RESTful API endpoints** for complete e-commerce functionality
-- **Product management** with categories and inventory tracking
-- **User authentication** with JWT tokens and role-based access (admin/customer)
-- **Shopping cart** functionality with persistent storage
-- **Wishlist** functionality for saving favorite products
-- **Order processing** system with order management
-- **Payment processing** module (implementation in progress)
-- **Inventory management** with stock tracking
-- **Comprehensive logging** with Winston logger
-- **Rate limiting** to prevent API abuse
-- **Security headers** with Helmet middleware
-- **API documentation** with Swagger UI
-- **Type-safe validation** with Zod schemas
-- **Database migrations** support for production deployments
+-   **RESTful API**: A comprehensive set of endpoints for all e-commerce functionalities.
+-   **Authentication & Authorization**: Secure user registration and login using JWT and role-based access control (Admin, Seller, Customer).
+-   **User Management**: Complete user profile management, including password changes and admin operations.
+-   **Product & Category Management**: Full CRUD operations for products and categories, with support for stock management and seller associations.
+-   **Shopping Cart & Wishlist**: Persistent shopping cart and wishlist functionality for an enhanced user experience.
+-   **Order Management**: A complete order processing system with status tracking, order history, and stock management.
+-   **Payment Processing**: Simulated payment processing with support for multiple payment methods and refund management.
+-   **Seller Operations**: Dedicated endpoints for sellers to manage their products and view orders.
+-   **Product Reviews & Ratings**: A complete system for customers to leave reviews and ratings on products.
+-   **Discounts & Coupons**: Flexible coupon system with support for percentage or fixed discounts, usage limits, and expiration dates.
+-   **Address Management**: Support for multiple shipping and billing addresses per user.
+-   **Shipping Methods**: Configurable shipping options with cost calculation and delivery estimates.
+-   **Advanced Product Options**: Support for multiple product images and product variants (e.g., size, color).
+-   **Notification System**: A notification system for order updates, promotions, and other events.
+-   **API Documentation**: Interactive API documentation powered by Swagger UI.
+-   **Robust Security**: Middleware for rate limiting, CORS, and security headers (Helmet).
+-   **Comprehensive Logging**: Detailed logging for monitoring and debugging.
+-   **Type-Safe & Validated**: Ensures data integrity with Zod schema validation and Drizzle ORM's type-safe queries.
 
 ## 🛠 Tech Stack
 
-- **Runtime**: [Bun](https://bun.sh/) - Fast JavaScript runtime
-- **Framework**: [Elysia.js](https://elysiajs.com/) - Bun-first TypeScript framework
-- **Database**: [PostgreSQL](https://www.postgresql.org/) - Advanced open-source database
-- **ORM**: [TypeORM](https://typeorm.io/) - TypeScript ORM for database operations
-- **Authentication**: JWT (JSON Web Tokens) with role-based access control
-- **API Documentation**: Swagger UI for interactive API documentation
-- **Logging**: [Winston](https://github.com/winstonjs/winston) for comprehensive application logging
-- **Validation**: [Zod](https://zod.dev/) for schema validation and [class-validator](https://github.com/typestack/class-validator) for entity validation
-- **Security**: Helmet middleware with various security headers
-- **Rate Limiting**: [rate-limiter-flexible](https://github.com/animir/node-rate-limiter-flexible) for API protection
-- **Password Hashing**: [bcryptjs](https://github.com/dcodeIO/bcrypt.js/) for secure password storage
+-   **Runtime**: [Bun](https://bun.sh/)
+-   **Framework**: [Elysia.js](https://elysiajs.com/)
+-   **Database**: [PostgreSQL](https://www.postgresql.org/)
+-   **ORM**: [Drizzle ORM](https://orm.drizzle.team/)
+-   **Authentication**: JWT (JSON Web Tokens)
+-   **API Documentation**: Swagger UI
+-   **Validation**: [Zod](https://zod.dev/)
+-   **Security**: Helmet, CORS, Rate Limiting
+-   **Password Hashing**: bcryptjs
 
-## 📦 Project Structure
+## 🗂️ Project Structure
+
+The project follows a modular architecture to ensure a clean separation of concerns, making it easy to scale and maintain.
 
 ```
-elysia-ecom/
-├── src/                    # Source code
-│   ├── config/            # Configuration files (database, environment, etc.)
-│   ├── core/              # Core utilities and base classes
-│   ├── database/          # Database related files (migrations, seeds)
-│   │   └── migrations/    # Database migration files
-│   ├── middlewares/       # Custom middleware functions
-│   ├── modules/           # Feature modules (user, product, order, etc.)
-│   │   ├── cart/          # Shopping cart module
-│   │   ├── category/      # Product categories module
-│   │   ├── order/         # Order management module
-│   │   ├── payment/       # Payment processing module
-│   │   ├── product/       # Product management module
-│   │   ├── user/          # User management module
-│   │   └── wishlist/      # Wishlist functionality module
-│   │       ├── controller/ # API controllers
-│   │       ├── dto/       # Data Transfer Objects for input validation
-│   │       ├── entity/    # Database entities/models
-│   │       ├── service/   # Business logic services
-│   │       └── validators/ # Custom validation logic
-│   ├── utils/             # Utility functions and helpers
-│   ├── index.ts           # Main application entry point
-│   └── server.ts          # Server configuration and setup
-├── logs/                  # Application logs
-├── .env                   # Environment variables (not committed)
-├── .gitignore             # Git ignore rules
-├── bun.lock               # Bun package lock file
-├── package.json           # Project dependencies and scripts
-├── README.md              # Project documentation
-└── tsconfig.json          # TypeScript configuration
+src/
+├── config/          # Environment, database, and other configurations
+├── core/            # Core utilities like error handling and response formatting
+├── database/        # Drizzle ORM schema and migration files
+│   └── schema/
+├── middlewares/     # Custom Elysia.js middlewares
+├── modules/         # Feature modules (e.g., auth, user, product)
+│   └── [module]/
+│       ├── controller/  # API endpoints and routing
+│       ├── service/     # Business logic
+│       ├── dto/         # Data Transfer Objects
+│       └── validators/  # Zod validation schemas
+├── utils/           # Shared utility functions
+├── server.ts        # Server setup and middleware registration
+└── index.ts         # Application entry point
 ```
-## 📋 Prerequisites
-
-Before you begin, ensure you have the following installed on your system:
-
-- [Bun](https://bun.sh/) v1.0 or higher (installation guide below)
-- [Node.js](https://nodejs.org/) v18 or higher (optional, but recommended for compatibility)
-- [PostgreSQL](https://www.postgresql.org/) database server
-- Git (for cloning the repository)
-
-### Installing Bun
-
-Choose your preferred installation method:
-
-**macOS/Linux:**
-```bash
-curl -fsSL https://bun.sh/install | bash
-```
-
-**Using npm:**
-```bash
-npm install -g bun
-```
-
-**Using Homebrew (macOS):**
-```bash
-brew tap oven-sh/bun
-brew install bun
-```
-
-Verify your installation:
-```bash
-bun --version
-```
-
-### Setting up PostgreSQL
-
-You'll need a PostgreSQL database to run this application. You can:
-
-1. **Install PostgreSQL locally:**
-   - **macOS:** `brew install postgresql`
-   - **Ubuntu/Debian:** `sudo apt install postgresql postgresql-contrib`
-   - **Windows:** Download from [PostgreSQL official website](https://www.postgresql.org/download/windows/)
-
-2. **Or use a cloud database service:**
-   - [Railway](https://railway.app/)
-   - [Supabase](https://supabase.com/)
-   - [AWS RDS](https://aws.amazon.com/rds/)
-
-## 🚀 Getting Started
-
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/piashcse/elysia-ecom.git
-cd elysia-ecom
-```
-
-### 2. Install Dependencies
-
-```bash
-bun install
-```
-
-### 3. Set up Environment Variables
-
-Create a `.env` file in the root directory with the following variables:
-
-```env
-# Server configuration
-PORT=3000
-NODE_ENV=development
-
-# Database configuration
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=postgres
-DB_PASSWORD=your_postgres_password
-DB_NAME=elysia_ecommerce_dev
-
-# JWT configuration (required)
-JWT_SECRET=your_super_secret_jwt_key_change_this_in_production
-
-# Logging configuration
-LOG_LEVEL=info
-```
-
-> **Note:** The `JWT_SECRET` variable is required and must be set.
-
-### 4. Start PostgreSQL Service
-
-Make sure your PostgreSQL service is running:
-
-- **macOS (with Homebrew):** `brew services start postgresql`
-- **Ubuntu/Debian:** `sudo systemctl start postgresql`
-- **Windows:** Start PostgreSQL service through Services panel
-
-### 5. Create Database
-
-Connect to PostgreSQL and create the database:
-
-```bash
-# Connect to PostgreSQL (using default postgres user)
-psql -U postgres
-
-# Create database
-CREATE DATABASE elysia_ecommerce_dev;
-
-# Create user (optional, for security)
-CREATE USER ecommerce_user WITH PASSWORD 'secure_password';
-GRANT ALL PRIVILEGES ON DATABASE elysia_ecommerce_dev TO ecommerce_user;
-
-# Exit psql
-\q
-```
-
-Alternatively, if you're using your own database user, make sure the database exists.
-
-### 6. Run the Application
-
-Start the development server:
-
-```bash
-bun run dev
-```
-
-The application will be available at: http://localhost:3000
-
-> **Note:** In development mode (NODE_ENV=development), the application automatically synchronizes database tables based on your entities. In production mode, it runs pending migrations instead.
-
-### 7. API Documentation
-
-Once the server is running, you can access the API documentation at:
-- Swagger UI: http://localhost:3000/swagger
-- OpenAPI JSON: http://localhost:3000/swagger/json
-
-## 🛠 Development Scripts
-
-The project includes several useful scripts:
-
-- `bun run dev` - Start development server with auto-reload
-- `bun run start` - Start production server
-- `bun run build` - Build the application for production
-- `bun run test` - Run tests
-- `bun run typeorm:run-migrations` - Run database migrations manually
-- `bun run typeorm:generate-migration` - Generate a new migration
-
 
 ## 🌐 API Endpoints
 
-The application provides a comprehensive REST API with the following main endpoints:
+The API is organized by modules. For a complete and interactive list of all endpoints, please visit the **Swagger UI** at `http://localhost:3000/swagger`.
 
-### User Management
-- `POST /users/register` - Register a new user
-- `POST /users/login` - User login (returns JWT token)
-- `GET /users/me` - Get current user profile (requires authentication)
-- `PUT /users/me` - Update user profile (requires authentication)
-- `DELETE /users/me` - Delete user account (requires authentication)
-- `GET /users` - Get all users (admin only)
-- `GET /users/:id` - Get user by ID (admin only or self)
-- `PUT /users/:id` - Update user by ID (admin only)
-- `DELETE /users/:id` - Delete user by ID (admin only)
+### Auth
+- `POST /auth/register`: Register a new user
+- `POST /auth/login`: Login user and get JWT token
 
-> **Note**: The system includes role-based access control with ADMIN and CUSTOMER roles. Admin users have additional permissions to manage other users and system resources.
+### User
+- `GET /users/profile`: Get current user profile
+- `PUT /users/profile`: Update current user profile
+- `PUT /users/change-password`: Change user password
+- `GET /users/`: Get all users (Admin only)
+- `GET /users/:id`: Get user by ID
+- `PUT /users/:id`: Update user by ID (Admin only)
+- `DELETE /users/:id`: Delete user by ID (Admin only)
 
-### Product Management
-- `GET /products` - Get all products
-- `GET /products/:id` - Get a specific product
-- `POST /products` - Create a new product (admin only)
-- `PUT /products/:id` - Update a product (admin only)
-- `DELETE /products/:id` - Delete a product (admin only)
+### Seller
+- `GET /seller/products`: Get seller's products
+- `POST /seller/products`: Create product as seller
+- `PUT /seller/products/:id`: Update seller's product
+- `DELETE /seller/products/:id`: Delete seller's product
+- `GET /seller/orders`: Get seller's orders
 
-### Category Management
-- `GET /categories` - Get all categories
-- `GET /categories/:id` - Get a specific category
-- `POST /categories` - Create a new category (admin only)
-- `PUT /categories/:id` - Update a category (admin only)
-- `DELETE /categories/:id` - Delete a category (admin only)
+### Product
+- `POST /products/`: Create a new product (Admin only)
+- `GET /products/`: Get all products with filters
+- `GET /products/:id`: Get product by ID
+- `PUT /products/:id`: Update product by ID (Admin only)
+- `DELETE /products/:id`: Delete product by ID (Admin only)
 
-### Cart Management
-- `GET /cart` - Get current user's cart
-- `POST /cart` - Add item to cart
-- `PUT /cart/:id` - Update cart item quantity
-- `DELETE /cart/:id` - Remove item from cart
+### Category
+- `POST /categories/`: Create a new category (Admin only)
+- `GET /categories/`: Get all categories
+- `GET /categories/:id`: Get category by ID
+- `PUT /categories/:id`: Update category by ID (Admin only)
+- `DELETE /categories/:id`: Delete category by ID (Admin only)
 
-### Wishlist Management
-- `GET /wishlist` - Get current user's wishlist
-- `POST /wishlist` - Add item to wishlist
-- `DELETE /wishlist/:id` - Remove item from wishlist
+### Cart
+- `GET /cart/`: Get current user's cart
+- `POST /cart/items`: Add item to cart
+- `PUT /cart/items/:id`: Update cart item quantity
+- `DELETE /cart/items/:id`: Remove item from cart
+- `DELETE /cart/`: Clear entire cart
 
-### Order Management
-- `GET /orders` - Get current user's orders
-- `GET /orders/:id` - Get a specific order
-- `POST /orders` - Create a new order
+### Wishlist
+- `GET /wishlist/`: Get current user's wishlist
+- `POST /wishlist/items`: Add product to wishlist
+- `DELETE /wishlist/items/:id`: Remove item from wishlist
+- `GET /wishlist/count`: Get total wishlist count
 
-### Payment Processing
-- `POST /payments` - Process payment for an order
+### Order
+- `POST /orders/`: Place a new order
+- `GET /orders/`: Get orders (Admin: all, Customer: own)
+- `GET /orders/:id`: Get order details by ID
+- `PUT /orders/:id`: Update order status (Admin only)
+- `PUT /orders/:id/cancel`: Cancel order
 
-All API endpoints (except public ones like product listings) require authentication via JWT tokens.
+### Payment
+- `POST /payments/`: Create initial payment record
+- `POST /payments/process`: Process payment with gateway simulation
+- `GET /payments/`: Get payments (Admin: all, Customer: own)
+- `GET /payments/:id`: Get payment details by ID
+- `POST /payments/:id/refund`: Refund a completed payment (Admin only)
 
-### Health Check
-- `GET /health` - Check server health status (no authentication required)
+### Review
+- `GET /reviews/product/:productId`: Get all reviews for a product
+- `POST /reviews/`: Create a product review
+- `GET /reviews/my-reviews`: Get current user reviews
+- `PUT /reviews/:id`: Update your review
+- `DELETE /reviews/:id`: Delete your review
+- `POST /reviews/:id/helpful`: Mark review as helpful
 
+### Coupon
+- `POST /coupons/`: Create a new coupon (Admin only)
+- `GET /coupons/`: Get all coupons
+- `GET /coupons/:id`: Get coupon by ID
+- `GET /coupons/code/:code`: Get coupon by code
+- `PUT /coupons/:id`: Update coupon by ID (Admin only)
+- `DELETE /coupons/:id`: Delete coupon by ID (Admin only)
 
-## 🐛 Troubleshooting
+### Notification
+- `GET /notifications/`: Get all notifications for the authenticated user
+- `PATCH /notifications/:id/read`: Mark a notification as read
+- `PATCH /notifications/read/all`: Mark all notifications as read
+- `DELETE /notifications/:id`: Delete a notification
 
-### Common Issues
+### Shipping
+- `POST /shipping-methods/`: Create a new shipping method (Admin only)
+- `GET /shipping-methods/`: Get all shipping methods
+- `GET /shipping-methods/:id`: Get shipping method by ID
+- `PUT /shipping-methods/:id`: Update shipping method by ID (Admin only)
+- `DELETE /shipping-methods/:id`: Delete shipping method by ID (Admin only)
 
-**1. Database Connection Issues:**
-- Ensure PostgreSQL is running: `brew services start postgresql` (macOS)
-- Verify your `.env` file has correct database credentials
-- Check that the database exists: `psql -U postgres -c "\l"` to list databases
+### Address
+- `GET /addresses/`: Get all user addresses
+- `GET /addresses/:id`: Get address by ID
+- `POST /addresses/`: Create new address
+- `PUT /addresses/:id`: Update address
+- `DELETE /addresses/:id`: Delete address
+- `POST /addresses/:id/set-default`: Set address as default
 
-**2. Bun Installation Issues:**
-- Make sure you're using a compatible system (macOS, Linux, or Windows WSL)
-- Try installing via npm if direct installation fails: `npm install -g bun`
+## 🚀 Getting Started
 
-**3. Missing Environment Variables:**
-- Ensure you have a `.env` file with required variables
-- The `JWT_SECRET` variable is mandatory and will cause the app to crash if not set
+### Prerequisites
+-   [Bun](https://bun.sh/) v1.0+
+-   [PostgreSQL](https://www.postgresql.org/)
 
-**4. Port Already in Use:**
-- Change the `PORT` variable in your `.env` file
-- Kill processes using the port: `lsof -ti:3000 | xargs kill -9` (macOS/Linux)
+### Installation & Setup
 
-**5. Migration Issues:**
-- Run migrations manually if auto-sync fails: `bun run typeorm:run-migrations`
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/piashcse/elysia-ecom.git
+    cd elysia-ecom
+    ```
 
-### Development Tips
+2.  **Install dependencies:**
+    ```bash
+    bun install
+    ```
 
-- Use `bun run dev` for development with auto-reload
-- Check the logs in the `logs/` directory for detailed error information
-- The application will automatically synchronize database tables in development mode (when NODE_ENV=development)
-- In production, database migrations are automatically run on startup
-- You can manually run migrations with: `bun run typeorm:run-migrations`
-- Use the `.env.example` file as a reference for required environment variables
+3.  **Set up environment variables:**
+    Create a `.env` file in the root directory. You can copy the `.env.example` file if it exists.
+    ```env
+    PORT=3000
+    NODE_ENV=development
+    DB_HOST=localhost
+    DB_PORT=5432
+    DB_USER=your_db_user
+    DB_PASSWORD=your_db_password
+    DB_NAME=elysia_ecom
+    JWT_SECRET=your_jwt_secret
+    ```
 
+4.  **Set up the database:**
+    Ensure your PostgreSQL server is running and create the database specified in your `.env` file.
+
+5.  **Run database migrations:**
+    ```bash
+    bun run db:push
+    ```
+
+6.  **Start the development server:**
+    ```bash
+    bun run dev
+    ```
+
+The server will start on the port defined in your `.env` file (default: 3000), and you can access the Swagger UI at `http://localhost:3000/swagger`.
+
+## 🛠️ Development Scripts
+
+-   `bun run dev`: Start the development server with hot-reloading.
+-   `bun run build`: Build the application for production.
+-   `bun run start`: Start the production server.
+-   `bun run db:generate`: Generate a new database migration.
+-   `bun run db:push`: Apply migrations to the database.
+-   `bun run db:studio`: Open Drizzle Studio to manage your database.
+
+## 🔑 Authentication
+
+The API uses JWT for authentication. To access protected endpoints, include the token in the `Authorization` header:
+
+```
+Authorization: Bearer <your-jwt-token>
+```
+
+You can obtain a token by registering and logging in via the `/auth/register` and `/auth/login` endpoints.
+
+## 📊 Response Format
+
+The API uses a standardized JSON response format for all requests.
+
+### Success Response
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "message": "Operation successful.",
+  "data": { ... }
+}
+```
+
+### Error Response
+```json
+{
+  "success": false,
+  "statusCode": 404,
+  "message": "Resource not found.",
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "The requested resource could not be found."
+  }
+}
+```
+
+### Paginated Response
+For endpoints that return a list of items, the response will be paginated.
+```json
+{
+  "success": true,
+  "data": {
+    "items": [...],
+    "meta": {
+      "page": 1,
+      "limit": 10,
+      "total": 100,
+      "totalPages": 10
+    }
+  }
+}
+```
+
+## 🎯 User Roles
+
+-   **customer**: Default role for all registered users. Can manage their profile, orders, and cart.
+-   **seller**: Can create and manage their own products and view orders for their products.
+-   **admin**: Has full access to the system, including user management, all products, and system settings.
+
+## 🗄️ Database Schema
+
+The database schema is defined using Drizzle ORM in the `src/database/schema/` directory. The main tables include:
+
+-   `users`
+-   `products`, `categories`, `product_images`, `product_variants`
+-   `carts`, `cart_items`
+-   `wishlists`
+-   `orders`, `order_items`
+-   `payments`
+-   `reviews`
+-   `coupons`, `coupon_usage`
+-   `addresses`
+-   `shipping_methods`
+-   `notifications`
+
+## 🏗️ Architecture & Best Practices
+
+This project adheres to modern software architecture principles to ensure it is scalable, maintainable, and robust.
+
+-   **Modular Design**: Each feature is encapsulated in its own module, promoting separation of concerns.
+-   **Service Layer**: Business logic is abstracted into services, keeping controllers lean.
+-   **Type Safety**: Leverages TypeScript and Zod for end-to-end type safety.
+-   **Dependency Injection**: Elysia's dependency injection is used to manage services and dependencies.
+-   **Environment Configuration**: Centralized environment variable management for different environments (development, production).
+-   **Security**: Implements security best practices, including password hashing, JWT, rate limiting, and protection against common vulnerabilities.
+-   **Error Handling**: A centralized error handling middleware ensures consistent error responses.
+
+## 🚢 Deployment Readiness
+
+This application is built to be production-ready. Before deploying to a live environment, ensure you have:
+
+-   Implemented a robust testing strategy (unit, integration, E2E tests).
+-   Set up monitoring and error tracking (e.g., Sentry, Prometheus).
+-   Configured a caching layer (e.g., Redis) for performance-critical endpoints.
+-   Set up a CI/CD pipeline for automated deployments.
+-   Configured a production-grade PostgreSQL database with automated backups.
+-   Implemented a CDN for serving static assets and product images.
 
 ## 🤝 Contributing
 
-We welcome contributions from the community! Here's how you can help:
+Contributions are welcome! Please follow these steps:
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes
-4. Commit your changes (`git commit -m 'Add some amazing feature'`)
-5. Push to the branch (`git push origin feature/amazing-feature`)
-6. Open a Pull Request
-
-### Development Guidelines
-
-- Follow TypeScript and Elysia.js best practices
-- Write tests for new features
-- Update documentation as needed
-- Follow the existing code style and conventions
-- Keep commits atomic and well-described
-
-### Code Quality
-
-This project follows TypeScript and Elysia.js best practices:
-
-- Use TypeScript for all server-side code
-- Follow functional programming patterns where appropriate
-- Write comprehensive unit tests for all business logic
-- Maintain clean, readable, and well-documented code
-- Use proper error handling and logging
-
-## 👨‍💻 Developed By
-
-<a href="https://twitter.com/piashcse" target="_blank">
-  <img src="https://avatars.githubusercontent.com/piashcse" width="90" align="left">
-</a>
-
-**Mehedi Hassan Piash**
-
-[![Twitter](https://img.shields.io/badge/-Twitter-1DA1F2?logo=x&logoColor=white&style=for-the-badge)](https://twitter.com/piashcse)
-[![Medium](https://img.shields.io/badge/-Medium-00AB6C?logo=medium&logoColor=white&style=for-the-badge)](https://medium.com/@piashcse)
-[![Linkedin](https://img.shields.io/badge/-LinkedIn-0077B5?logo=linkedin&logoColor=white&style=for-the-badge)](https://www.linkedin.com/in/piashcse/)
-[![Web](https://img.shields.io/badge/-Web-0073E6?logo=appveyor&logoColor=white&style=for-the-badge)](https://piashcse.github.io/)
-[![Blog](https://img.shields.io/badge/-Blog-0077B5?logo=readme&logoColor=white&style=for-the-badge)](https://piashcse.blogspot.com)
+1.  Fork the repository.
+2.  Create a new feature branch (`git checkout -b feature/your-feature`).
+3.  Commit your changes (`git commit -m 'Add your feature'`).
+4.  Push to the branch (`git push origin feature/your-feature`).
+5.  Open a pull request.
 
 ## 📄 License
 
-```
-Copyright 2024 piashcse (Mehedi Hassan Piash)
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-```
+This project is licensed under the Apache License 2.0. See the [LICENSE](LICENSE) file for details.

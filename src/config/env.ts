@@ -15,6 +15,7 @@ interface EnvironmentConfig {
   DB_USERNAME?: string; // Optional - for compatibility with common env var name
   DB_PASSWORD: string;
   DB_NAME: string;
+  DB_SSL: string;
   JWT_SECRET: string;
   LOG_LEVEL: string;
 }
@@ -28,6 +29,7 @@ const defaults = {
   DB_USER: 'postgres',
   DB_PASSWORD: 'postgres',
   DB_NAME: 'ecommerce_db',
+  DB_SSL: 'false',
   JWT_SECRET: 'super-secret-key',
   LOG_LEVEL: 'info',
 };
@@ -41,6 +43,7 @@ export const envConfig: EnvironmentConfig = {
   DB_USER: process.env.DB_USER || process.env.DB_USERNAME || defaults.DB_USER, // Support both DB_USER and DB_USERNAME
   DB_PASSWORD: process.env.DB_PASSWORD || defaults.DB_PASSWORD,
   DB_NAME: process.env.DB_NAME || defaults.DB_NAME,
+  DB_SSL: process.env.DB_SSL || defaults.DB_SSL,
   JWT_SECRET: process.env.JWT_SECRET || defaults.JWT_SECRET,
   LOG_LEVEL: process.env.LOG_LEVEL || defaults.LOG_LEVEL,
 };

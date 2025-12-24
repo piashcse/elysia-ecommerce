@@ -1,5 +1,7 @@
 import { z } from 'zod';
-import { OrderStatus } from '../entity/Order';
+// Order validation schemas
+export const orderStatuses = ['pending', 'processing', 'shipped', 'delivered', 'cancelled'] as const;
+export type OrderStatus = (typeof orderStatuses)[number];
 
 // Address schema
 const addressSchema = z.object({
@@ -26,7 +28,7 @@ export const createOrderSchema = z.object({
 });
 
 export const updateOrderSchema = z.object({
-  status: z.nativeEnum(OrderStatus).optional(),
+  status: z.enum(orderStatuses).optional(),
   notes: z.string().max(500).optional(),
 });
 
@@ -35,7 +37,7 @@ export const orderIdSchema = z.object({
 });
 
 export const orderFilterSchema = z.object({
-  status: z.nativeEnum(OrderStatus).optional(),
+  status: z.enum(orderStatuses).optional(),
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),
   sortBy: z.enum(['createdAt', 'totalAmount', 'status']).optional(),

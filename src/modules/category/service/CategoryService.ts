@@ -1,125 +1,127 @@
-import { AppDataSource } from '../../../config/database';
-import { Category } from '../entity/Category';
-import { Product } from '../../product/entity/Product';
+import { db } from '../../../config/database';
+import { categories, products } from '../../../database/schema';
+import { eq, and, or, ilike, desc, sql } from 'drizzle-orm';
 import { CreateCategoryDto, UpdateCategoryDto } from '../dto/CategoryDto';
 import { NotFoundError, ConflictError } from '../../../core/errors';
 
 export class CategoryService {
-  private categoryRepository = AppDataSource.getRepository(Category);
-  private productRepository = AppDataSource.getRepository(Product);
+  async createCategory(createCategoryDto: CreateCategoryDto): Promise<any> {
+    const existingCategory = await db.select().from(categories).where(eq(categories.name, createCategoryDto.name)).limit(1);
 
-  async createCategory(createCategoryDto: CreateCategoryDto): Promise<Category> {
-    // Check if category with the same name already exists
-    const existingCategory = await this.categoryRepository.findOne({
-      where: { name: createCategoryDto.name }
-    });
-
-    if (existingCategory) {
+    if (existingCategory.length > 0) {
       throw new ConflictError('Category with this name already exists');
     }
 
-    const category = new Category();
-    Object.assign(category, createCategoryDto);
+    const [newCategory] = await db.insert(categories).values({
+      name: createCategoryDto.name,
+      description: createCategoryDto.description,
+    }).returning();
 
-    return this.categoryRepository.save(category);
+    return newCategory;
   }
 
-  async findCategoryById(id: string): Promise<Category | null> {
-    return this.categoryRepository.findOne({ where: { id } });
+  async findCategoryById(id: string): Promise<any | null> {
+    const [category] = await db.select().from(categories).where(eq(categories.id, id)).limit(1);
+    return category || null;
   }
 
-  async updateCategory(id: string, updateCategoryDto: UpdateCategoryDto): Promise<Category> {
-    const category = await this.categoryRepository.findOne({ where: { id } });
+  async updateCategory(id: string, updateCategoryDto: UpdateCategoryDto): Promise<any> {
+    const category = await this.findCategoryById(id);
 
     if (!category) {
       throw new NotFoundError('Category not found');
     }
 
-    // If name is being updated, check if it's already taken by another category
     if (updateCategoryDto.name && updateCategoryDto.name !== category.name) {
-      const existingCategory = await this.categoryRepository.findOne({
-        where: { name: updateCategoryDto.name }
-      });
-
-      if (existingCategory) {
+      const existingCategory = await db.select().from(categories).where(eq(categories.name, updateCategoryDto.name)).limit(1);
+      if (existingCategory.length > 0) {
         throw new ConflictError('Category with this name already exists');
       }
     }
 
-    Object.assign(category, updateCategoryDto);
-    return this.categoryRepository.save(category);
+    const [updatedCategory] = await db.update(categories)
+      .set(updateCategoryDto)
+      .where(eq(categories.id, id))
+      .returning();
+
+    return updatedCategory;
   }
 
   async deleteCategory(id: string): Promise<void> {
-    const category = await this.categoryRepository.findOne({ 
-      where: { id },
-      relations: ['products']
-    });
-    
+    const category = await this.findCategoryById(id);
+
     if (!category) {
       throw new NotFoundError('Category not found');
     }
 
-    // Check if category has associated products
-    if (category.products && category.products.length > 0) {
+    const productsResult = await db.select().from(products).where(eq(products.categoryId, id)).limit(1);
+    if (productsResult.length > 0) {
       throw new Error('Cannot delete category with associated products');
     }
 
-    await this.categoryRepository.remove(category);
+    await db.delete(categories).where(eq(categories.id, id));
   }
 
   async getAllCategories(
-    page: number = 1, 
+    page: number = 1,
     limit: number = 10,
     filters: {
       search?: string;
       isActive?: boolean;
     } = {}
-  ): Promise<{ categories: Category[]; total: number }> {
-    const queryBuilder = this.categoryRepository
-      .createQueryBuilder('category')
-      .orderBy('category.createdAt', 'DESC');
+  ): Promise<{ categories: any[]; total: number }> {
+    const offset = (page - 1) * limit;
 
-    // Apply filters
+    const conditions = [];
     if (filters.search) {
-      queryBuilder.andWhere('category.name ILIKE :search OR category.description ILIKE :search', {
-        search: `%${filters.search}%`
-      });
+      conditions.push(
+        or(
+          ilike(categories.name, `%${filters.search}%`),
+          ilike(categories.description, `%${filters.search}%`)
+        )
+      );
     }
 
-    if (filters.isActive !== undefined) {
-      queryBuilder.andWhere('category.isActive = :isActive', { isActive: filters.isActive });
-    }
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-    const [categories, total] = await queryBuilder
-      .skip((page - 1) * limit)
-      .take(limit)
-      .getManyAndCount();
+    const categoriesResult = await db.select().from(categories)
+      .where(whereClause)
+      .orderBy(desc(categories.createdAt))
+      .limit(limit)
+      .offset(offset);
 
-    return { categories, total };
+    const [countResult] = await db.select({ count: sql<number>`count(*)` }).from(categories).where(whereClause);
+    const total = countResult ? Number(countResult.count) : 0;
+
+    return { categories: categoriesResult, total };
   }
 
   async getCategoryWithProducts(id: string, page: number = 1, limit: number = 10): Promise<any> {
-    // Get the category
-    const category = await this.categoryRepository.findOne({ where: { id } });
+    const [category] = await db.select().from(categories).where(eq(categories.id, id)).limit(1);
     if (!category) {
       throw new NotFoundError('Category not found');
     }
 
-    // Get products in this category with pagination
-    const queryBuilder = this.productRepository
-      .createQueryBuilder('product')
-      .where('product.categoryId = :categoryId', { categoryId: id })
-      .orderBy('product.createdAt', 'DESC');
+    const offset = (page - 1) * limit;
 
-    const [products, total] = await queryBuilder
-      .skip((page - 1) * limit)
-      .take(limit)
-      .getManyAndCount();
+    const productsResult = await db
+      .select()
+      .from(products)
+      .where(eq(products.categoryId, id))
+      .orderBy(desc(products.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    const [countResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(products)
+      .where(eq(products.categoryId, id));
+
+    const total = countResult ? Number(countResult.count) : 0;
 
     return {
       category,
-      products,
+      products: productsResult,
       pagination: {
         page,
         limit,

@@ -1,26 +1,25 @@
-import { Product } from '../entity/Product';
-
-// Product DTOs (Data Transfer Objects)
 export interface CreateProductDto {
   name: string;
   description?: string;
   price: number;
-  image?: string;
-  stock: number;
+  imageUrl?: string;
+  stockQuantity: number;
+  sku: string;
   isActive?: boolean;
-  attributes?: Record<string, any>;
   categoryId: string;
+  sellerId: string;
 }
 
 export interface UpdateProductDto {
   name?: string;
   description?: string;
   price?: number;
-  image?: string;
-  stock?: number;
+  imageUrl?: string;
+  stockQuantity?: number;
+  sku?: string;
   isActive?: boolean;
-  attributes?: Record<string, any>;
   categoryId?: string;
+  sellerId?: string;
 }
 
 export interface ProductResponseDto {
@@ -28,27 +27,12 @@ export interface ProductResponseDto {
   name: string;
   description: string | null;
   price: number;
-  image: string | null;
-  stock: number;
+  imageUrl: string | null;
+  stockQuantity: number;
+  sku: string;
   isActive: boolean;
-  attributes: Record<string, any> | null;
-  category: {
-    id: string;
-    name: string;
-  } | null;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface ProductListResponseDto {
-  id: string;
-  name: string;
-  description: string | null;
-  price: number;
-  image: string | null;
-  stock: number;
-  isActive: boolean;
-  categoryId: string;
+  categoryId: string | null;
+  sellerId: string;
   createdAt: Date;
   updatedAt: Date;
 }
