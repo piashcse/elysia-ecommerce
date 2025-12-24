@@ -61,20 +61,103 @@ src/
 
 The API is organized by modules. For a complete and interactive list of all endpoints, please visit the **Swagger UI** at `http://localhost:3000/swagger`.
 
-### Key Modules & Prefixes:
--   **Auth**: `/auth`
--   **Users**: `/users`
--   **Products**: `/products`
--   **Categories**: `/categories`
--   **Cart**: `/cart`
--   **Wishlist**: `/wishlist`
--   **Orders**: `/orders`
--   **Payments**: `/payments`
--   **Reviews**: `/reviews`
--   **Coupons**: `/coupons`
--   **Addresses**: `/addresses`
--   **Shipping**: `/shipping-methods`
--   **Notifications**: `/notifications`
+### Auth
+- `POST /auth/register`: Register a new user
+- `POST /auth/login`: Login user and get JWT token
+
+### User
+- `GET /users/profile`: Get current user profile
+- `PUT /users/profile`: Update current user profile
+- `PUT /users/change-password`: Change user password
+- `GET /users/`: Get all users (Admin only)
+- `GET /users/:id`: Get user by ID
+- `PUT /users/:id`: Update user by ID (Admin only)
+- `DELETE /users/:id`: Delete user by ID (Admin only)
+
+### Seller
+- `GET /seller/products`: Get seller's products
+- `POST /seller/products`: Create product as seller
+- `PUT /seller/products/:id`: Update seller's product
+- `DELETE /seller/products/:id`: Delete seller's product
+- `GET /seller/orders`: Get seller's orders
+
+### Product
+- `POST /products/`: Create a new product (Admin only)
+- `GET /products/`: Get all products with filters
+- `GET /products/:id`: Get product by ID
+- `PUT /products/:id`: Update product by ID (Admin only)
+- `DELETE /products/:id`: Delete product by ID (Admin only)
+
+### Category
+- `POST /categories/`: Create a new category (Admin only)
+- `GET /categories/`: Get all categories
+- `GET /categories/:id`: Get category by ID
+- `PUT /categories/:id`: Update category by ID (Admin only)
+- `DELETE /categories/:id`: Delete category by ID (Admin only)
+
+### Cart
+- `GET /cart/`: Get current user's cart
+- `POST /cart/items`: Add item to cart
+- `PUT /cart/items/:id`: Update cart item quantity
+- `DELETE /cart/items/:id`: Remove item from cart
+- `DELETE /cart/`: Clear entire cart
+
+### Wishlist
+- `GET /wishlist/`: Get current user's wishlist
+- `POST /wishlist/items`: Add product to wishlist
+- `DELETE /wishlist/items/:id`: Remove item from wishlist
+- `GET /wishlist/count`: Get total wishlist count
+
+### Order
+- `POST /orders/`: Place a new order
+- `GET /orders/`: Get orders (Admin: all, Customer: own)
+- `GET /orders/:id`: Get order details by ID
+- `PUT /orders/:id`: Update order status (Admin only)
+- `PUT /orders/:id/cancel`: Cancel order
+
+### Payment
+- `POST /payments/`: Create initial payment record
+- `POST /payments/process`: Process payment with gateway simulation
+- `GET /payments/`: Get payments (Admin: all, Customer: own)
+- `GET /payments/:id`: Get payment details by ID
+- `POST /payments/:id/refund`: Refund a completed payment (Admin only)
+
+### Review
+- `GET /reviews/product/:productId`: Get all reviews for a product
+- `POST /reviews/`: Create a product review
+- `GET /reviews/my-reviews`: Get current user reviews
+- `PUT /reviews/:id`: Update your review
+- `DELETE /reviews/:id`: Delete your review
+- `POST /reviews/:id/helpful`: Mark review as helpful
+
+### Coupon
+- `POST /coupons/`: Create a new coupon (Admin only)
+- `GET /coupons/`: Get all coupons
+- `GET /coupons/:id`: Get coupon by ID
+- `GET /coupons/code/:code`: Get coupon by code
+- `PUT /coupons/:id`: Update coupon by ID (Admin only)
+- `DELETE /coupons/:id`: Delete coupon by ID (Admin only)
+
+### Notification
+- `GET /notifications/`: Get all notifications for the authenticated user
+- `PATCH /notifications/:id/read`: Mark a notification as read
+- `PATCH /notifications/read/all`: Mark all notifications as read
+- `DELETE /notifications/:id`: Delete a notification
+
+### Shipping
+- `POST /shipping-methods/`: Create a new shipping method (Admin only)
+- `GET /shipping-methods/`: Get all shipping methods
+- `GET /shipping-methods/:id`: Get shipping method by ID
+- `PUT /shipping-methods/:id`: Update shipping method by ID (Admin only)
+- `DELETE /shipping-methods/:id`: Delete shipping method by ID (Admin only)
+
+### Address
+- `GET /addresses/`: Get all user addresses
+- `GET /addresses/:id`: Get address by ID
+- `POST /addresses/`: Create new address
+- `PUT /addresses/:id`: Update address
+- `DELETE /addresses/:id`: Delete address
+- `POST /addresses/:id/set-default`: Set address as default
 
 ## 🚀 Getting Started
 
