@@ -1,4 +1,14 @@
-# Elysia E-commerce API
+# Elysia E-commerce
+![Framework](https://img.shields.io/badge/Framework-Elysia.js-6E56CF?style=flat)
+![Runtime](https://img.shields.io/badge/Runtime-Bun-black?logo=bun&style=flat)
+![ORM](https://img.shields.io/badge/ORM-Drizzle-0C4A6E?style=flat)
+![Database](https://img.shields.io/badge/Database-PostgreSQL-336791?logo=postgresql&logoColor=white&style=flat)
+![Language](https://img.shields.io/badge/Language-TypeScript-3178C6?logo=typescript&logoColor=white&style=flat)
+
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg?style=flat)](https://www.apache.org/licenses/LICENSE-2.0)
+<a href="https://github.com/piashcse">
+  <img alt="Author" src="https://img.shields.io/static/v1?label=GitHub&message=piashcse&color=C51162&style=flat"/>
+</a>
 
 A modern, high-performance eCommerce backend built with Elysia.js, Bun, and Drizzle ORM. This project is designed with a clean, modular architecture and production-ready best practices, providing a complete solution for e-commerce platforms.
 
@@ -22,6 +32,18 @@ A modern, high-performance eCommerce backend built with Elysia.js, Bun, and Driz
 -   **Robust Security**: Middleware for rate limiting, CORS, and security headers (Helmet).
 -   **Comprehensive Logging**: Detailed logging for monitoring and debugging.
 -   **Type-Safe & Validated**: Ensures data integrity with Zod schema validation and Drizzle ORM's type-safe queries.
+
+## 🏗️ Architecture & Best Practices
+
+This project adheres to modern software architecture principles to ensure it is scalable, maintainable, and robust.
+
+-   **Modular Design**: Each feature is encapsulated in its own module, promoting separation of concerns.
+-   **Service Layer**: Business logic is abstracted into services, keeping controllers lean.
+-   **Type Safety**: Leverages TypeScript and Zod for end-to-end type safety.
+-   **Dependency Injection**: Elysia's dependency injection is used to manage services and dependencies.
+-   **Environment Configuration**: Centralized environment variable management for different environments (development, production).
+-   **Security**: Implements security best practices, including password hashing, JWT, rate limiting, and protection against common vulnerabilities.
+-   **Error Handling**: A centralized error handling middleware ensures consistent error responses.
 
 ## 🛠 Tech Stack
 
@@ -269,39 +291,6 @@ For endpoints that return a list of items, the response will be paginated.
 }
 ```
 
-## 🎯 User Roles
-
--   **customer**: Default role for all registered users. Can manage their profile, orders, and cart.
--   **seller**: Can create and manage their own products and view orders for their products.
--   **admin**: Has full access to the system, including user management, all products, and system settings.
-
-## 🗄️ Database Schema
-
-The database schema is defined using Drizzle ORM in the `src/database/schema/` directory. The main tables include:
-
--   `users`
--   `products`, `categories`, `product_images`, `product_variants`
--   `carts`, `cart_items`
--   `wishlists`
--   `orders`, `order_items`
--   `payments`
--   `reviews`
--   `coupons`, `coupon_usage`
--   `addresses`
--   `shipping_methods`
--   `notifications`
-
-## 🏗️ Architecture & Best Practices
-
-This project adheres to modern software architecture principles to ensure it is scalable, maintainable, and robust.
-
--   **Modular Design**: Each feature is encapsulated in its own module, promoting separation of concerns.
--   **Service Layer**: Business logic is abstracted into services, keeping controllers lean.
--   **Type Safety**: Leverages TypeScript and Zod for end-to-end type safety.
--   **Dependency Injection**: Elysia's dependency injection is used to manage services and dependencies.
--   **Environment Configuration**: Centralized environment variable management for different environments (development, production).
--   **Security**: Implements security best practices, including password hashing, JWT, rate limiting, and protection against common vulnerabilities.
--   **Error Handling**: A centralized error handling middleware ensures consistent error responses.
 
 ## 🚢 Deployment Readiness
 
@@ -324,6 +313,34 @@ Contributions are welcome! Please follow these steps:
 4.  Push to the branch (`git push origin feature/your-feature`).
 5.  Open a pull request.
 
-## 📄 License
+## 👨 Developed By
 
-This project is licensed under the Apache License 2.0. See the [LICENSE](LICENSE) file for details.
+<a href="https://twitter.com/piashcse" target="_blank">
+  <img src="https://avatars.githubusercontent.com/piashcse" width="90" align="left">
+</a>
+
+**Mehedi Hassan Piash**
+
+[![Twitter](https://img.shields.io/badge/-Twitter-1DA1F2?logo=x&logoColor=white&style=for-the-badge)](https://twitter.com/piashcse)
+[![Medium](https://img.shields.io/badge/-Medium-00AB6C?logo=medium&logoColor=white&style=for-the-badge)](https://medium.com/@piashcse)
+[![Linkedin](https://img.shields.io/badge/-LinkedIn-0077B5?logo=linkedin&logoColor=white&style=for-the-badge)](https://www.linkedin.com/in/piashcse/)
+[![Web](https://img.shields.io/badge/-Web-0073E6?logo=appveyor&logoColor=white&style=for-the-badge)](https://piashcse.github.io/)
+[![Blog](https://img.shields.io/badge/-Blog-0077B5?logo=readme&logoColor=white&style=for-the-badge)](https://piashcse.blogspot.com)
+
+# License
+
+```
+Copyright 2023 piashcse (Mehedi Hassan Piash)
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+```
