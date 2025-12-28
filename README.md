@@ -1,10 +1,9 @@
 # Elysia E-commerce
-![Framework](https://img.shields.io/badge/Framework-Elysia.js-6E56CF?style=flat)
-![Runtime](https://img.shields.io/badge/Runtime-Bun-black?logo=bun&style=flat)
-![ORM](https://img.shields.io/badge/ORM-Drizzle-0C4A6E?style=flat)
-![Database](https://img.shields.io/badge/Database-PostgreSQL-336791?logo=postgresql&logoColor=white&style=flat)
-![Language](https://img.shields.io/badge/Language-TypeScript-3178C6?logo=typescript&logoColor=white&style=flat)
-
+![Elysia](https://img.shields.io/badge/Elysia-1.4.16-6E56CF?style=flat)
+![Bun](https://img.shields.io/badge/Bun-1.3.3-black?logo=bun&style=flat)
+![Drizzle](https://img.shields.io/badge/Drizzle-0.45.1-0C4A6E?style=flat)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-8.16.3-336791?style=flat)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.9.3-3178C6?style=flat)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg?style=flat)](https://www.apache.org/licenses/LICENSE-2.0)
 <a href="https://github.com/piashcse">
   <img alt="Author" src="https://img.shields.io/static/v1?label=GitHub&message=piashcse&color=C51162&style=flat"/>
@@ -47,15 +46,19 @@ This project adheres to modern software architecture principles to ensure it is 
 
 ## 🛠 Tech Stack
 
--   **Runtime**: [Bun](https://bun.sh/)
--   **Framework**: [Elysia.js](https://elysiajs.com/)
--   **Database**: [PostgreSQL](https://www.postgresql.org/)
--   **ORM**: [Drizzle ORM](https://orm.drizzle.team/)
--   **Authentication**: JWT (JSON Web Tokens)
--   **API Documentation**: Swagger UI
--   **Validation**: [Zod](https://zod.dev/)
--   **Security**: Helmet, CORS, Rate Limiting
--   **Password Hashing**: bcryptjs
+-   **Runtime**: [Bun](https://bun.sh/) - Fast JavaScript runtime with built-in bundler, transpiler, and package manager
+-   **Framework**: [Elysia.js](https://elysiajs.com/) - Fast, friendly, and type-safe web framework for Bun
+-   **Database**: [PostgreSQL](https://www.postgresql.org/) - Powerful, open-source object-relational database system
+-   **ORM**: [Drizzle ORM](https://orm.drizzle.team/) - TypeScript ORM with a focus on type safety and runtime efficiency
+-   **Authentication**: [JWT](https://jwt.io/) (JSON Web Tokens) - Secure token-based authentication system
+-   **API Documentation**: [Swagger UI](https://swagger.io/tools/swagger-ui/) - Interactive API documentation interface
+-   **Validation**: [Zod](https://zod.dev/) - TypeScript-first schema validation with static type inference
+-   **Security**: [Helmet](https://helmetjs.github.io/), [CORS](https://github.com/elysiajs/@elysiajs/cors), [Rate Limiting](https://www.npmjs.com/package/rate-limiter-flexible) - Comprehensive security middleware
+-   **Password Hashing**: [bcryptjs](https://www.npmjs.com/package/bcryptjs) - Robust password hashing library
+-   **Environment Variables**: [dotenv](https://www.npmjs.com/package/dotenv) - Zero-dependency module to load environment variables
+-   **Logging**: [pino](https://getpino.io/) - Extremely fast Node.js logger with a focus on performance
+-   **Data Transformation**: [class-transformer](https://www.npmjs.com/package/class-transformer) - Transform plain objects to class instances
+-   **Data Validation**: [class-validator](https://www.npmjs.com/package/class-validator) - Decorator-based validation library
 
 ## 🗂️ Project Structure
 
