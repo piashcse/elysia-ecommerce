@@ -1,14 +1,6 @@
 import {Elysia} from 'elysia';
 import {RateLimiterMemory} from 'rate-limiter-flexible';
 
-// Create a rate limiter instance
-const opts = {
-  points: 10, // Number of points (requests)
-  duration: 60, // Per 60 seconds
-};
-
-const rateLimiter = new RateLimiterMemory(opts);
-
 export const rateLimiterMiddleware = (points: number = 10, duration: number = 60) => {
   const limiter = new RateLimiterMemory({
     points,
