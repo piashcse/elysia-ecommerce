@@ -56,7 +56,7 @@ This project adheres to modern software architecture principles to ensure it is 
 -   **Security**: [Helmet](https://helmetjs.github.io/), [CORS](https://github.com/elysiajs/@elysiajs/cors), [Rate Limiting](https://www.npmjs.com/package/rate-limiter-flexible) - Comprehensive security middleware
 -   **Password Hashing**: [bcryptjs](https://www.npmjs.com/package/bcryptjs) - Robust password hashing library
 -   **Environment Variables**: [dotenv](https://www.npmjs.com/package/dotenv) - Zero-dependency module to load environment variables
--   **Logging**: [pino](https://getpino.io/) - Extremely fast Node.js logger with a focus on performance
+-   **Logging**: [@bogeychan/elysia-logger](https://github.com/BogeyChan/elysia-logger) - Elysia.js logger plugin for structured logging
 -   **Data Transformation**: [class-transformer](https://www.npmjs.com/package/class-transformer) - Transform plain objects to class instances
 -   **Data Validation**: [class-validator](https://www.npmjs.com/package/class-validator) - Decorator-based validation library
 
