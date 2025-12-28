@@ -28,7 +28,6 @@
     "@elysiajs/eden": "^latest",
     "@elysiajs/jwt": "^latest",
     "@elysiajs/openapi": "^1.4.11",
-    "@elysiajs/swagger": "^latest",
     "bcryptjs": "^2.4.3",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",

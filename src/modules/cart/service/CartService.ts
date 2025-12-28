@@ -1,8 +1,8 @@
-import { db } from '../../../config/database';
-import { carts, cartItems, products, users } from '../../../database/schema';
-import { eq, and, desc } from 'drizzle-orm';
-import { AddToCartDto, UpdateCartItemDto } from '../dto/CartDto';
-import { NotFoundError, ConflictError } from '../../../core/errors';
+import {db} from '../../../config/database';
+import {cartItems, carts, products, users} from '../../../database/schema';
+import {and, eq} from 'drizzle-orm';
+import {AddToCartDto, UpdateCartItemDto} from '../dto/CartDto';
+import {NotFoundError} from '../../../core/errors';
 
 export class CartService {
   async createCart(userId?: string, sessionId?: string): Promise<any> {

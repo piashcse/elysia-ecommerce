@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import {z} from 'zod';
 
 // Category validation schemas
 export const createCategorySchema = z.object({

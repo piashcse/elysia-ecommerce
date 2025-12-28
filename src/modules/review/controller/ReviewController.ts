@@ -1,26 +1,14 @@
-import { Elysia, t } from 'elysia';
-import { ReviewService } from '../service/ReviewService';
-import { createReviewSchema, updateReviewSchema, reviewIdSchema } from '../validators/ReviewValidator';
-import { validate } from '../../../utils/validation';
-import { successResponse, errorResponse, paginatedResponse } from '../../../core/responses';
-import { jwt } from '@elysiajs/jwt';
-import envConfig from '../../../config/env';
-import { JwtPayload } from '../../../utils/jwt';
+import {Elysia, t} from 'elysia';
+import {ReviewService} from '../service/ReviewService';
+import {createReviewSchema, reviewIdSchema, updateReviewSchema} from '../validators/ReviewValidator';
+import {validate} from '../../../utils/validation';
+import {errorResponse, paginatedResponse, successResponse} from '../../../core/responses';
+import {authPlugin} from '../../../core/auth';
 
 const reviewService = new ReviewService();
 
 export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'] })
-    .use(jwt({ name: 'jwt', secret: envConfig.JWT_SECRET }))
-    .derive(async ({ jwt, headers }) => {
-        const authHeader = headers['authorization'];
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            return { user: null };
-        }
-        const token = authHeader.split(' ')[1];
-        const payload = await jwt.verify(token);
-        if (!payload) return { user: null };
-        return { user: payload as unknown as JwtPayload };
-    })
+    .use(authPlugin)
 
     // Get reviews for a product (public)
     .get(
@@ -65,13 +53,8 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
         '/',
         async ({ body, set, user }) => {
             try {
-                if (!user) {
-                    set.status = 401;
-                    return errorResponse('Authentication required', 'UNAUTHORIZED', 401);
-                }
-
                 const validatedData = validate(createReviewSchema, body);
-                const review = await reviewService.createReview(user.sub, validatedData);
+                const review = await reviewService.createReview(user!.sub, validatedData);
 
                 set.status = 201;
                 return successResponse(review, 'Review created successfully', 201);
@@ -87,6 +70,7 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
                 title: t.Optional(t.String()),
                 comment: t.Optional(t.String()),
             }),
+            isAuth: true,
             detail: { summary: 'Create a product review' }
         }
     )
@@ -96,15 +80,10 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
         '/my-reviews',
         async ({ query, set, user }) => {
             try {
-                if (!user) {
-                    set.status = 401;
-                    return errorResponse('Authentication required', 'UNAUTHORIZED', 401);
-                }
-
                 const page = parseInt(query.page as string) || 1;
                 const limit = parseInt(query.limit as string) || 10;
 
-                const result = await reviewService.getUserReviews(user.sub, page, limit);
+                const result = await reviewService.getUserReviews(user!.sub, page, limit);
 
                 return paginatedResponse(
                     result.reviews,
@@ -126,6 +105,7 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
                 page: t.Optional(t.String()),
                 limit: t.Optional(t.String()),
             }),
+            isAuth: true,
             detail: { summary: 'Get current user reviews' }
         }
     )
@@ -135,16 +115,11 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
         '/:id',
         async ({ params, body, set, user }) => {
             try {
-                if (!user) {
-                    set.status = 401;
-                    return errorResponse('Authentication required', 'UNAUTHORIZED', 401);
-                }
-
                 const { id } = params;
                 validate(reviewIdSchema, { id });
                 const validatedData = validate(updateReviewSchema, body);
 
-                const review = await reviewService.updateReview(id, user.sub, validatedData);
+                const review = await reviewService.updateReview(id, user!.sub, validatedData);
 
                 return successResponse(review, 'Review updated successfully');
             } catch (error: any) {
@@ -159,6 +134,7 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
                 title: t.Optional(t.String()),
                 comment: t.Optional(t.String()),
             }),
+            isAuth: true,
             detail: { summary: 'Update your review' }
         }
     )
@@ -168,16 +144,11 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
         '/:id',
         async ({ params, set, user }) => {
             try {
-                if (!user) {
-                    set.status = 401;
-                    return errorResponse('Authentication required', 'UNAUTHORIZED', 401);
-                }
-
                 const { id } = params;
                 validate(reviewIdSchema, { id });
 
-                const isAdmin = user.role === 'admin';
-                await reviewService.deleteReview(id, user.sub, isAdmin);
+                const isAdmin = user!.role === 'admin';
+                await reviewService.deleteReview(id, user!.sub, isAdmin);
 
                 return successResponse(null, 'Review deleted successfully');
             } catch (error: any) {
@@ -187,6 +158,7 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
         },
         {
             params: t.Object({ id: t.String() }),
+            isAuth: true,
             detail: { summary: 'Delete your review' }
         }
     )

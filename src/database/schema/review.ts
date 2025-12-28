@@ -1,6 +1,6 @@
-import { pgTable, uuid, varchar, text, integer, timestamp, boolean } from 'drizzle-orm/pg-core';
-import { products } from './product';
-import { users } from './user';
+import {boolean, integer, pgTable, text, timestamp, uuid, varchar} from 'drizzle-orm/pg-core';
+import {products} from './product';
+import {users} from './user';
 
 export const reviews = pgTable('reviews', {
     id: uuid('id').defaultRandom().primaryKey(),

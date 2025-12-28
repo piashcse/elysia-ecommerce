@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import {z} from 'zod';
 
 // User validation schemas
 export const userRoles = ['admin', 'seller', 'customer'] as const;
@@ -45,3 +45,6 @@ export const resetPasswordSchema = z.object({
   token: z.string(),
   password: z.string().min(6, 'Password must be at least 6 characters long'),
 });
+
+export type CreateUserType = z.infer<typeof createUserSchema>;
+export type LoginUserType = z.infer<typeof loginUserSchema>;

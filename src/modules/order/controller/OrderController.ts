@@ -1,41 +1,16 @@
-import { Elysia, t } from 'elysia';
-import { OrderService } from '../service/OrderService';
-import {
-  createOrderSchema,
-  updateOrderSchema,
-  orderIdSchema
-} from '../validators/OrderValidator';
-import { validate } from '../../../utils/validation';
-import { successResponse, errorResponse, paginatedResponse } from '../../../core/responses';
-import { jwt } from '@elysiajs/jwt';
-import envConfig from '../../../config/env';
-import { JwtPayload } from '../../../utils/jwt';
+import {Elysia, t} from 'elysia';
+import {OrderService} from '../service/OrderService';
+import {createOrderSchema, orderIdSchema, updateOrderSchema} from '../validators/OrderValidator';
+import {validate} from '../../../utils/validation';
+import {errorResponse, paginatedResponse, successResponse} from '../../../core/responses';
+import {authPlugin} from '../../../core/auth';
 
 const orderService = new OrderService();
 
 export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] })
-  .use(
-    jwt({
-      name: 'jwt',
-      secret: envConfig.JWT_SECRET,
-    })
-  )
-  .derive(async ({ jwt, headers }) => {
-    const authHeader = headers['authorization'];
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return { user: null };
-    }
-    const token = authHeader.split(' ')[1];
-    const payload = await jwt.verify(token);
-    if (!payload) return { user: null };
-    return { user: payload as unknown as JwtPayload };
-  })
-  .onBeforeHandle(({ user, set }) => {
-    if (!user) {
-      set.status = 401;
-      return errorResponse('Authentication required', 'UNAUTHORIZED', 401);
-    }
-    return;
+  .use(authPlugin)
+  .guard({
+    isAuth: true
   })
   // Create a new order
   .post(
@@ -43,7 +18,7 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
     async ({ body, set, user }) => {
       try {
         const validatedData = validate(createOrderSchema, body);
-        const order = await orderService.createOrder(user?.sub as string, validatedData);
+        const order = await orderService.createOrder(user!.sub as string, validatedData);
         set.status = 201;
         return successResponse(order, 'Order created successfully', 201);
       } catch (error: any) {
@@ -96,7 +71,7 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
           status: query.status as string,
           dateFrom: query.dateFrom as string,
           dateTo: query.dateTo as string,
-          userId: isAdmin ? (query.userId as string) : (user?.sub as string),
+          userId: isAdmin ? (query.userId as string) : (user!.sub as string),
         };
 
         const { orders, total } = await orderService.getOrders(page, limit, filters);
@@ -166,13 +141,8 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
   // Update order (admin only)
   .put(
     '/:id',
-    async ({ params, body, set, user }) => {
+    async ({ params, body, set }) => {
       try {
-        if (user?.role !== 'admin') {
-          set.status = 403;
-          return errorResponse('Access denied. Admin role required.', 'FORBIDDEN', 403);
-        }
-
         const { id } = params;
         validate(orderIdSchema, { id });
         const validatedData = validate(updateOrderSchema, body);
@@ -192,6 +162,7 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
         status: t.Optional(t.String()),
         notes: t.Optional(t.String())
       }),
+      hasRole: 'admin',
       detail: { summary: 'Update order status (Admin only)' }
     }
   )

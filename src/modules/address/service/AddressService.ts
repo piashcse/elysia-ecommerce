@@ -1,8 +1,8 @@
-import { db } from '../../../config/database';
-import { addresses } from '../../../database/schema';
-import { eq, and, sql } from 'drizzle-orm';
-import { CreateAddressDto, UpdateAddressDto } from '../dto/AddressDto';
-import { NotFoundError } from '../../../core/errors';
+import {db} from '../../../config/database';
+import {addresses} from '../../../database/schema';
+import {and, eq} from 'drizzle-orm';
+import {CreateAddressDto, UpdateAddressDto} from '../dto/AddressDto';
+import {NotFoundError} from '../../../core/errors';
 
 export class AddressService {
     async createAddress(userId: string, createAddressDto: CreateAddressDto): Promise<any> {

@@ -1,4 +1,4 @@
-import { Order, OrderStatus } from '../entity/Order';
+import {OrderStatus} from '../entity/Order';
 
 // Order DTOs (Data Transfer Objects)
 export interface CreateOrderDto {

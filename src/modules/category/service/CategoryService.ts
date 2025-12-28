@@ -1,8 +1,8 @@
-import { db } from '../../../config/database';
-import { categories, products } from '../../../database/schema';
-import { eq, and, or, ilike, desc, sql } from 'drizzle-orm';
-import { CreateCategoryDto, UpdateCategoryDto } from '../dto/CategoryDto';
-import { NotFoundError, ConflictError } from '../../../core/errors';
+import {db} from '../../../config/database';
+import {categories, products} from '../../../database/schema';
+import {and, desc, eq, ilike, or, sql} from 'drizzle-orm';
+import {CreateCategoryDto, UpdateCategoryDto} from '../dto/CategoryDto';
+import {ConflictError, NotFoundError} from '../../../core/errors';
 
 export class CategoryService {
   async createCategory(createCategoryDto: CreateCategoryDto): Promise<any> {

@@ -1,4 +1,4 @@
-import { createHash } from 'crypto';
+import {createHash} from 'crypto';
 
 /**
  * Hash a password using bcrypt

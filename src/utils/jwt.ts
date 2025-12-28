@@ -1,5 +1,3 @@
-import { Context } from 'elysia';
-
 // Define a type for the JWT payload
 export interface JwtPayload {
   sub: string; // user id

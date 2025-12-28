@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import {z} from 'zod';
 
 export const createReviewSchema = z.object({
     productId: z.string().uuid('Product ID must be a valid UUID'),

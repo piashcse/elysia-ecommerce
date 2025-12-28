@@ -1,42 +1,16 @@
-import { Elysia, t } from 'elysia';
-import { PaymentService } from '../service/PaymentService';
-import {
-  createPaymentSchema,
-  processPaymentSchema,
-  updatePaymentSchema,
-  paymentIdSchema
-} from '../validators/PaymentValidator';
-import { validate } from '../../../utils/validation';
-import { successResponse, errorResponse, paginatedResponse } from '../../../core/responses';
-import { jwt } from '@elysiajs/jwt';
-import envConfig from '../../../config/env';
-import { JwtPayload } from '../../../utils/jwt';
+import {Elysia, t} from 'elysia';
+import {PaymentService} from '../service/PaymentService';
+import {createPaymentSchema, paymentIdSchema, processPaymentSchema} from '../validators/PaymentValidator';
+import {validate} from '../../../utils/validation';
+import {errorResponse, paginatedResponse, successResponse} from '../../../core/responses';
+import {authPlugin} from '../../../core/auth';
 
 const paymentService = new PaymentService();
 
 export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payment'] })
-  .use(
-    jwt({
-      name: 'jwt',
-      secret: envConfig.JWT_SECRET,
-    })
-  )
-  .derive(async ({ jwt, headers }) => {
-    const authHeader = headers['authorization'];
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return { user: null };
-    }
-    const token = authHeader.split(' ')[1];
-    const payload = await jwt.verify(token);
-    if (!payload) return { user: null };
-    return { user: payload as unknown as JwtPayload };
-  })
-  .onBeforeHandle(({ user, set }) => {
-    if (!user) {
-      set.status = 401;
-      return errorResponse('Authentication required', 'UNAUTHORIZED', 401);
-    }
-    return;
+  .use(authPlugin)
+  .guard({
+    isAuth: true
   })
   // Create a new payment
   .post(
@@ -98,7 +72,7 @@ export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payme
     '/',
     async ({ query, set, user }) => {
       try {
-        const isAdmin = user?.role === 'admin';
+        const isAdmin = user!.role === 'admin';
         const page = parseInt(query.page as string) || 1;
         const limit = parseInt(query.limit as string) || 10;
 
@@ -108,7 +82,7 @@ export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payme
           dateFrom: query.dateFrom as string,
           dateTo: query.dateTo as string,
           orderId: query.orderId as string,
-          userId: isAdmin ? (query.userId as string) : (user?.sub as string),
+          userId: isAdmin ? (query.userId as string) : (user!.sub as string),
         };
 
         const { payments, total } = await paymentService.getPayments(page, limit, filters);
@@ -158,7 +132,7 @@ export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payme
         }
 
         // Check if user is admin or owner of order associated with payment
-        if (user?.role !== 'admin' && payment.order.userId !== user?.sub) {
+        if (user!.role !== 'admin' && payment.order.userId !== user!.sub) {
           set.status = 403;
           return errorResponse('Access denied. You can only view your own payments.', 'FORBIDDEN', 403);
         }
@@ -180,13 +154,8 @@ export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payme
   // Refund (admin only)
   .post(
     '/:id/refund',
-    async ({ params, set, user }) => {
+    async ({ params, set }) => {
       try {
-        if (user?.role !== 'admin') {
-          set.status = 403;
-          return errorResponse('Access denied. Admin role required.', 'FORBIDDEN', 403);
-        }
-
         const { id } = params;
         validate(paymentIdSchema, { id });
         const payment = await paymentService.refundPayment(id);
@@ -200,6 +169,7 @@ export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payme
       params: t.Object({
         id: t.String()
       }),
+      hasRole: 'admin',
       detail: { summary: 'Refund a completed payment (Admin only)' }
     }
   );

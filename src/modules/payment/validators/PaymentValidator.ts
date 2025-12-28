@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import {z} from 'zod';
 
 export const paymentMethods = ['credit_card', 'debit_card', 'paypal', 'bank_transfer', 'cash_on_delivery'] as const;
 export const paymentStatuses = ['pending', 'completed', 'failed', 'refunded'] as const;

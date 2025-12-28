@@ -1,5 +1,5 @@
-import { Elysia } from 'elysia';
-import { RateLimiterMemory } from 'rate-limiter-flexible';
+import {Elysia} from 'elysia';
+import {RateLimiterMemory} from 'rate-limiter-flexible';
 
 // Create a rate limiter instance
 const opts = {

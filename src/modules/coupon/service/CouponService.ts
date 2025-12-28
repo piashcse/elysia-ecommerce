@@ -1,8 +1,8 @@
-import { db } from '../../../config/database';
-import { coupons } from '../../../database/schema';
-import { eq, and, desc, sql } from 'drizzle-orm';
-import { CreateCouponDto, UpdateCouponDto } from '../dto/CouponDto';
-import { NotFoundError } from '../../../core/errors';
+import {db} from '../../../config/database';
+import {coupons} from '../../../database/schema';
+import {desc, eq, sql} from 'drizzle-orm';
+import {CreateCouponDto, UpdateCouponDto} from '../dto/CouponDto';
+import {NotFoundError} from '../../../core/errors';
 
 export class CouponService {
   async createCoupon(createCouponDto: CreateCouponDto): Promise<any> {

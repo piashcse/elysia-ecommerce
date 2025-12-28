@@ -1,44 +1,20 @@
-import { Elysia, t } from 'elysia';
-import { ProductService } from '../service/ProductService';
-import {
-  createProductSchema,
-  updateProductSchema,
-  productIdSchema
-} from '../validators/ProductValidator';
-import { validate } from '../../../utils/validation';
-import { successResponse, errorResponse, paginatedResponse } from '../../../core/responses';
-import { jwt } from '@elysiajs/jwt';
-import envConfig from '../../../config/env';
+import {Elysia, t} from 'elysia';
+import {ProductService} from '../service/ProductService';
+import {createProductSchema, productIdSchema, updateProductSchema} from '../validators/ProductValidator';
+import {validate} from '../../../utils/validation';
+import {errorResponse, paginatedResponse, successResponse} from '../../../core/responses';
+import {authPlugin} from '../../../core/auth';
 
 const productService = new ProductService();
 
 export const productController = new Elysia({ prefix: '/products', tags: ['Product'] })
-  .use(
-    jwt({
-      name: 'jwt',
-      secret: envConfig.JWT_SECRET,
-    })
-  )
-  .derive(async ({ jwt, headers }) => {
-    const authHeader = headers['authorization'];
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return { user: null };
-    }
-    const token = authHeader.split(' ')[1];
-    const payload = await jwt.verify(token);
-    return { user: payload };
-  })
+  .use(authPlugin)
   // Create a new product (admin only)
   .post(
     '/',
-    async ({ body, set, user }) => {
+    async ({ body, set }) => {
       try {
         // Check if user is authenticated and has admin role
-        if (!user || user.role !== 'admin') {
-          set.status = 403;
-          return errorResponse('Access denied. Admin role required.', 'FORBIDDEN', 403);
-        }
-
         const validatedData = validate(createProductSchema, body);
         const product = await productService.createProduct(validatedData);
 
@@ -61,6 +37,7 @@ export const productController = new Elysia({ prefix: '/products', tags: ['Produ
         categoryId: t.String(),
         sellerId: t.String(),
       }),
+      hasRole: 'admin',
       detail: { summary: 'Create a new product (Admin only)' }
     }
   )
@@ -145,13 +122,8 @@ export const productController = new Elysia({ prefix: '/products', tags: ['Produ
   // Update product by ID (admin only)
   .put(
     '/:id',
-    async ({ params, body, set, user }) => {
+    async ({ params, body, set }) => {
       try {
-        if (!user || user.role !== 'admin') {
-          set.status = 403;
-          return errorResponse('Access denied. Admin role required.', 'FORBIDDEN', 403);
-        }
-
         const { id } = params;
         validate(productIdSchema, { id });
         const validatedData = validate(updateProductSchema, body);
@@ -179,20 +151,15 @@ export const productController = new Elysia({ prefix: '/products', tags: ['Produ
         categoryId: t.Optional(t.String()),
         sellerId: t.Optional(t.String()),
       }),
+      hasRole: 'admin',
       detail: { summary: 'Update product by ID (Admin only)' }
     }
   )
-
   // Delete product by ID (admin only)
   .delete(
     '/:id',
-    async ({ params, set, user }) => {
+    async ({ params, set }) => {
       try {
-        if (!user || user.role !== 'admin') {
-          set.status = 403;
-          return errorResponse('Access denied. Admin role required.', 'FORBIDDEN', 403);
-        }
-
         const { id } = params;
         validate(productIdSchema, { id });
 
@@ -208,6 +175,7 @@ export const productController = new Elysia({ prefix: '/products', tags: ['Produ
       params: t.Object({
         id: t.String()
       }),
+      hasRole: 'admin',
       detail: { summary: 'Delete product by ID (Admin only)' }
     }
   );

@@ -1,8 +1,7 @@
-import { db } from '../../../config/database';
-import { wishlists, users, products } from '../../../database/schema';
-import { eq, and, desc, sql } from 'drizzle-orm';
-import { CreateWishlistDto } from '../dto/WishlistDto';
-import { NotFoundError, ConflictError } from '../../../core/errors';
+import {db} from '../../../config/database';
+import {products, users, wishlists} from '../../../database/schema';
+import {and, desc, eq, sql} from 'drizzle-orm';
+import {ConflictError, NotFoundError} from '../../../core/errors';
 
 export class WishlistService {
   async addToWishlist(userId: string, productId: string): Promise<any> {

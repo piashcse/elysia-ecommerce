@@ -1,8 +1,8 @@
-import { db } from '../../../config/database';
-import { products, categories } from '../../../database/schema';
-import { eq, and, or, ilike, gte, lte, gt, desc, sql } from 'drizzle-orm';
-import { CreateProductDto, UpdateProductDto } from '../dto/ProductDto';
-import { NotFoundError } from '../../../core/errors';
+import {db} from '../../../config/database';
+import {categories, products} from '../../../database/schema';
+import {and, desc, eq, gt, gte, ilike, lte, sql} from 'drizzle-orm';
+import {CreateProductDto, UpdateProductDto} from '../dto/ProductDto';
+import {NotFoundError} from '../../../core/errors';
 
 export class ProductService {
   async createProduct(createProductDto: CreateProductDto): Promise<any> {

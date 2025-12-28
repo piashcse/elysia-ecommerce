@@ -1,9 +1,9 @@
-import { db } from '../../../config/database';
-import { users } from '../../../database/schema';
-import { eq, sql } from 'drizzle-orm';
-import { CreateUserDto, UpdateUserDto } from '../dto/UserDto';
-import { hashPassword, comparePassword } from '../../../utils/auth';
-import { NotFoundError, ConflictError } from '../../../core/errors';
+import {db} from '../../../config/database';
+import {users} from '../../../database/schema';
+import {eq, sql} from 'drizzle-orm';
+import {CreateUserDto, UpdateUserDto} from '../dto/UserDto';
+import {comparePassword, hashPassword} from '../../../utils/auth';
+import {ConflictError, NotFoundError} from '../../../core/errors';
 
 export class UserService {
   async createUser(createUserDto: CreateUserDto): Promise<any> {

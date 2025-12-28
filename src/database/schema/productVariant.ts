@@ -1,5 +1,5 @@
-import { pgTable, uuid, varchar, numeric, integer, boolean, timestamp } from 'drizzle-orm/pg-core';
-import { products } from './product';
+import {boolean, integer, numeric, pgTable, timestamp, uuid, varchar} from 'drizzle-orm/pg-core';
+import {products} from './product';
 
 export const productVariants = pgTable('product_variants', {
     id: uuid('id').defaultRandom().primaryKey(),

@@ -1,43 +1,19 @@
-import { Elysia, t } from 'elysia';
-import { CategoryService } from '../service/CategoryService';
-import {
-  createCategorySchema,
-  updateCategorySchema,
-  categoryIdSchema
-} from '../validators/CategoryValidator';
-import { validate } from '../../../utils/validation';
-import { successResponse, errorResponse, paginatedResponse } from '../../../core/responses';
-import { jwt } from '@elysiajs/jwt';
-import envConfig from '../../../config/env';
+import {Elysia, t} from 'elysia';
+import {CategoryService} from '../service/CategoryService';
+import {categoryIdSchema, createCategorySchema, updateCategorySchema} from '../validators/CategoryValidator';
+import {validate} from '../../../utils/validation';
+import {errorResponse, paginatedResponse, successResponse} from '../../../core/responses';
+import {authPlugin} from '../../../core/auth';
 
 const categoryService = new CategoryService();
 
 export const categoryController = new Elysia({ prefix: '/categories', tags: ['Category'] })
-  .use(
-    jwt({
-      name: 'jwt',
-      secret: envConfig.JWT_SECRET,
-    })
-  )
-  .derive(async ({ jwt, headers }) => {
-    const authHeader = headers['authorization'];
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return { user: null };
-    }
-    const token = authHeader.split(' ')[1];
-    const payload = await jwt.verify(token);
-    return { user: payload };
-  })
+  .use(authPlugin)
   // Create a new category (admin only)
   .post(
     '/',
-    async ({ body, set, user }) => {
+    async ({ body, set }) => {
       try {
-        if (!user || user.role !== 'admin') {
-          set.status = 403;
-          return errorResponse('Access denied. Admin role required.', 'FORBIDDEN', 403);
-        }
-
         const validatedData = validate(createCategorySchema, body);
         const category = await categoryService.createCategory(validatedData);
 
@@ -53,6 +29,7 @@ export const categoryController = new Elysia({ prefix: '/categories', tags: ['Ca
         name: t.String(),
         description: t.Optional(t.String()),
       }),
+      hasRole: 'admin',
       detail: { summary: 'Create a new category (Admin only)' }
     }
   )
@@ -129,13 +106,8 @@ export const categoryController = new Elysia({ prefix: '/categories', tags: ['Ca
   // Update category by ID (admin only)
   .put(
     '/:id',
-    async ({ params, body, set, user }) => {
+    async ({ params, body, set }) => {
       try {
-        if (!user || user.role !== 'admin') {
-          set.status = 403;
-          return errorResponse('Access denied. Admin role required.', 'FORBIDDEN', 403);
-        }
-
         const { id } = params;
         validate(categoryIdSchema, { id });
         const validatedData = validate(updateCategorySchema, body);
@@ -156,6 +128,7 @@ export const categoryController = new Elysia({ prefix: '/categories', tags: ['Ca
         name: t.Optional(t.String()),
         description: t.Optional(t.String()),
       }),
+      hasRole: 'admin',
       detail: { summary: 'Update category by ID (Admin only)' }
     }
   )
@@ -163,13 +136,8 @@ export const categoryController = new Elysia({ prefix: '/categories', tags: ['Ca
   // Delete category by ID (admin only)
   .delete(
     '/:id',
-    async ({ params, set, user }) => {
+    async ({ params, set }) => {
       try {
-        if (!user || user.role !== 'admin') {
-          set.status = 403;
-          return errorResponse('Access denied. Admin role required.', 'FORBIDDEN', 403);
-        }
-
         const { id } = params;
         validate(categoryIdSchema, { id });
 
@@ -185,6 +153,7 @@ export const categoryController = new Elysia({ prefix: '/categories', tags: ['Ca
       params: t.Object({
         id: t.String()
       }),
+      hasRole: 'admin',
       detail: { summary: 'Delete category by ID (Admin only)' }
     }
   );

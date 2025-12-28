@@ -1,5 +1,5 @@
 import { Elysia } from 'elysia';
-import { swagger } from '@elysiajs/swagger';
+import { openapi } from '@elysiajs/openapi';
 import { cors } from '@elysiajs/cors';
 import { jwt } from '@elysiajs/jwt';
 import { logger } from '@bogeychan/elysia-logger';
@@ -30,8 +30,9 @@ await connectDB();
 
 // Register middlewares
 app.use(
-    swagger({
-        provider: 'swagger-ui', // Use classic Swagger UI instead of Scalar
+    openapi({
+        path:'/swagger',
+        provider:'swagger-ui',
         documentation: {
             info: {
                 title: "Elysia E-commerce API",
@@ -52,15 +53,6 @@ app.use(
                     url: "https://api.domainname.com",
                     description: "Production Server"
                 }
-            ],
-            tags: [
-                { name: 'User' },
-                { name: 'Product' },
-                { name: 'Category' },
-                { name: 'Cart' },
-                { name: 'Wishlist' },
-                { name: 'Order' },
-                { name: 'Payment' }
             ]
         }
     })

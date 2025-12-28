@@ -1,7 +1,7 @@
-import { db } from '../../../config/database';
-import { products, categories, orders, orderItems } from '../../../database/schema';
-import { eq, and, desc, sql } from 'drizzle-orm';
-import { NotFoundError, UnauthorizedError } from '../../../core/errors';
+import {db} from '../../../config/database';
+import {orderItems, orders, products} from '../../../database/schema';
+import {and, desc, eq, sql} from 'drizzle-orm';
+import {NotFoundError} from '../../../core/errors';
 
 export class SellerService {
     async getSellerProducts(sellerId: string, page: number = 1, limit: number = 10) {
