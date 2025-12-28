@@ -1,9 +1,9 @@
-import {Elysia, t} from 'elysia';
-import {CouponService} from '../service/CouponService';
-import {couponIdSchema, createCouponSchema, updateCouponSchema,} from '../validators/CouponValidator';
-import {validate} from '../../../utils/validation';
-import {errorResponse, paginatedResponse, successResponse} from '../../../core/responses';
-import {authPlugin} from '../../../core/auth';
+import { Elysia, t } from 'elysia';
+import { CouponService } from '../service/CouponService';
+import { couponIdSchema, createCouponSchema, updateCouponSchema, } from '../validators/CouponValidator';
+import { validate } from '../../../utils/validation';
+import { errorResponse, paginatedResponse, successResponse } from '../../../core/responses';
+import { authPlugin } from '../../../core/auth';
 
 const couponService = new CouponService();
 

@@ -1,27 +1,27 @@
-import {Elysia} from 'elysia';
-import {swagger} from '@elysiajs/swagger';
-import {cors} from '@elysiajs/cors';
-import {jwt} from '@elysiajs/jwt';
-import {logger} from '@bogeychan/elysia-logger';
-import {connectDB} from './config/database';
+import { Elysia } from 'elysia';
+import { openapi } from '@elysiajs/openapi';
+import { cors } from '@elysiajs/cors';
+import { jwt } from '@elysiajs/jwt';
+import { logger } from '@bogeychan/elysia-logger';
+import { connectDB } from './config/database';
 import envConfig from './config/env';
-import {helmetMiddleware} from './middlewares/helmet';
-import {defaultRateLimiter} from './middlewares/rateLimiter';
-import {errorHandler} from './middlewares/errorHandler';
-import {authController} from './modules/auth/controller/AuthController';
-import {sellerController} from './modules/seller/controller/SellerController';
-import {userController} from './modules/user/controller/UserController';
-import {productController} from './modules/product/controller/ProductController';
-import {categoryController} from './modules/category/controller/CategoryController';
-import {cartController} from './modules/cart/controller/CartController';
-import {wishlistController} from './modules/wishlist/controller/WishlistController';
-import {orderController} from './modules/order/controller/OrderController';
-import {paymentController} from './modules/payment/controller/PaymentController';
-import {reviewController} from './modules/review/controller/ReviewController';
-import {couponController} from './modules/coupon/controller/CouponController';
-import {notificationController} from './modules/notification/controller/NotificationController';
-import {shippingController} from './modules/shipping/controller/ShippingController';
-import {addressController} from './modules/address/controller/AddressController';
+import { helmetMiddleware } from './middlewares/helmet';
+import { defaultRateLimiter } from './middlewares/rateLimiter';
+import { errorHandler } from './middlewares/errorHandler';
+import { authController } from './modules/auth/controller/AuthController';
+import { sellerController } from './modules/seller/controller/SellerController';
+import { userController } from './modules/user/controller/UserController';
+import { productController } from './modules/product/controller/ProductController';
+import { categoryController } from './modules/category/controller/CategoryController';
+import { cartController } from './modules/cart/controller/CartController';
+import { wishlistController } from './modules/wishlist/controller/WishlistController';
+import { orderController } from './modules/order/controller/OrderController';
+import { paymentController } from './modules/payment/controller/PaymentController';
+import { reviewController } from './modules/review/controller/ReviewController';
+import { couponController } from './modules/coupon/controller/CouponController';
+import { notificationController } from './modules/notification/controller/NotificationController';
+import { shippingController } from './modules/shipping/controller/ShippingController';
+import { addressController } from './modules/address/controller/AddressController';
 
 const app = new Elysia();
 
@@ -30,8 +30,9 @@ await connectDB();
 
 // Register middlewares
 app.use(
-    swagger({
-        provider: 'swagger-ui', // Use classic Swagger UI instead of Scalar
+    openapi({
+        path:'/swagger',
+        provider:'swagger-ui',
         documentation: {
             info: {
                 title: "Elysia E-commerce API",
@@ -52,15 +53,6 @@ app.use(
                     url: "https://api.domainname.com",
                     description: "Production Server"
                 }
-            ],
-            tags: [
-                { name: 'User' },
-                { name: 'Product' },
-                { name: 'Category' },
-                { name: 'Cart' },
-                { name: 'Wishlist' },
-                { name: 'Order' },
-                { name: 'Payment' }
             ]
         }
     })
