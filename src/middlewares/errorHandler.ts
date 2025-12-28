@@ -1,6 +1,6 @@
-import { Elysia } from 'elysia';
-import { errorResponse } from '../core/responses';
-import { AppError } from '../core/errors';
+import {Elysia} from 'elysia';
+import {errorResponse} from '../core/responses';
+import {AppError} from '../core/errors';
 
 export const errorHandler = new Elysia({ name: 'errorHandler' })
   .error({

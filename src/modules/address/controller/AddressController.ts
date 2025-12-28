@@ -1,32 +1,16 @@
-import { Elysia, t } from 'elysia';
-import { AddressService } from '../service/AddressService';
-import { createAddressSchema, updateAddressSchema, addressIdSchema } from '../validators/AddressValidator';
-import { validate } from '../../../utils/validation';
-import { successResponse, errorResponse } from '../../../core/responses';
-import { jwt } from '@elysiajs/jwt';
-import envConfig from '../../../config/env';
-import { JwtPayload } from '../../../utils/jwt';
+import {Elysia, t} from 'elysia';
+import {AddressService} from '../service/AddressService';
+import {addressIdSchema, createAddressSchema, updateAddressSchema} from '../validators/AddressValidator';
+import {validate} from '../../../utils/validation';
+import {errorResponse, successResponse} from '../../../core/responses';
+import {authPlugin} from '../../../core/auth';
 
 const addressService = new AddressService();
 
 export const addressController = new Elysia({ prefix: '/addresses', tags: ['Address'] })
-    .use(jwt({ name: 'jwt', secret: envConfig.JWT_SECRET }))
-    .derive(async ({ jwt, headers }) => {
-        const authHeader = headers['authorization'];
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            return { user: null };
-        }
-        const token = authHeader.split(' ')[1];
-        const payload = await jwt.verify(token);
-        if (!payload) return { user: null };
-        return { user: payload as unknown as JwtPayload };
-    })
-    .onBeforeHandle(({ user, set }) => {
-        if (!user) {
-            set.status = 401;
-            return errorResponse('Authentication required', 'UNAUTHORIZED', 401);
-        }
-        return;
+    .use(authPlugin)
+    .guard({
+        isAuth: true
     })
 
     // Get all user addresses

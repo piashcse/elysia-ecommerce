@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import {z} from 'zod';
 
 export const createCouponSchema = z.object({
   code: z.string().min(1, 'Coupon code is required').max(50),

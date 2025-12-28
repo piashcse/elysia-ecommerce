@@ -1,12 +1,12 @@
-import { db } from '../../../config/database';
-import { users } from '../../../database/schema';
-import { eq } from 'drizzle-orm';
-import { hashPassword, comparePassword } from '../../../utils/auth';
-import { NotFoundError, UnauthorizedError, ConflictError } from '../../../core/errors';
-import { CreateUserDto, LoginUserDto } from '../dto/AuthDto';
+import {db} from '../../../config/database';
+import {users} from '../../../database/schema';
+import {eq} from 'drizzle-orm';
+import {comparePassword, hashPassword} from '../../../utils/auth';
+import {ConflictError, UnauthorizedError} from '../../../core/errors';
+import {CreateUserType, LoginUserType} from '../../user/validators/UserValidator';
 
 export class AuthService {
-    async register(data: CreateUserDto) {
+    async register(data: CreateUserType) {
         // Check if user already exists
         const [existingUser] = await db.select().from(users).where(eq(users.email, data.email)).limit(1);
         if (existingUser) {
@@ -20,7 +20,7 @@ export class AuthService {
             password: hashedPassword,
             firstName: data.firstName,
             lastName: data.lastName,
-            role: data.role || 'customer',
+            role: (data.role as any) || 'customer',
         }).returning();
 
         if (!newUser) {
@@ -31,7 +31,7 @@ export class AuthService {
         return userWithoutPassword;
     }
 
-    async login(data: LoginUserDto) {
+    async login(data: LoginUserType) {
         const [user] = await db.select().from(users).where(eq(users.email, data.email)).limit(1);
         if (!user) {
             throw new UnauthorizedError('Invalid email or password');

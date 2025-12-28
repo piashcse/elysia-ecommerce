@@ -1,20 +1,14 @@
-import { Elysia, t } from 'elysia';
-import { AuthService } from '../service/AuthService';
-import { createUserSchema, loginUserSchema } from '../dto/AuthDto';
-import { validate } from '../../../utils/validation';
-import { successResponse, errorResponse } from '../../../core/responses';
-import { jwt } from '@elysiajs/jwt';
-import envConfig from '../../../config/env';
+import {Elysia, t} from 'elysia';
+import {AuthService} from '../service/AuthService';
+import {createUserSchema, loginUserSchema} from '../../user/validators/UserValidator';
+import {validate} from '../../../utils/validation';
+import {errorResponse, successResponse} from '../../../core/responses';
+import {authPlugin} from '../../../core/auth';
 
 const authService = new AuthService();
 
 export const authController = new Elysia({ prefix: '/auth', tags: ['Auth'] })
-    .use(
-        jwt({
-            name: 'jwt',
-            secret: envConfig.JWT_SECRET,
-        })
-    )
+    .use(authPlugin)
     .post(
         '/register',
         async ({ body, set }) => {

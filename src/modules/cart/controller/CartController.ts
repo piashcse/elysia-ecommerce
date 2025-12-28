@@ -1,48 +1,23 @@
-import { Elysia, t } from 'elysia';
-import { CartService } from '../service/CartService';
-import {
-  addToCartSchema,
-  updateCartItemSchema,
-  cartItemIdSchema
-} from '../validators/CartValidator';
-import { validate } from '../../../utils/validation';
-import { successResponse, errorResponse } from '../../../core/responses';
-import { jwt } from '@elysiajs/jwt';
-import envConfig from '../../../config/env';
-import { JwtPayload } from '../../../utils/jwt';
+import {Elysia, t} from 'elysia';
+import {CartService} from '../service/CartService';
+import {addToCartSchema, cartItemIdSchema, updateCartItemSchema} from '../validators/CartValidator';
+import {validate} from '../../../utils/validation';
+import {errorResponse, successResponse} from '../../../core/responses';
+import {authPlugin} from '../../../core/auth';
 
 const cartService = new CartService();
 
 export const cartController = new Elysia({ prefix: '/cart', tags: ['Cart'] })
-  .use(
-    jwt({
-      name: 'jwt',
-      secret: envConfig.JWT_SECRET,
-    })
-  )
-  .derive(async ({ jwt, headers }) => {
-    const authHeader = headers['authorization'];
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return { user: null };
-    }
-    const token = authHeader.split(' ')[1];
-    const payload = await jwt.verify(token);
-    if (!payload) return { user: null };
-    return { user: payload as unknown as JwtPayload };
-  })
-  .onBeforeHandle(({ user, set }) => {
-    if (!user) {
-      set.status = 401;
-      return errorResponse('Authentication required', 'UNAUTHORIZED', 401);
-    }
-    return;
+  .use(authPlugin)
+  .guard({
+    isAuth: true
   })
   // Get user's cart
   .get(
     '/',
     async ({ user, set }) => {
       try {
-        const cart = await cartService.getCartForUser(user?.sub as string);
+        const cart = await cartService.getCartForUser(user!.sub as string);
         return successResponse(cart || null, 'Cart retrieved successfully');
       } catch (error: any) {
         set.status = error.statusCode || 500;
@@ -60,7 +35,7 @@ export const cartController = new Elysia({ prefix: '/cart', tags: ['Cart'] })
     async ({ body, set, user }) => {
       try {
         const validatedData = validate(addToCartSchema, body);
-        const cart = await cartService.addToCart(user?.sub as string, validatedData);
+        const cart = await cartService.addToCart(user!.sub as string, validatedData);
         return successResponse(cart, 'Item added to cart successfully');
       } catch (error: any) {
         set.status = error.statusCode || 500;
@@ -129,8 +104,7 @@ export const cartController = new Elysia({ prefix: '/cart', tags: ['Cart'] })
     '/',
     async ({ user, set }) => {
       try {
-        const userId = user?.sub as string;
-        const cart = await cartService.getCartForUser(userId);
+        const cart = await cartService.getCartForUser(user!.sub as string);
         if (cart) {
           await cartService.clearCart(cart.id);
         }

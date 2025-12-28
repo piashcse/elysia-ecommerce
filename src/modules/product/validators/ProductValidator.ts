@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import {z} from 'zod';
 
 // Product validation schemas
 export const createProductSchema = z.object({

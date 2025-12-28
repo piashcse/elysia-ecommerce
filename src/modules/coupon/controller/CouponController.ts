@@ -1,43 +1,19 @@
-import { Elysia, t } from 'elysia';
-import { CouponService } from '../service/CouponService';
-import {
-  createCouponSchema,
-  updateCouponSchema,
-  couponIdSchema,
-} from '../validators/CouponValidator';
-import { validate } from '../../../utils/validation';
-import { successResponse, errorResponse, paginatedResponse } from '../../../core/responses';
-import { jwt } from '@elysiajs/jwt';
-import envConfig from '../../../config/env';
+import {Elysia, t} from 'elysia';
+import {CouponService} from '../service/CouponService';
+import {couponIdSchema, createCouponSchema, updateCouponSchema,} from '../validators/CouponValidator';
+import {validate} from '../../../utils/validation';
+import {errorResponse, paginatedResponse, successResponse} from '../../../core/responses';
+import {authPlugin} from '../../../core/auth';
 
 const couponService = new CouponService();
 
 export const couponController = new Elysia({ prefix: '/coupons', tags: ['Coupon'] })
-  .use(
-    jwt({
-      name: 'jwt',
-      secret: envConfig.JWT_SECRET,
-    })
-  )
-  .derive(async ({ jwt, headers }) => {
-    const authHeader = headers['authorization'];
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return { user: null };
-    }
-    const token = authHeader.split(' ')[1];
-    const payload = await jwt.verify(token);
-    return { user: payload };
-  })
+  .use(authPlugin)
   // Create a new coupon (admin only)
   .post(
     '/',
-    async ({ body, set, user }) => {
+    async ({ body, set }) => {
       try {
-        if (!user || user.role !== 'admin') {
-          set.status = 403;
-          return errorResponse('Access denied. Admin role required.', 'FORBIDDEN', 403);
-        }
-
         const validatedData = validate(createCouponSchema, body);
         const coupon = await couponService.createCoupon(validatedData);
 
@@ -61,6 +37,7 @@ export const couponController = new Elysia({ prefix: '/coupons', tags: ['Coupon'
         startDate: t.String(),
         endDate: t.String(),
       }),
+      hasRole: 'admin',
       detail: { summary: 'Create a new coupon (Admin only)' }
     }
   )
@@ -153,17 +130,12 @@ export const couponController = new Elysia({ prefix: '/coupons', tags: ['Coupon'
       detail: { summary: 'Get coupon by code' }
     }
   )
-  
+
   // Update coupon by ID (admin only)
   .put(
     '/:id',
-    async ({ params, body, set, user }) => {
+    async ({ params, body, set }) => {
       try {
-        if (!user || user.role !== 'admin') {
-          set.status = 403;
-          return errorResponse('Access denied. Admin role required.', 'FORBIDDEN', 403);
-        }
-
         const { id } = params;
         validate(couponIdSchema, { id });
         const validatedData = validate(updateCouponSchema, body);
@@ -192,6 +164,7 @@ export const couponController = new Elysia({ prefix: '/coupons', tags: ['Coupon'
         startDate: t.Optional(t.String()),
         endDate: t.Optional(t.String()),
       }),
+      hasRole: 'admin',
       detail: { summary: 'Update coupon by ID (Admin only)' }
     }
   )
@@ -199,13 +172,8 @@ export const couponController = new Elysia({ prefix: '/coupons', tags: ['Coupon'
   // Delete coupon by ID (admin only)
   .delete(
     '/:id',
-    async ({ params, set, user }) => {
+    async ({ params, set }) => {
       try {
-        if (!user || user.role !== 'admin') {
-          set.status = 403;
-          return errorResponse('Access denied. Admin role required.', 'FORBIDDEN', 403);
-        }
-
         const { id } = params;
         validate(couponIdSchema, { id });
 
@@ -221,6 +189,7 @@ export const couponController = new Elysia({ prefix: '/coupons', tags: ['Coupon'
       params: t.Object({
         id: t.String()
       }),
+      hasRole: 'admin',
       detail: { summary: 'Delete coupon by ID (Admin only)' }
     }
   );

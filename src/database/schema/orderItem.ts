@@ -1,6 +1,6 @@
-import { pgTable, uuid, integer, numeric, timestamp } from 'drizzle-orm/pg-core';
-import { orders } from './order';
-import { products } from './product';
+import {integer, numeric, pgTable, timestamp, uuid} from 'drizzle-orm/pg-core';
+import {orders} from './order';
+import {products} from './product';
 
 export const orderItems = pgTable('order_items', {
   id: uuid('id').defaultRandom().primaryKey(),

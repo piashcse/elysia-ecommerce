@@ -1,8 +1,8 @@
-import { db } from '../../../config/database';
-import { shippingMethods } from '../../../database/schema';
-import { eq, and, desc, sql } from 'drizzle-orm';
-import { CreateShippingMethodDto, UpdateShippingMethodDto } from '../dto/ShippingDto';
-import { NotFoundError } from '../../../core/errors';
+import {db} from '../../../config/database';
+import {shippingMethods} from '../../../database/schema';
+import {desc, eq, sql} from 'drizzle-orm';
+import {CreateShippingMethodDto, UpdateShippingMethodDto} from '../dto/ShippingDto';
+import {NotFoundError} from '../../../core/errors';
 
 export class ShippingService {
   async createShippingMethod(createShippingMethodDto: CreateShippingMethodDto): Promise<any> {

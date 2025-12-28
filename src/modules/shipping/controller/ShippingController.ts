@@ -1,43 +1,23 @@
-import { Elysia, t } from 'elysia';
-import { ShippingService } from '../service/ShippingService';
+import {Elysia, t} from 'elysia';
+import {ShippingService} from '../service/ShippingService';
 import {
-  createShippingMethodSchema,
-  updateShippingMethodSchema,
-  shippingMethodIdSchema,
+    createShippingMethodSchema,
+    shippingMethodIdSchema,
+    updateShippingMethodSchema,
 } from '../validators/ShippingValidator';
-import { validate } from '../../../utils/validation';
-import { successResponse, errorResponse, paginatedResponse } from '../../../core/responses';
-import { jwt } from '@elysiajs/jwt';
-import envConfig from '../../../config/env';
+import {validate} from '../../../utils/validation';
+import {errorResponse, paginatedResponse, successResponse} from '../../../core/responses';
+import {authPlugin} from '../../../core/auth';
 
 const shippingService = new ShippingService();
 
 export const shippingController = new Elysia({ prefix: '/shipping-methods', tags: ['Shipping'] })
-  .use(
-    jwt({
-      name: 'jwt',
-      secret: envConfig.JWT_SECRET,
-    })
-  )
-  .derive(async ({ jwt, headers }) => {
-    const authHeader = headers['authorization'];
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return { user: null };
-    }
-    const token = authHeader.split(' ')[1];
-    const payload = await jwt.verify(token);
-    return { user: payload };
-  })
+  .use(authPlugin)
   // Create a new shipping method (admin only)
   .post(
     '/',
-    async ({ body, set, user }) => {
+    async ({ body, set }) => {
       try {
-        if (!user || user.role !== 'admin') {
-          set.status = 403;
-          return errorResponse('Access denied. Admin role required.', 'FORBIDDEN', 403);
-        }
-
         const validatedData = validate(createShippingMethodSchema, body);
         const shippingMethod = await shippingService.createShippingMethod(validatedData);
 
@@ -58,6 +38,7 @@ export const shippingController = new Elysia({ prefix: '/shipping-methods', tags
         estimatedDaysMax: t.Number(),
         isActive: t.Optional(t.Boolean()),
       }),
+      hasRole: 'admin',
       detail: { summary: 'Create a new shipping method (Admin only)' }
     }
   )
@@ -127,13 +108,8 @@ export const shippingController = new Elysia({ prefix: '/shipping-methods', tags
   // Update shipping method by ID (admin only)
   .put(
     '/:id',
-    async ({ params, body, set, user }) => {
+    async ({ params, body, set }) => {
       try {
-        if (!user || user.role !== 'admin') {
-          set.status = 403;
-          return errorResponse('Access denied. Admin role required.', 'FORBIDDEN', 403);
-        }
-
         const { id } = params;
         validate(shippingMethodIdSchema, { id });
         const validatedData = validate(updateShippingMethodSchema, body);
@@ -159,6 +135,7 @@ export const shippingController = new Elysia({ prefix: '/shipping-methods', tags
         estimatedDaysMax: t.Optional(t.Number()),
         isActive: t.Optional(t.Boolean()),
       }),
+      hasRole: 'admin',
       detail: { summary: 'Update shipping method by ID (Admin only)' }
     }
   )
@@ -166,13 +143,8 @@ export const shippingController = new Elysia({ prefix: '/shipping-methods', tags
   // Delete shipping method by ID (admin only)
   .delete(
     '/:id',
-    async ({ params, set, user }) => {
+    async ({ params, set }) => {
       try {
-        if (!user || user.role !== 'admin') {
-          set.status = 403;
-          return errorResponse('Access denied. Admin role required.', 'FORBIDDEN', 403);
-        }
-
         const { id } = params;
         validate(shippingMethodIdSchema, { id });
 
@@ -188,6 +160,7 @@ export const shippingController = new Elysia({ prefix: '/shipping-methods', tags
       params: t.Object({
         id: t.String()
       }),
+      hasRole: 'admin',
       detail: { summary: 'Delete shipping method by ID (Admin only)' }
     }
   );

@@ -1,5 +1,3 @@
-import path from 'path';
-import { fileURLToPath } from 'url';
 import 'dotenv/config';
 
 // For debugging - log environment variables

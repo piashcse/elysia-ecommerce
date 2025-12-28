@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import {z} from 'zod';
 
 // Wishlist validation schemas
 export const addToWishlistSchema = z.object({

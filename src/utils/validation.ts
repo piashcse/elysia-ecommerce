@@ -1,5 +1,5 @@
-import { z, ZodSchema } from 'zod';
-import { ValidationError } from '../core/errors';
+import {z, ZodSchema} from 'zod';
+import {ValidationError} from '../core/errors';
 
 /**
  * Validates data against a Zod schema

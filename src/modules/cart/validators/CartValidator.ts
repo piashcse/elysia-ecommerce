@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import {z} from 'zod';
 
 // Cart validation schemas
 export const addToCartSchema = z.object({

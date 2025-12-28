@@ -1,44 +1,20 @@
-import { Elysia, t } from 'elysia';
-import { UserService } from '../service/UserService';
-import {
-  createUserSchema,
-  updateUserSchema,
-  changePasswordSchema
-} from '../validators/UserValidator';
-import { validate } from '../../../utils/validation';
-import { successResponse, errorResponse, paginatedResponse } from '../../../core/responses';
-import { jwt } from '@elysiajs/jwt';
-import envConfig from '../../../config/env';
+import {Elysia, t} from 'elysia';
+import {UserService} from '../service/UserService';
+import {changePasswordSchema, updateUserSchema} from '../validators/UserValidator';
+import {validate} from '../../../utils/validation';
+import {errorResponse, paginatedResponse, successResponse} from '../../../core/responses';
+import {authPlugin} from '../../../core/auth';
 
 const userService = new UserService();
 
 export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
-  .use(
-    jwt({
-      name: 'jwt',
-      secret: envConfig.JWT_SECRET,
-    })
-  )
-  .derive(async ({ jwt, headers }) => {
-    const authHeader = headers['authorization'];
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return { user: null };
-    }
-    const token = authHeader.split(' ')[1];
-    const payload = await jwt.verify(token);
-    return { user: payload };
-  })
+  .use(authPlugin)
   // Get current user profile
   .get(
     '/profile',
     async ({ user, set }) => {
       try {
-        if (!user) {
-          set.status = 401;
-          return errorResponse('Authentication token required', 'UNAUTHORIZED', 401);
-        }
-
-        const userData = await userService.findUserById(user.sub as string);
+        const userData = await userService.findUserById(user!.sub as string);
         if (!userData) {
           set.status = 404;
           return errorResponse('User not found', 'NOT_FOUND', 404);
@@ -54,7 +30,8 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
       }
     },
     {
-      detail: { summary: 'Get current user profile' }
+      detail: { summary: 'Get current user profile' },
+      isAuth: true
     }
   )
 
@@ -63,13 +40,8 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
     '/profile',
     async ({ user, body, set }) => {
       try {
-        if (!user) {
-          set.status = 401;
-          return errorResponse('Authentication token required', 'UNAUTHORIZED', 401);
-        }
-
         const validatedData = validate(updateUserSchema, body);
-        const updatedUser = await userService.updateUser(user.sub as string, validatedData);
+        const updatedUser = await userService.updateUser(user!.sub as string, validatedData);
 
         // Don't return password in response
         const { password, ...userWithoutPassword } = updatedUser;
@@ -86,6 +58,7 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
         firstName: t.Optional(t.String()),
         lastName: t.Optional(t.String()),
       }),
+      isAuth: true,
       detail: { summary: 'Update current user profile' }
     }
   )
@@ -95,15 +68,10 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
     '/change-password',
     async ({ user, body, set }) => {
       try {
-        if (!user) {
-          set.status = 401;
-          return errorResponse('Authentication token required', 'UNAUTHORIZED', 401);
-        }
-
         const validatedData = validate(changePasswordSchema, body);
 
         const updatedUser = await userService.changePassword(
-          user.sub as string,
+          user!.sub as string,
           validatedData.currentPassword,
           validatedData.newPassword
         );
@@ -122,6 +90,7 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
         currentPassword: t.String(),
         newPassword: t.String(),
       }),
+      isAuth: true,
       detail: { summary: 'Change user password' }
     }
   )
@@ -129,13 +98,8 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
   // Get all users (admin only)
   .get(
     '/',
-    async ({ user, query, set }) => {
+    async ({ query, set }) => {
       try {
-        if (!user || user.role !== 'admin') {
-          set.status = 403;
-          return errorResponse('Access denied. Admin role required.', 'FORBIDDEN', 403);
-        }
-
         const page = parseInt(query.page as string) || 1;
         const limit = parseInt(query.limit as string) || 10;
 
@@ -164,6 +128,7 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
         page: t.Optional(t.String()),
         limit: t.Optional(t.String()),
       }),
+      hasRole: 'admin',
       detail: { summary: 'Get all users (Admin only)' }
     }
   )
@@ -173,15 +138,10 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
     '/:id',
     async ({ user, params, set }) => {
       try {
-        if (!user) {
-          set.status = 401;
-          return errorResponse('Authentication token required', 'UNAUTHORIZED', 401);
-        }
-
         const { id } = params;
 
         // Allow access if it's the user's own profile or if admin
-        if (user.sub !== id && user.role !== 'admin') {
+        if (user!.sub !== id && user!.role !== 'admin') {
           set.status = 403;
           return errorResponse('Access denied. You can only view your own profile or need admin role.', 'FORBIDDEN', 403);
         }
@@ -205,6 +165,7 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
       params: t.Object({
         id: t.String()
       }),
+      isAuth: true,
       detail: { summary: 'Get user by ID' }
     }
   )
@@ -212,13 +173,8 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
   // Update user by ID (admin only)
   .put(
     '/:id',
-    async ({ user, params, body, set }) => {
+    async ({ params, body, set }) => {
       try {
-        if (!user || user.role !== 'admin') {
-          set.status = 403;
-          return errorResponse('Access denied. Admin role required.', 'FORBIDDEN', 403);
-        }
-
         const { id } = params;
         const validatedData = validate(updateUserSchema, body);
 
@@ -242,6 +198,7 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
         firstName: t.Optional(t.String()),
         lastName: t.Optional(t.String()),
       }),
+      hasRole: 'admin',
       detail: { summary: 'Update user by ID (Admin only)' }
     }
   )
@@ -249,13 +206,8 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
   // Delete user by ID (admin only)
   .delete(
     '/:id',
-    async ({ user, params, set }) => {
+    async ({ params, set }) => {
       try {
-        if (!user || user.role !== 'admin') {
-          set.status = 403;
-          return errorResponse('Access denied. Admin role required.', 'FORBIDDEN', 403);
-        }
-
         const { id } = params;
 
         await userService.deleteUser(id);
@@ -270,6 +222,7 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
       params: t.Object({
         id: t.String()
       }),
+      hasRole: 'admin',
       detail: { summary: 'Delete user by ID (Admin only)' }
     }
   );

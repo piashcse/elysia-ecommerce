@@ -1,5 +1,5 @@
-import { pgTable, uuid, varchar, numeric, timestamp, pgEnum } from 'drizzle-orm/pg-core';
-import { orders } from './order';
+import {numeric, pgEnum, pgTable, timestamp, uuid, varchar} from 'drizzle-orm/pg-core';
+import {orders} from './order';
 
 export const paymentStatusEnum = pgEnum('payment_status', ['pending', 'completed', 'failed', 'refunded']);
 export const paymentMethodEnum = pgEnum('payment_method', ['credit_card', 'debit_card', 'paypal', 'bank_transfer', 'cash_on_delivery']);

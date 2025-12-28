@@ -1,5 +1,5 @@
-import { pgTable, uuid, varchar, text, boolean, timestamp, pgEnum } from 'drizzle-orm/pg-core';
-import { users } from './user';
+import {boolean, pgEnum, pgTable, text, timestamp, uuid, varchar} from 'drizzle-orm/pg-core';
+import {users} from './user';
 
 export const notificationTypeEnum = pgEnum('notification_type', [
     'order_confirmation',

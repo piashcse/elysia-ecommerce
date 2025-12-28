@@ -1,4 +1,4 @@
-import { Elysia } from 'elysia';
+import {Elysia} from 'elysia';
 
 export const helmetMiddleware = new Elysia({ name: 'helmet' })
   .onBeforeHandle(({ set }) => {

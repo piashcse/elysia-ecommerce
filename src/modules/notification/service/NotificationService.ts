@@ -1,8 +1,8 @@
-import { db } from '../../../config/database';
-import { notifications } from '../../../database/schema';
-import { eq, and, desc, sql } from 'drizzle-orm';
-import { CreateNotificationDto, UpdateNotificationDto } from '../dto/NotificationDto';
-import { NotFoundError } from '../../../core/errors';
+import {db} from '../../../config/database';
+import {notifications} from '../../../database/schema';
+import {desc, eq, sql} from 'drizzle-orm';
+import {CreateNotificationDto} from '../dto/NotificationDto';
+import {NotFoundError} from '../../../core/errors';
 
 export class NotificationService {
   async createNotification(createNotificationDto: CreateNotificationDto): Promise<any> {
