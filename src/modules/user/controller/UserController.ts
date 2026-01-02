@@ -1,9 +1,9 @@
-import {Elysia, t} from 'elysia';
-import {UserService} from '../service/UserService';
-import {changePasswordSchema, updateUserSchema} from '../validators/UserValidator';
-import {validate} from '../../../utils/validation';
-import {errorResponse, paginatedResponse, successResponse} from '../../../core/responses';
-import {authPlugin} from '../../../core/auth';
+import { Elysia, t } from 'elysia';
+import { UserService } from '../service/UserService';
+import { changePasswordSchema, updateUserSchema } from '../validators/UserValidator';
+import { validate } from '../../../utils/validation';
+import { errorResponse, paginatedResponse, successResponse } from '../../../core/responses';
+import { authPlugin } from '../../../core/auth';
 
 const userService = new UserService();
 
@@ -13,44 +13,43 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
   .get(
     '/profile',
     async ({ user, set }) => {
-      try {
-        const userData = await userService.findUserById(user!.sub as string);
-        if (!userData) {
-          set.status = 404;
-          return errorResponse('User not found', 'NOT_FOUND', 404);
-        }
-
-        // Don't return password in response
-        const { password, ...userWithoutPassword } = userData;
-
-        return successResponse(userWithoutPassword, 'Profile retrieved successfully');
-      } catch (error: any) {
-        set.status = error.statusCode || 500;
-        return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
+      const userData = await userService.findUserById(user!.sub as string);
+      if (!userData) {
+        set.status = 404;
+        return errorResponse('User not found', 'NOT_FOUND', 404);
       }
+
+      // Don't return password in response
+      const { password, ...userWithoutPassword } = userData;
+
+      return successResponse(userWithoutPassword, 'Profile retrieved successfully');
     },
     {
       detail: { summary: 'Get current user profile' },
-      isAuth: true
+      isAuth: true,
+      response: {
+        200: t.Object({
+          success: t.Boolean(),
+          statusCode: t.Number(),
+          message: t.String(),
+          data: t.Any()
+        }),
+        404: t.Any()
+      }
     }
   )
 
   // Update current user profile
   .put(
     '/profile',
-    async ({ user, body, set }) => {
-      try {
-        const validatedData = validate(updateUserSchema, body);
-        const updatedUser = await userService.updateUser(user!.sub as string, validatedData);
+    async ({ user, body }) => {
+      const validatedData = validate(updateUserSchema, body);
+      const updatedUser = await userService.updateUser(user!.sub as string, validatedData);
 
-        // Don't return password in response
-        const { password, ...userWithoutPassword } = updatedUser;
+      // Don't return password in response
+      const { password, ...userWithoutPassword } = updatedUser;
 
-        return successResponse(userWithoutPassword, 'Profile updated successfully');
-      } catch (error: any) {
-        set.status = error.statusCode || 500;
-        return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
-      }
+      return successResponse(userWithoutPassword, 'Profile updated successfully');
     },
     {
       body: t.Object({
@@ -59,6 +58,11 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
         lastName: t.Optional(t.String()),
       }),
       isAuth: true,
+      response: {
+        200: t.Any(),
+        400: t.Any(),
+        422: t.Any()
+      },
       detail: { summary: 'Update current user profile' }
     }
   )
@@ -66,24 +70,19 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
   // Change password
   .put(
     '/change-password',
-    async ({ user, body, set }) => {
-      try {
-        const validatedData = validate(changePasswordSchema, body);
+    async ({ user, body }) => {
+      const validatedData = validate(changePasswordSchema, body);
 
-        const updatedUser = await userService.changePassword(
-          user!.sub as string,
-          validatedData.currentPassword,
-          validatedData.newPassword
-        );
+      const updatedUser = await userService.changePassword(
+        user!.sub as string,
+        validatedData.currentPassword,
+        validatedData.newPassword
+      );
 
-        // Don't return password in response
-        const { password, ...userWithoutPassword } = updatedUser;
+      // Don't return password in response
+      const { password, ...userWithoutPassword } = updatedUser;
 
-        return successResponse(userWithoutPassword, 'Password changed successfully');
-      } catch (error: any) {
-        set.status = error.statusCode || 500;
-        return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
-      }
+      return successResponse(userWithoutPassword, 'Password changed successfully');
     },
     {
       body: t.Object({
@@ -91,6 +90,11 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
         newPassword: t.String(),
       }),
       isAuth: true,
+      response: {
+        200: t.Any(),
+        400: t.Any(),
+        401: t.Any()
+      },
       detail: { summary: 'Change user password' }
     }
   )
@@ -98,30 +102,25 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
   // Get all users (admin only)
   .get(
     '/',
-    async ({ query, set }) => {
-      try {
-        const page = parseInt(query.page as string) || 1;
-        const limit = parseInt(query.limit as string) || 10;
+    async ({ query }) => {
+      const page = parseInt(query.page as string) || 1;
+      const limit = parseInt(query.limit as string) || 10;
 
-        const { users, total } = await userService.getAllUsers(page, limit);
+      const { users, total } = await userService.getAllUsers(page, limit);
 
-        // Don't return passwords in response
-        const usersWithoutPasswords = users.map(({ password, ...rest }) => rest);
+      // Don't return passwords in response
+      const usersWithoutPasswords = users.map(({ password, ...rest }) => rest);
 
-        return paginatedResponse(
-          usersWithoutPasswords,
-          {
-            page,
-            limit,
-            total,
-            totalPages: Math.ceil(total / limit),
-          },
-          'Users retrieved successfully'
-        );
-      } catch (error: any) {
-        set.status = error.statusCode || 500;
-        return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
-      }
+      return paginatedResponse(
+        usersWithoutPasswords,
+        {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+        'Users retrieved successfully'
+      );
     },
     {
       query: t.Object({
@@ -129,6 +128,9 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
         limit: t.Optional(t.String()),
       }),
       hasRole: 'admin',
+      response: {
+        200: t.Any()
+      },
       detail: { summary: 'Get all users (Admin only)' }
     }
   )
@@ -137,35 +139,35 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
   .get(
     '/:id',
     async ({ user, params, set }) => {
-      try {
-        const { id } = params;
+      const { id } = params;
 
-        // Allow access if it's the user's own profile or if admin
-        if (user!.sub !== id && user!.role !== 'admin') {
-          set.status = 403;
-          return errorResponse('Access denied. You can only view your own profile or need admin role.', 'FORBIDDEN', 403);
-        }
-
-        const userData = await userService.findUserById(id);
-        if (!userData) {
-          set.status = 404;
-          return errorResponse('User not found', 'NOT_FOUND', 404);
-        }
-
-        // Don't return password in response
-        const { password, ...userWithoutPassword } = userData;
-
-        return successResponse(userWithoutPassword, 'User retrieved successfully');
-      } catch (error: any) {
-        set.status = error.statusCode || 500;
-        return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
+      // Allow access if it's the user's own profile or if admin
+      if (user!.sub !== id && user!.role !== 'admin') {
+        set.status = 403;
+        return errorResponse('Access denied. You can only view your own profile or need admin role.', 'FORBIDDEN', 403);
       }
+
+      const userData = await userService.findUserById(id);
+      if (!userData) {
+        set.status = 404;
+        return errorResponse('User not found', 'NOT_FOUND', 404);
+      }
+
+      // Don't return password in response
+      const { password, ...userWithoutPassword } = userData;
+
+      return successResponse(userWithoutPassword, 'User retrieved successfully');
     },
     {
       params: t.Object({
         id: t.String()
       }),
       isAuth: true,
+      response: {
+        200: t.Any(),
+        403: t.Any(),
+        404: t.Any()
+      },
       detail: { summary: 'Get user by ID' }
     }
   )
@@ -173,21 +175,16 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
   // Update user by ID (admin only)
   .put(
     '/:id',
-    async ({ params, body, set }) => {
-      try {
-        const { id } = params;
-        const validatedData = validate(updateUserSchema, body);
+    async ({ params, body }) => {
+      const { id } = params;
+      const validatedData = validate(updateUserSchema, body);
 
-        const updatedUser = await userService.updateUser(id, validatedData);
+      const updatedUser = await userService.updateUser(id, validatedData);
 
-        // Don't return password in response
-        const { password, ...userWithoutPassword } = updatedUser;
+      // Don't return password in response
+      const { password, ...userWithoutPassword } = updatedUser;
 
-        return successResponse(userWithoutPassword, 'User updated successfully');
-      } catch (error: any) {
-        set.status = error.statusCode || 500;
-        return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
-      }
+      return successResponse(userWithoutPassword, 'User updated successfully');
     },
     {
       params: t.Object({
@@ -199,6 +196,11 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
         lastName: t.Optional(t.String()),
       }),
       hasRole: 'admin',
+      response: {
+        200: t.Any(),
+        400: t.Any(),
+        404: t.Any()
+      },
       detail: { summary: 'Update user by ID (Admin only)' }
     }
   )
@@ -206,23 +208,22 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
   // Delete user by ID (admin only)
   .delete(
     '/:id',
-    async ({ params, set }) => {
-      try {
-        const { id } = params;
+    async ({ params }) => {
+      const { id } = params;
 
-        await userService.deleteUser(id);
+      await userService.deleteUser(id);
 
-        return successResponse(null, 'User deleted successfully');
-      } catch (error: any) {
-        set.status = error.statusCode || 500;
-        return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
-      }
+      return successResponse(null, 'User deleted successfully');
     },
     {
       params: t.Object({
         id: t.String()
       }),
       hasRole: 'admin',
+      response: {
+        200: t.Any(),
+        404: t.Any()
+      },
       detail: { summary: 'Delete user by ID (Admin only)' }
     }
   );

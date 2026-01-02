@@ -8,6 +8,13 @@
       "when": 1766545340163,
       "tag": "0000_worthless_madame_masque",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1767342318726,
+      "tag": "0001_gorgeous_orphan",
+      "breakpoints": true
     }
   ]
 }

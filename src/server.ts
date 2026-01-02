@@ -8,6 +8,8 @@ import envConfig from './config/env';
 import { helmetMiddleware } from './middlewares/helmet';
 import { defaultRateLimiter } from './middlewares/rateLimiter';
 import { errorHandler } from './middlewares/errorHandler';
+import { AppError } from './core/errors';
+import { errorResponse } from './core/responses';
 import { authController } from './modules/auth/controller/AuthController';
 import { sellerController } from './modules/seller/controller/SellerController';
 import { userController } from './modules/user/controller/UserController';
@@ -29,35 +31,7 @@ const app = new Elysia();
 await connectDB();
 
 // Register middlewares
-app.use(
-    openapi({
-        path:'/swagger',
-        provider:'swagger-ui',
-        documentation: {
-            info: {
-                title: "Elysia E-commerce API",
-                version: "1.0.0",
-                description: "High-performance eCommerce backend built with Elysia.js and Drizzle ORM.",
-                contact: {
-                    name: "Mehedi Hassan Piash",
-                    email: "piash599@gmail.com",
-                    url: "https://piashcse.github.io"
-                }
-            },
-            servers: [
-                {
-                    url: "http://localhost:3000",
-                    description: "Local Development Server"
-                },
-                {
-                    url: "https://api.domainname.com",
-                    description: "Production Server"
-                }
-            ]
-        }
-    })
-)
-    .use(cors())
+app.use(cors())
     .use(helmetMiddleware)
     .use(logger({
         level: 'info',
@@ -81,8 +55,7 @@ app.use(
             name: 'jwt',
             secret: envConfig.JWT_SECRET,
         })
-    )
-    .use(errorHandler);
+    );
 
 // Register controllers
 app.use(authController)
@@ -98,7 +71,66 @@ app.use(authController)
     .use(couponController)
     .use(notificationController)
     .use(shippingController)
-    .use(addressController);
+    .use(addressController)
+    .onError(({ code, error, set }) => {
+        const err = error as any;
+        console.error('Application error occurred:', {
+            code,
+            message: err.message || 'Unknown error',
+            stack: err.stack,
+            timestamp: new Date().toISOString(),
+        });
+
+        if (code === 'VALIDATION' || code === 'PARSE') {
+            set.status = 422;
+            let message = err.message;
+            let details = err;
+
+            try {
+                const parsed = JSON.parse(err.message);
+                if (parsed.summary) message = parsed.summary;
+                details = parsed;
+            } catch (e) { }
+
+            return errorResponse(message, code.toString(), 422, details);
+        }
+
+        if (error instanceof AppError) {
+            const appErr = error as AppError;
+            set.status = appErr.statusCode;
+            return errorResponse(appErr.message, (appErr.errorCode || code).toString(), appErr.statusCode, appErr);
+        }
+
+        const statusCode = err.status || err.statusCode || 500;
+        set.status = statusCode;
+        return errorResponse(err.message || 'Internal server error', (err.code || code).toString(), statusCode, err);
+    });
+
+// Register Swagger/OpenAPI after routes to ensure discovery
+app.use(
+    openapi({
+        path: '/swagger',
+        provider: 'swagger-ui',
+        documentation: {
+            info: {
+                title: "Elysia E-commerce API",
+                version: "1.0.0",
+                description: "High-performance eCommerce backend built with Elysia.js and Drizzle ORM.",
+                contact: {
+                    name: "Mehedi Hassan Piash",
+                    email: "piash599@gmail.com",
+                    url: "https://piashcse.github.io"
+                }
+            },
+            servers: [
+                {
+                    url: `http://localhost:${envConfig.PORT}`,
+                    description: "Local Development Server"
+                }
+            ]
+        }
+    })
+);
 
 // Health check endpoint
 app.get('/health', () => ({
@@ -115,7 +147,7 @@ if (import.meta.main) {
     app.listen(PORT, () => {
         console.log(`Elysia E-commerce server is running on port ${PORT}`);
         console.log(`Environment: ${envConfig.NODE_ENV}`);
-        console.log(`Swagger UI available at http://localhost:${PORT}//swagger`);
+        console.log(`Swagger UI available at http://localhost:${PORT}/swagger`);
     });
 }
 

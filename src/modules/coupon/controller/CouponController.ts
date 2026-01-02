@@ -13,16 +13,11 @@ export const couponController = new Elysia({ prefix: '/coupons', tags: ['Coupon'
   .post(
     '/',
     async ({ body, set }) => {
-      try {
-        const validatedData = validate(createCouponSchema, body);
-        const coupon = await couponService.createCoupon(validatedData);
+      const validatedData = validate(createCouponSchema, body);
+      const coupon = await couponService.createCoupon(validatedData);
 
-        set.status = 201;
-        return successResponse(coupon, 'Coupon created successfully', 201);
-      } catch (error: any) {
-        set.status = error.statusCode || 500;
-        return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
-      }
+      set.status = 201;
+      return successResponse(coupon, 'Coupon created successfully', 201);
     },
     {
       body: t.Object({
@@ -37,6 +32,7 @@ export const couponController = new Elysia({ prefix: '/coupons', tags: ['Coupon'
         startDate: t.String(),
         endDate: t.String(),
       }),
+      response: { 201: t.Any(), 400: t.Any(), 422: t.Any() },
       hasRole: 'admin',
       detail: { summary: 'Create a new coupon (Admin only)' }
     }
@@ -45,33 +41,29 @@ export const couponController = new Elysia({ prefix: '/coupons', tags: ['Coupon'
   // Get all coupons
   .get(
     '/',
-    async ({ query, set }) => {
-      try {
-        const page = parseInt(query.page as string) || 1;
-        const limit = parseInt(query.limit as string) || 10;
+    async ({ query }) => {
+      const page = parseInt(query.page as string) || 1;
+      const limit = parseInt(query.limit as string) || 10;
 
-        const { coupons, total } = await couponService.getAllCoupons(page, limit);
+      const { coupons, total } = await couponService.getAllCoupons(page, limit);
 
-        return paginatedResponse(
-          coupons,
-          {
-            page,
-            limit,
-            total,
-            totalPages: Math.ceil(total / limit),
-          },
-          'Coupons retrieved successfully'
-        );
-      } catch (error: any) {
-        set.status = error.statusCode || 500;
-        return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
-      }
+      return paginatedResponse(
+        coupons,
+        {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+        'Coupons retrieved successfully'
+      );
     },
     {
       query: t.Object({
         page: t.Optional(t.String()),
         limit: t.Optional(t.String()),
       }),
+      response: { 200: t.Any() },
       detail: { summary: 'Get all coupons' }
     }
   )
@@ -80,26 +72,22 @@ export const couponController = new Elysia({ prefix: '/coupons', tags: ['Coupon'
   .get(
     '/:id',
     async ({ params, set }) => {
-      try {
-        const { id } = params;
-        validate(couponIdSchema, { id });
+      const { id } = params;
+      validate(couponIdSchema, { id });
 
-        const coupon = await couponService.findCouponById(id);
-        if (!coupon) {
-          set.status = 404;
-          return errorResponse('Coupon not found', 'NOT_FOUND', 404);
-        }
-
-        return successResponse(coupon, 'Coupon retrieved successfully', 200);
-      } catch (error: any) {
-        set.status = error.statusCode || 500;
-        return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
+      const coupon = await couponService.findCouponById(id);
+      if (!coupon) {
+        set.status = 404;
+        return errorResponse('Coupon not found', 'NOT_FOUND', 404);
       }
+
+      return successResponse(coupon, 'Coupon retrieved successfully', 200);
     },
     {
       params: t.Object({
         id: t.String()
       }),
+      response: { 200: t.Any(), 404: t.Any() },
       detail: { summary: 'Get coupon by ID' }
     }
   )
@@ -108,25 +96,21 @@ export const couponController = new Elysia({ prefix: '/coupons', tags: ['Coupon'
   .get(
     '/code/:code',
     async ({ params, set }) => {
-      try {
-        const { code } = params;
+      const { code } = params;
 
-        const coupon = await couponService.getCouponByCode(code);
-        if (!coupon) {
-          set.status = 404;
-          return errorResponse('Coupon not found', 'NOT_FOUND', 404);
-        }
-
-        return successResponse(coupon, 'Coupon retrieved successfully', 200);
-      } catch (error: any) {
-        set.status = error.statusCode || 500;
-        return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
+      const coupon = await couponService.getCouponByCode(code);
+      if (!coupon) {
+        set.status = 404;
+        return errorResponse('Coupon not found', 'NOT_FOUND', 404);
       }
+
+      return successResponse(coupon, 'Coupon retrieved successfully', 200);
     },
     {
       params: t.Object({
         code: t.String()
       }),
+      response: { 200: t.Any(), 404: t.Any() },
       detail: { summary: 'Get coupon by code' }
     }
   )
@@ -134,19 +118,14 @@ export const couponController = new Elysia({ prefix: '/coupons', tags: ['Coupon'
   // Update coupon by ID (admin only)
   .put(
     '/:id',
-    async ({ params, body, set }) => {
-      try {
-        const { id } = params;
-        validate(couponIdSchema, { id });
-        const validatedData = validate(updateCouponSchema, body);
+    async ({ params, body }) => {
+      const { id } = params;
+      validate(couponIdSchema, { id });
+      const validatedData = validate(updateCouponSchema, body);
 
-        const updatedCoupon = await couponService.updateCoupon(id, validatedData);
+      const updatedCoupon = await couponService.updateCoupon(id, validatedData);
 
-        return successResponse(updatedCoupon, 'Coupon updated successfully', 200);
-      } catch (error: any) {
-        set.status = error.statusCode || 500;
-        return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
-      }
+      return successResponse(updatedCoupon, 'Coupon updated successfully', 200);
     },
     {
       params: t.Object({
@@ -164,6 +143,7 @@ export const couponController = new Elysia({ prefix: '/coupons', tags: ['Coupon'
         startDate: t.Optional(t.String()),
         endDate: t.Optional(t.String()),
       }),
+      response: { 200: t.Any(), 400: t.Any(), 404: t.Any() },
       hasRole: 'admin',
       detail: { summary: 'Update coupon by ID (Admin only)' }
     }
@@ -172,23 +152,19 @@ export const couponController = new Elysia({ prefix: '/coupons', tags: ['Coupon'
   // Delete coupon by ID (admin only)
   .delete(
     '/:id',
-    async ({ params, set }) => {
-      try {
-        const { id } = params;
-        validate(couponIdSchema, { id });
+    async ({ params }) => {
+      const { id } = params;
+      validate(couponIdSchema, { id });
 
-        await couponService.deleteCoupon(id);
+      await couponService.deleteCoupon(id);
 
-        return successResponse(null, 'Coupon deleted successfully', 200);
-      } catch (error: any) {
-        set.status = error.statusCode || 500;
-        return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
-      }
+      return successResponse(null, 'Coupon deleted successfully', 200);
     },
     {
       params: t.Object({
         id: t.String()
       }),
+      response: { 200: t.Any(), 404: t.Any() },
       hasRole: 'admin',
       detail: { summary: 'Delete coupon by ID (Admin only)' }
     }

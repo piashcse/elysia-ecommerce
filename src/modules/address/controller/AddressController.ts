@@ -1,9 +1,9 @@
-import {Elysia, t} from 'elysia';
-import {AddressService} from '../service/AddressService';
-import {addressIdSchema, createAddressSchema, updateAddressSchema} from '../validators/AddressValidator';
-import {validate} from '../../../utils/validation';
-import {errorResponse, successResponse} from '../../../core/responses';
-import {authPlugin} from '../../../core/auth';
+import { Elysia, t } from 'elysia';
+import { AddressService } from '../service/AddressService';
+import { addressIdSchema, createAddressSchema, updateAddressSchema } from '../validators/AddressValidator';
+import { validate } from '../../../utils/validation';
+import { errorResponse, successResponse } from '../../../core/responses';
+import { authPlugin } from '../../../core/auth';
 
 const addressService = new AddressService();
 
@@ -16,20 +16,16 @@ export const addressController = new Elysia({ prefix: '/addresses', tags: ['Addr
     // Get all user addresses
     .get(
         '/',
-        async ({ query, user, set }) => {
-            try {
-                const type = query.type as string | undefined;
-                const addresses = await addressService.getUserAddresses(user!.sub, type);
-                return successResponse(addresses, 'Addresses retrieved successfully');
-            } catch (error: any) {
-                set.status = error.statusCode || 500;
-                return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
-            }
+        async ({ query, user }) => {
+            const type = query.type as string | undefined;
+            const addresses = await addressService.getUserAddresses(user!.sub, type);
+            return successResponse(addresses, 'Addresses retrieved successfully');
         },
         {
             query: t.Object({
                 type: t.Optional(t.String()),
             }),
+            response: { 200: t.Any() },
             detail: { summary: 'Get all user addresses' }
         }
     )
@@ -38,24 +34,20 @@ export const addressController = new Elysia({ prefix: '/addresses', tags: ['Addr
     .get(
         '/:id',
         async ({ params, user, set }) => {
-            try {
-                const { id } = params;
-                validate(addressIdSchema, { id });
-                const address = await addressService.getAddressById(id, user!.sub);
+            const { id } = params;
+            validate(addressIdSchema, { id });
+            const address = await addressService.getAddressById(id, user!.sub);
 
-                if (!address) {
-                    set.status = 404;
-                    return errorResponse('Address not found', 'NOT_FOUND', 404);
-                }
-
-                return successResponse(address, 'Address retrieved successfully');
-            } catch (error: any) {
-                set.status = error.statusCode || 500;
-                return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
+            if (!address) {
+                set.status = 404;
+                return errorResponse('Address not found', 'NOT_FOUND', 404);
             }
+
+            return successResponse(address, 'Address retrieved successfully');
         },
         {
             params: t.Object({ id: t.String() }),
+            response: { 200: t.Any(), 404: t.Any() },
             detail: { summary: 'Get address by ID' }
         }
     )
@@ -64,16 +56,11 @@ export const addressController = new Elysia({ prefix: '/addresses', tags: ['Addr
     .post(
         '/',
         async ({ body, user, set }) => {
-            try {
-                const validatedData = validate(createAddressSchema, body);
-                const address = await addressService.createAddress(user!.sub, validatedData);
+            const validatedData = validate(createAddressSchema, body);
+            const address = await addressService.createAddress(user!.sub, validatedData);
 
-                set.status = 201;
-                return successResponse(address, 'Address created successfully', 201);
-            } catch (error: any) {
-                set.status = error.statusCode || 500;
-                return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
-            }
+            set.status = 201;
+            return successResponse(address, 'Address created successfully', 201);
         },
         {
             body: t.Object({
@@ -88,6 +75,7 @@ export const addressController = new Elysia({ prefix: '/addresses', tags: ['Addr
                 country: t.String(),
                 isDefault: t.Optional(t.Boolean()),
             }),
+            response: { 201: t.Any(), 400: t.Any(), 422: t.Any() },
             detail: { summary: 'Create new address' }
         }
     )
@@ -95,18 +83,13 @@ export const addressController = new Elysia({ prefix: '/addresses', tags: ['Addr
     // Update address
     .put(
         '/:id',
-        async ({ params, body, user, set }) => {
-            try {
-                const { id } = params;
-                validate(addressIdSchema, { id });
-                const validatedData = validate(updateAddressSchema, body);
-                const address = await addressService.updateAddress(id, user!.sub, validatedData);
+        async ({ params, body, user }) => {
+            const { id } = params;
+            validate(addressIdSchema, { id });
+            const validatedData = validate(updateAddressSchema, body);
+            const address = await addressService.updateAddress(id, user!.sub, validatedData);
 
-                return successResponse(address, 'Address updated successfully');
-            } catch (error: any) {
-                set.status = error.statusCode || 500;
-                return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
-            }
+            return successResponse(address, 'Address updated successfully');
         },
         {
             params: t.Object({ id: t.String() }),
@@ -122,6 +105,7 @@ export const addressController = new Elysia({ prefix: '/addresses', tags: ['Addr
                 country: t.Optional(t.String()),
                 isDefault: t.Optional(t.Boolean()),
             }),
+            response: { 200: t.Any(), 400: t.Any(), 404: t.Any() },
             detail: { summary: 'Update address' }
         }
     )
@@ -129,20 +113,16 @@ export const addressController = new Elysia({ prefix: '/addresses', tags: ['Addr
     // Delete address
     .delete(
         '/:id',
-        async ({ params, user, set }) => {
-            try {
-                const { id } = params;
-                validate(addressIdSchema, { id });
-                await addressService.deleteAddress(id, user!.sub);
+        async ({ params, user }) => {
+            const { id } = params;
+            validate(addressIdSchema, { id });
+            await addressService.deleteAddress(id, user!.sub);
 
-                return successResponse(null, 'Address deleted successfully');
-            } catch (error: any) {
-                set.status = error.statusCode || 500;
-                return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
-            }
+            return successResponse(null, 'Address deleted successfully');
         },
         {
             params: t.Object({ id: t.String() }),
+            response: { 200: t.Any(), 404: t.Any() },
             detail: { summary: 'Delete address' }
         }
     )
@@ -150,20 +130,16 @@ export const addressController = new Elysia({ prefix: '/addresses', tags: ['Addr
     // Set default address
     .post(
         '/:id/set-default',
-        async ({ params, user, set }) => {
-            try {
-                const { id } = params;
-                validate(addressIdSchema, { id });
-                const address = await addressService.setDefaultAddress(id, user!.sub);
+        async ({ params, user }) => {
+            const { id } = params;
+            validate(addressIdSchema, { id });
+            const address = await addressService.setDefaultAddress(id, user!.sub);
 
-                return successResponse(address, 'Default address set successfully');
-            } catch (error: any) {
-                set.status = error.statusCode || 500;
-                return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
-            }
+            return successResponse(address, 'Default address set successfully');
         },
         {
             params: t.Object({ id: t.String() }),
+            response: { 200: t.Any(), 404: t.Any() },
             detail: { summary: 'Set address as default' }
         }
     );
