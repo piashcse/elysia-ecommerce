@@ -1,9 +1,9 @@
-import {Elysia, t} from 'elysia';
-import {OrderService} from '../service/OrderService';
-import {createOrderSchema, orderIdSchema, updateOrderSchema} from '../validators/OrderValidator';
-import {validate} from '../../../utils/validation';
-import {errorResponse, paginatedResponse, successResponse} from '../../../core/responses';
-import {authPlugin} from '../../../core/auth';
+import { Elysia, t } from 'elysia';
+import { OrderService } from '../service/OrderService';
+import { createOrderSchema, orderIdSchema, updateOrderSchema } from '../validators/OrderValidator';
+import { validate } from '../../../utils/validation';
+import { errorResponse, paginatedResponse, successResponse } from '../../../core/responses';
+import { authPlugin } from '../../../core/auth';
 
 const orderService = new OrderService();
 
@@ -16,15 +16,10 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
   .post(
     '/',
     async ({ body, set, user }) => {
-      try {
-        const validatedData = validate(createOrderSchema, body);
-        const order = await orderService.createOrder(user!.sub as string, validatedData);
-        set.status = 201;
-        return successResponse(order, 'Order created successfully', 201);
-      } catch (error: any) {
-        set.status = error.statusCode || 500;
-        return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
-      }
+      const validatedData = validate(createOrderSchema, body);
+      const order = await orderService.createOrder(user!.sub as string, validatedData);
+      set.status = 201;
+      return successResponse(order, 'Order created successfully', 201);
     },
     {
       body: t.Object({
@@ -54,6 +49,11 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
         })),
         notes: t.Optional(t.String())
       }),
+      response: {
+        201: t.Any(),
+        400: t.Any(),
+        422: t.Any()
+      },
       detail: { summary: 'Place a new order' }
     }
   )
@@ -61,35 +61,30 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
   // Get all orders (admin only) or user's orders
   .get(
     '/',
-    async ({ query, set, user }) => {
-      try {
-        const isAdmin = user?.role === 'admin';
-        const page = parseInt(query.page as string) || 1;
-        const limit = parseInt(query.limit as string) || 10;
+    async ({ query, user }) => {
+      const isAdmin = user?.role === 'admin';
+      const page = parseInt(query.page as string) || 1;
+      const limit = parseInt(query.limit as string) || 10;
 
-        const filters = {
-          status: query.status as string,
-          dateFrom: query.dateFrom as string,
-          dateTo: query.dateTo as string,
-          userId: isAdmin ? (query.userId as string) : (user!.sub as string),
-        };
+      const filters = {
+        status: query.status as string,
+        dateFrom: query.dateFrom as string,
+        dateTo: query.dateTo as string,
+        userId: isAdmin ? (query.userId as string) : (user!.sub as string),
+      };
 
-        const { orders, total } = await orderService.getOrders(page, limit, filters);
+      const { orders, total } = await orderService.getOrders(page, limit, filters);
 
-        return paginatedResponse(
-          orders,
-          {
-            page,
-            limit,
-            total,
-            totalPages: Math.ceil(total / limit),
-          },
-          'Orders retrieved successfully'
-        );
-      } catch (error: any) {
-        set.status = error.statusCode || 500;
-        return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
-      }
+      return paginatedResponse(
+        orders,
+        {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+        'Orders retrieved successfully'
+      );
     },
     {
       query: t.Object({
@@ -100,6 +95,9 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
         dateTo: t.Optional(t.String()),
         userId: t.Optional(t.String()),
       }),
+      response: {
+        200: t.Any()
+      },
       detail: { summary: 'Get orders (Admin: all, Customer: own)' }
     }
   )
@@ -108,32 +106,32 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
   .get(
     '/:id',
     async ({ params, set, user }) => {
-      try {
-        const { id } = params;
-        validate(orderIdSchema, { id });
+      const { id } = params;
+      validate(orderIdSchema, { id });
 
-        const order = await orderService.getOrderById(id);
-        if (!order) {
-          set.status = 404;
-          return errorResponse('Order not found', 'NOT_FOUND', 404);
-        }
-
-        // Check if user is admin or owner of order
-        if (user?.role !== 'admin' && order.userId !== user?.sub) {
-          set.status = 403;
-          return errorResponse('Access denied. You can only view your own orders.', 'FORBIDDEN', 403);
-        }
-
-        return successResponse(order, 'Order retrieved successfully', 200);
-      } catch (error: any) {
-        set.status = error.statusCode || 500;
-        return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
+      const order = await orderService.getOrderById(id);
+      if (!order) {
+        set.status = 404;
+        return errorResponse('Order not found', 'NOT_FOUND', 404);
       }
+
+      // Check if user is admin or owner of order
+      if (user?.role !== 'admin' && order.userId !== user?.sub) {
+        set.status = 403;
+        return errorResponse('Access denied. You can only view your own orders.', 'FORBIDDEN', 403);
+      }
+
+      return successResponse(order, 'Order retrieved successfully', 200);
     },
     {
       params: t.Object({
         id: t.String()
       }),
+      response: {
+        200: t.Any(),
+        403: t.Any(),
+        404: t.Any()
+      },
       detail: { summary: 'Get order details by ID' }
     }
   )
@@ -141,18 +139,13 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
   // Update order (admin only)
   .put(
     '/:id',
-    async ({ params, body, set }) => {
-      try {
-        const { id } = params;
-        validate(orderIdSchema, { id });
-        const validatedData = validate(updateOrderSchema, body);
+    async ({ params, body }) => {
+      const { id } = params;
+      validate(orderIdSchema, { id });
+      const validatedData = validate(updateOrderSchema, body);
 
-        const order = await orderService.updateOrder(id, validatedData);
-        return successResponse(order, 'Order updated successfully', 200);
-      } catch (error: any) {
-        set.status = error.statusCode || 500;
-        return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
-      }
+      const order = await orderService.updateOrder(id, validatedData);
+      return successResponse(order, 'Order updated successfully', 200);
     },
     {
       params: t.Object({
@@ -162,6 +155,11 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
         status: t.Optional(t.String()),
         notes: t.Optional(t.String())
       }),
+      response: {
+        200: t.Any(),
+        400: t.Any(),
+        404: t.Any()
+      },
       hasRole: 'admin',
       detail: { summary: 'Update order status (Admin only)' }
     }
@@ -171,33 +169,33 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
   .put(
     '/:id/cancel',
     async ({ params, set, user }) => {
-      try {
-        const { id } = params;
-        validate(orderIdSchema, { id });
+      const { id } = params;
+      validate(orderIdSchema, { id });
 
-        const order = await orderService.getOrderById(id);
-        if (!order) {
-          set.status = 404;
-          return errorResponse('Order not found', 'NOT_FOUND', 404);
-        }
-
-        // Check if user is admin or owner of order
-        if (user?.role !== 'admin' && order.userId !== user?.sub) {
-          set.status = 403;
-          return errorResponse('Access denied. You can only cancel your own orders.', 'FORBIDDEN', 403);
-        }
-
-        const cancelledOrder = await orderService.cancelOrder(id);
-        return successResponse(cancelledOrder, 'Order cancelled successfully', 200);
-      } catch (error: any) {
-        set.status = error.statusCode || 500;
-        return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
+      const order = await orderService.getOrderById(id);
+      if (!order) {
+        set.status = 404;
+        return errorResponse('Order not found', 'NOT_FOUND', 404);
       }
+
+      // Check if user is admin or owner of order
+      if (user?.role !== 'admin' && order.userId !== user?.sub) {
+        set.status = 403;
+        return errorResponse('Access denied. You can only cancel your own orders.', 'FORBIDDEN', 403);
+      }
+
+      const cancelledOrder = await orderService.cancelOrder(id);
+      return successResponse(cancelledOrder, 'Order cancelled successfully', 200);
     },
     {
       params: t.Object({
         id: t.String()
       }),
+      response: {
+        200: t.Any(),
+        403: t.Any(),
+        404: t.Any()
+      },
       detail: { summary: 'Cancel order' }
     }
   );

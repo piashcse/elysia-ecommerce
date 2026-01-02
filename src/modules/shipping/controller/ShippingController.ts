@@ -1,13 +1,13 @@
-import {Elysia, t} from 'elysia';
-import {ShippingService} from '../service/ShippingService';
+import { Elysia, t } from 'elysia';
+import { ShippingService } from '../service/ShippingService';
 import {
-    createShippingMethodSchema,
-    shippingMethodIdSchema,
-    updateShippingMethodSchema,
+  createShippingMethodSchema,
+  shippingMethodIdSchema,
+  updateShippingMethodSchema,
 } from '../validators/ShippingValidator';
-import {validate} from '../../../utils/validation';
-import {errorResponse, paginatedResponse, successResponse} from '../../../core/responses';
-import {authPlugin} from '../../../core/auth';
+import { validate } from '../../../utils/validation';
+import { errorResponse, paginatedResponse, successResponse } from '../../../core/responses';
+import { authPlugin } from '../../../core/auth';
 
 const shippingService = new ShippingService();
 
@@ -17,16 +17,11 @@ export const shippingController = new Elysia({ prefix: '/shipping-methods', tags
   .post(
     '/',
     async ({ body, set }) => {
-      try {
-        const validatedData = validate(createShippingMethodSchema, body);
-        const shippingMethod = await shippingService.createShippingMethod(validatedData);
+      const validatedData = validate(createShippingMethodSchema, body);
+      const shippingMethod = await shippingService.createShippingMethod(validatedData);
 
-        set.status = 201;
-        return successResponse(shippingMethod, 'Shipping method created successfully', 201);
-      } catch (error: any) {
-        set.status = error.statusCode || 500;
-        return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
-      }
+      set.status = 201;
+      return successResponse(shippingMethod, 'Shipping method created successfully', 201);
     },
     {
       body: t.Object({
@@ -38,6 +33,7 @@ export const shippingController = new Elysia({ prefix: '/shipping-methods', tags
         estimatedDaysMax: t.Number(),
         isActive: t.Optional(t.Boolean()),
       }),
+      response: { 201: t.Any(), 400: t.Any(), 422: t.Any() },
       hasRole: 'admin',
       detail: { summary: 'Create a new shipping method (Admin only)' }
     }
@@ -46,33 +42,29 @@ export const shippingController = new Elysia({ prefix: '/shipping-methods', tags
   // Get all shipping methods
   .get(
     '/',
-    async ({ query, set }) => {
-      try {
-        const page = parseInt(query.page as string) || 1;
-        const limit = parseInt(query.limit as string) || 10;
+    async ({ query }) => {
+      const page = parseInt(query.page as string) || 1;
+      const limit = parseInt(query.limit as string) || 10;
 
-        const { shippingMethods, total } = await shippingService.getAllShippingMethods(page, limit);
+      const { shippingMethods, total } = await shippingService.getAllShippingMethods(page, limit);
 
-        return paginatedResponse(
-          shippingMethods,
-          {
-            page,
-            limit,
-            total,
-            totalPages: Math.ceil(total / limit),
-          },
-          'Shipping methods retrieved successfully'
-        );
-      } catch (error: any) {
-        set.status = error.statusCode || 500;
-        return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
-      }
+      return paginatedResponse(
+        shippingMethods,
+        {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+        'Shipping methods retrieved successfully'
+      );
     },
     {
       query: t.Object({
         page: t.Optional(t.String()),
         limit: t.Optional(t.String()),
       }),
+      response: { 200: t.Any() },
       detail: { summary: 'Get all shipping methods' }
     }
   )
@@ -81,26 +73,22 @@ export const shippingController = new Elysia({ prefix: '/shipping-methods', tags
   .get(
     '/:id',
     async ({ params, set }) => {
-      try {
-        const { id } = params;
-        validate(shippingMethodIdSchema, { id });
+      const { id } = params;
+      validate(shippingMethodIdSchema, { id });
 
-        const shippingMethod = await shippingService.findShippingMethodById(id);
-        if (!shippingMethod) {
-          set.status = 404;
-          return errorResponse('Shipping method not found', 'NOT_FOUND', 404);
-        }
-
-        return successResponse(shippingMethod, 'Shipping method retrieved successfully', 200);
-      } catch (error: any) {
-        set.status = error.statusCode || 500;
-        return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
+      const shippingMethod = await shippingService.findShippingMethodById(id);
+      if (!shippingMethod) {
+        set.status = 404;
+        return errorResponse('Shipping method not found', 'NOT_FOUND', 404);
       }
+
+      return successResponse(shippingMethod, 'Shipping method retrieved successfully', 200);
     },
     {
       params: t.Object({
         id: t.String()
       }),
+      response: { 200: t.Any(), 404: t.Any() },
       detail: { summary: 'Get shipping method by ID' }
     }
   )
@@ -108,19 +96,14 @@ export const shippingController = new Elysia({ prefix: '/shipping-methods', tags
   // Update shipping method by ID (admin only)
   .put(
     '/:id',
-    async ({ params, body, set }) => {
-      try {
-        const { id } = params;
-        validate(shippingMethodIdSchema, { id });
-        const validatedData = validate(updateShippingMethodSchema, body);
+    async ({ params, body }) => {
+      const { id } = params;
+      validate(shippingMethodIdSchema, { id });
+      const validatedData = validate(updateShippingMethodSchema, body);
 
-        const updatedShippingMethod = await shippingService.updateShippingMethod(id, validatedData);
+      const updatedShippingMethod = await shippingService.updateShippingMethod(id, validatedData);
 
-        return successResponse(updatedShippingMethod, 'Shipping method updated successfully', 200);
-      } catch (error: any) {
-        set.status = error.statusCode || 500;
-        return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
-      }
+      return successResponse(updatedShippingMethod, 'Shipping method updated successfully', 200);
     },
     {
       params: t.Object({
@@ -135,6 +118,7 @@ export const shippingController = new Elysia({ prefix: '/shipping-methods', tags
         estimatedDaysMax: t.Optional(t.Number()),
         isActive: t.Optional(t.Boolean()),
       }),
+      response: { 200: t.Any(), 400: t.Any(), 404: t.Any() },
       hasRole: 'admin',
       detail: { summary: 'Update shipping method by ID (Admin only)' }
     }
@@ -143,23 +127,19 @@ export const shippingController = new Elysia({ prefix: '/shipping-methods', tags
   // Delete shipping method by ID (admin only)
   .delete(
     '/:id',
-    async ({ params, set }) => {
-      try {
-        const { id } = params;
-        validate(shippingMethodIdSchema, { id });
+    async ({ params }) => {
+      const { id } = params;
+      validate(shippingMethodIdSchema, { id });
 
-        await shippingService.deleteShippingMethod(id);
+      await shippingService.deleteShippingMethod(id);
 
-        return successResponse(null, 'Shipping method deleted successfully', 200);
-      } catch (error: any) {
-        set.status = error.statusCode || 500;
-        return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
-      }
+      return successResponse(null, 'Shipping method deleted successfully', 200);
     },
     {
       params: t.Object({
         id: t.String()
       }),
+      response: { 200: t.Any(), 404: t.Any() },
       hasRole: 'admin',
       detail: { summary: 'Delete shipping method by ID (Admin only)' }
     }

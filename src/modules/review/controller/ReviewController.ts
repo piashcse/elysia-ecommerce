@@ -1,9 +1,9 @@
-import {Elysia, t} from 'elysia';
-import {ReviewService} from '../service/ReviewService';
-import {createReviewSchema, reviewIdSchema, updateReviewSchema} from '../validators/ReviewValidator';
-import {validate} from '../../../utils/validation';
-import {errorResponse, paginatedResponse, successResponse} from '../../../core/responses';
-import {authPlugin} from '../../../core/auth';
+import { Elysia, t } from 'elysia';
+import { ReviewService } from '../service/ReviewService';
+import { createReviewSchema, reviewIdSchema, updateReviewSchema } from '../validators/ReviewValidator';
+import { validate } from '../../../utils/validation';
+import { errorResponse, paginatedResponse, successResponse } from '../../../core/responses';
+import { authPlugin } from '../../../core/auth';
 
 const reviewService = new ReviewService();
 
@@ -13,30 +13,25 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
     // Get reviews for a product (public)
     .get(
         '/product/:productId',
-        async ({ params, query, set }) => {
-            try {
-                const { productId } = params;
-                const page = parseInt(query.page as string) || 1;
-                const limit = parseInt(query.limit as string) || 10;
+        async ({ params, query }) => {
+            const { productId } = params;
+            const page = parseInt(query.page as string) || 1;
+            const limit = parseInt(query.limit as string) || 10;
 
-                const result = await reviewService.getProductReviews(productId, page, limit);
+            const result = await reviewService.getProductReviews(productId, page, limit);
 
-                return paginatedResponse(
-                    result.reviews,
-                    {
-                        page,
-                        limit,
-                        total: result.total,
-                        totalPages: Math.ceil(result.total / limit),
-                    },
-                    'Reviews retrieved successfully',
-                    200,
-                    { averageRating: result.averageRating }
-                );
-            } catch (error: any) {
-                set.status = error.statusCode || 500;
-                return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
-            }
+            return paginatedResponse(
+                result.reviews,
+                {
+                    page,
+                    limit,
+                    total: result.total,
+                    totalPages: Math.ceil(result.total / limit),
+                },
+                'Reviews retrieved successfully',
+                200,
+                { averageRating: result.averageRating }
+            );
         },
         {
             params: t.Object({ productId: t.String() }),
@@ -44,6 +39,7 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
                 page: t.Optional(t.String()),
                 limit: t.Optional(t.String()),
             }),
+            response: { 200: t.Any() },
             detail: { summary: 'Get all reviews for a product' }
         }
     )
@@ -52,16 +48,11 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
     .post(
         '/',
         async ({ body, set, user }) => {
-            try {
-                const validatedData = validate(createReviewSchema, body);
-                const review = await reviewService.createReview(user!.sub, validatedData);
+            const validatedData = validate(createReviewSchema, body);
+            const review = await reviewService.createReview(user!.sub, validatedData);
 
-                set.status = 201;
-                return successResponse(review, 'Review created successfully', 201);
-            } catch (error: any) {
-                set.status = error.statusCode || 500;
-                return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
-            }
+            set.status = 201;
+            return successResponse(review, 'Review created successfully', 201);
         },
         {
             body: t.Object({
@@ -71,6 +62,7 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
                 comment: t.Optional(t.String()),
             }),
             isAuth: true,
+            response: { 201: t.Any(), 400: t.Any(), 422: t.Any() },
             detail: { summary: 'Create a product review' }
         }
     )
@@ -78,27 +70,22 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
     // Get user's reviews (authenticated)
     .get(
         '/my-reviews',
-        async ({ query, set, user }) => {
-            try {
-                const page = parseInt(query.page as string) || 1;
-                const limit = parseInt(query.limit as string) || 10;
+        async ({ query, user }) => {
+            const page = parseInt(query.page as string) || 1;
+            const limit = parseInt(query.limit as string) || 10;
 
-                const result = await reviewService.getUserReviews(user!.sub, page, limit);
+            const result = await reviewService.getUserReviews(user!.sub, page, limit);
 
-                return paginatedResponse(
-                    result.reviews,
-                    {
-                        page,
-                        limit,
-                        total: result.total,
-                        totalPages: Math.ceil(result.total / limit),
-                    },
-                    'Your reviews retrieved successfully'
-                );
-            } catch (error: any) {
-                set.status = error.statusCode || 500;
-                return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
-            }
+            return paginatedResponse(
+                result.reviews,
+                {
+                    page,
+                    limit,
+                    total: result.total,
+                    totalPages: Math.ceil(result.total / limit),
+                },
+                'Your reviews retrieved successfully'
+            );
         },
         {
             query: t.Object({
@@ -106,6 +93,7 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
                 limit: t.Optional(t.String()),
             }),
             isAuth: true,
+            response: { 200: t.Any() },
             detail: { summary: 'Get current user reviews' }
         }
     )
@@ -113,19 +101,14 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
     // Update a review (authenticated)
     .put(
         '/:id',
-        async ({ params, body, set, user }) => {
-            try {
-                const { id } = params;
-                validate(reviewIdSchema, { id });
-                const validatedData = validate(updateReviewSchema, body);
+        async ({ params, body, user }) => {
+            const { id } = params;
+            validate(reviewIdSchema, { id });
+            const validatedData = validate(updateReviewSchema, body);
 
-                const review = await reviewService.updateReview(id, user!.sub, validatedData);
+            const review = await reviewService.updateReview(id, user!.sub, validatedData);
 
-                return successResponse(review, 'Review updated successfully');
-            } catch (error: any) {
-                set.status = error.statusCode || 500;
-                return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
-            }
+            return successResponse(review, 'Review updated successfully');
         },
         {
             params: t.Object({ id: t.String() }),
@@ -135,6 +118,7 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
                 comment: t.Optional(t.String()),
             }),
             isAuth: true,
+            response: { 200: t.Any(), 400: t.Any(), 404: t.Any() },
             detail: { summary: 'Update your review' }
         }
     )
@@ -142,23 +126,19 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
     // Delete a review (authenticated)
     .delete(
         '/:id',
-        async ({ params, set, user }) => {
-            try {
-                const { id } = params;
-                validate(reviewIdSchema, { id });
+        async ({ params, user }) => {
+            const { id } = params;
+            validate(reviewIdSchema, { id });
 
-                const isAdmin = user!.role === 'admin';
-                await reviewService.deleteReview(id, user!.sub, isAdmin);
+            const isAdmin = user!.role === 'admin';
+            await reviewService.deleteReview(id, user!.sub, isAdmin);
 
-                return successResponse(null, 'Review deleted successfully');
-            } catch (error: any) {
-                set.status = error.statusCode || 500;
-                return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
-            }
+            return successResponse(null, 'Review deleted successfully');
         },
         {
             params: t.Object({ id: t.String() }),
             isAuth: true,
+            response: { 200: t.Any(), 403: t.Any(), 404: t.Any() },
             detail: { summary: 'Delete your review' }
         }
     )
@@ -166,21 +146,17 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
     // Mark review as helpful (public)
     .post(
         '/:id/helpful',
-        async ({ params, set }) => {
-            try {
-                const { id } = params;
-                validate(reviewIdSchema, { id });
+        async ({ params }) => {
+            const { id } = params;
+            validate(reviewIdSchema, { id });
 
-                const review = await reviewService.markHelpful(id);
+            const review = await reviewService.markHelpful(id);
 
-                return successResponse(review, 'Review marked as helpful');
-            } catch (error: any) {
-                set.status = error.statusCode || 500;
-                return errorResponse(error.message, error.errorCode || 'INTERNAL_ERROR', error.statusCode || 500);
-            }
+            return successResponse(review, 'Review marked as helpful');
         },
         {
             params: t.Object({ id: t.String() }),
+            response: { 200: t.Any(), 404: t.Any() },
             detail: { summary: 'Mark review as helpful' }
         }
     );
