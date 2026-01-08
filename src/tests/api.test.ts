@@ -123,7 +123,6 @@ describe('E-commerce API Tests', () => {
             const token = await getAuthToken();
             const prodRes = await app.handle(new Request('http://localhost/products'));
             const prodData = await prodRes.json() as any;
-            console.log('prodData.data.items:', prodData.data.items);
             const productId = prodData.data.items[0]?.id;
 
             if (productId) {
