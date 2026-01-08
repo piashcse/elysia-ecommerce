@@ -1,7 +1,5 @@
 import { Elysia, t } from 'elysia';
 import { AddressService } from '../service/AddressService';
-import { addressIdSchema, createAddressSchema, updateAddressSchema } from '../validators/AddressValidator';
-import { validate } from '../../../utils/validation';
 import { errorResponse, successResponse } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
 
@@ -17,7 +15,7 @@ export const addressController = new Elysia({ prefix: '/addresses', tags: ['Addr
     .get(
         '/',
         async ({ query, user }) => {
-            const type = query.type as string | undefined;
+            const type = query.type;
             const addresses = await addressService.getUserAddresses(user!.sub, type);
             return successResponse(addresses, 'Addresses retrieved successfully');
         },
@@ -35,7 +33,6 @@ export const addressController = new Elysia({ prefix: '/addresses', tags: ['Addr
         '/:id',
         async ({ params, user, set }) => {
             const { id } = params;
-            validate(addressIdSchema, { id });
             const address = await addressService.getAddressById(id, user!.sub);
 
             if (!address) {
@@ -56,23 +53,22 @@ export const addressController = new Elysia({ prefix: '/addresses', tags: ['Addr
     .post(
         '/',
         async ({ body, user, set }) => {
-            const validatedData = validate(createAddressSchema, body);
-            const address = await addressService.createAddress(user!.sub, validatedData);
+            const address = await addressService.createAddress(user!.sub, body);
 
             set.status = 201;
             return successResponse(address, 'Address created successfully', 201);
         },
         {
             body: t.Object({
-                type: t.String(),
-                fullName: t.String(),
-                phoneNumber: t.String(),
-                addressLine1: t.String(),
+                type: t.Union([t.Literal('shipping'), t.Literal('billing'), t.Literal('both')]),
+                fullName: t.String({ minLength: 1 }),
+                phoneNumber: t.String({ minLength: 1 }),
+                addressLine1: t.String({ minLength: 1 }),
                 addressLine2: t.Optional(t.String()),
-                city: t.String(),
-                state: t.String(),
-                postalCode: t.String(),
-                country: t.String(),
+                city: t.String({ minLength: 1 }),
+                state: t.String({ minLength: 1 }),
+                postalCode: t.String({ minLength: 1 }),
+                country: t.String({ minLength: 1 }),
                 isDefault: t.Optional(t.Boolean()),
             }),
             response: { 201: t.Any(), 400: t.Any(), 422: t.Any() },
@@ -85,16 +81,14 @@ export const addressController = new Elysia({ prefix: '/addresses', tags: ['Addr
         '/:id',
         async ({ params, body, user }) => {
             const { id } = params;
-            validate(addressIdSchema, { id });
-            const validatedData = validate(updateAddressSchema, body);
-            const address = await addressService.updateAddress(id, user!.sub, validatedData);
+            const address = await addressService.updateAddress(id, user!.sub, body);
 
             return successResponse(address, 'Address updated successfully');
         },
         {
             params: t.Object({ id: t.String() }),
             body: t.Object({
-                type: t.Optional(t.String()),
+                type: t.Optional(t.Union([t.Literal('shipping'), t.Literal('billing'), t.Literal('both')])),
                 fullName: t.Optional(t.String()),
                 phoneNumber: t.Optional(t.String()),
                 addressLine1: t.Optional(t.String()),
@@ -115,7 +109,6 @@ export const addressController = new Elysia({ prefix: '/addresses', tags: ['Addr
         '/:id',
         async ({ params, user }) => {
             const { id } = params;
-            validate(addressIdSchema, { id });
             await addressService.deleteAddress(id, user!.sub);
 
             return successResponse(null, 'Address deleted successfully');
@@ -132,7 +125,6 @@ export const addressController = new Elysia({ prefix: '/addresses', tags: ['Addr
         '/:id/set-default',
         async ({ params, user }) => {
             const { id } = params;
-            validate(addressIdSchema, { id });
             const address = await addressService.setDefaultAddress(id, user!.sub);
 
             return successResponse(address, 'Default address set successfully');

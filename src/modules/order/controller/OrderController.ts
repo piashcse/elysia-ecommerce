@@ -1,9 +1,8 @@
 import { Elysia, t } from 'elysia';
 import { OrderService } from '../service/OrderService';
-import { createOrderSchema, orderIdSchema, updateOrderSchema } from '../validators/OrderValidator';
-import { validate } from '../../../utils/validation';
 import { errorResponse, paginatedResponse, successResponse } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
+import { UserRole } from '../../../core/roles';
 
 const orderService = new OrderService();
 
@@ -16,8 +15,7 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
   .post(
     '/',
     async ({ body, set, user }) => {
-      const validatedData = validate(createOrderSchema, body);
-      const order = await orderService.createOrder(user!.sub as string, validatedData);
+      const order = await orderService.createOrder(user!.sub as string, body);
       set.status = 201;
       return successResponse(order, 'Order created successfully', 201);
     },
@@ -26,26 +24,26 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
         items: t.Array(
           t.Object({
             productId: t.String(),
-            quantity: t.Number()
+            quantity: t.Number({ minimum: 1 })
           })
         ),
         shippingAddress: t.Object({
-          firstName: t.String(),
-          lastName: t.String(),
-          address: t.String(),
-          city: t.String(),
-          state: t.String(),
-          zipCode: t.String(),
-          country: t.String()
+          firstName: t.String({ minLength: 1 }),
+          lastName: t.String({ minLength: 1 }),
+          address: t.String({ minLength: 1 }),
+          city: t.String({ minLength: 1 }),
+          state: t.String({ minLength: 1 }),
+          zipCode: t.String({ minLength: 1 }),
+          country: t.String({ minLength: 1 })
         }),
         billingAddress: t.Optional(t.Object({
-          firstName: t.String(),
-          lastName: t.String(),
-          address: t.String(),
-          city: t.String(),
-          state: t.String(),
-          zipCode: t.String(),
-          country: t.String()
+          firstName: t.String({ minLength: 1 }),
+          lastName: t.String({ minLength: 1 }),
+          address: t.String({ minLength: 1 }),
+          city: t.String({ minLength: 1 }),
+          state: t.String({ minLength: 1 }),
+          zipCode: t.String({ minLength: 1 }),
+          country: t.String({ minLength: 1 })
         })),
         notes: t.Optional(t.String())
       }),
@@ -62,15 +60,15 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
   .get(
     '/',
     async ({ query, user }) => {
-      const isAdmin = user?.role === 'admin';
-      const page = parseInt(query.page as string) || 1;
-      const limit = parseInt(query.limit as string) || 10;
+      const isAdmin = user?.role === UserRole.ADMIN;
+      const page = query.page ? parseInt(query.page) : 1;
+      const limit = query.limit ? parseInt(query.limit) : 10;
 
       const filters = {
-        status: query.status as string,
-        dateFrom: query.dateFrom as string,
-        dateTo: query.dateTo as string,
-        userId: isAdmin ? (query.userId as string) : (user!.sub as string),
+        status: query.status,
+        dateFrom: query.dateFrom,
+        dateTo: query.dateTo,
+        userId: isAdmin ? query.userId : (user!.sub as string),
       };
 
       const { orders, total } = await orderService.getOrders(page, limit, filters);
@@ -107,7 +105,6 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
     '/:id',
     async ({ params, set, user }) => {
       const { id } = params;
-      validate(orderIdSchema, { id });
 
       const order = await orderService.getOrderById(id);
       if (!order) {
@@ -116,7 +113,7 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
       }
 
       // Check if user is admin or owner of order
-      if (user?.role !== 'admin' && order.userId !== user?.sub) {
+      if (user?.role !== UserRole.ADMIN && order.userId !== user?.sub) {
         set.status = 403;
         return errorResponse('Access denied. You can only view your own orders.', 'FORBIDDEN', 403);
       }
@@ -141,10 +138,8 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
     '/:id',
     async ({ params, body }) => {
       const { id } = params;
-      validate(orderIdSchema, { id });
-      const validatedData = validate(updateOrderSchema, body);
 
-      const order = await orderService.updateOrder(id, validatedData);
+      const order = await orderService.updateOrder(id, body);
       return successResponse(order, 'Order updated successfully', 200);
     },
     {
@@ -160,7 +155,7 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
         400: t.Any(),
         404: t.Any()
       },
-      hasRole: 'admin',
+      hasRole: UserRole.ADMIN,
       detail: { summary: 'Update order status (Admin only)' }
     }
   )
@@ -170,7 +165,6 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
     '/:id/cancel',
     async ({ params, set, user }) => {
       const { id } = params;
-      validate(orderIdSchema, { id });
 
       const order = await orderService.getOrderById(id);
       if (!order) {
@@ -179,7 +173,7 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
       }
 
       // Check if user is admin or owner of order
-      if (user?.role !== 'admin' && order.userId !== user?.sub) {
+      if (user?.role !== UserRole.ADMIN && order.userId !== user?.sub) {
         set.status = 403;
         return errorResponse('Access denied. You can only cancel your own orders.', 'FORBIDDEN', 403);
       }

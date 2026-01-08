@@ -1,9 +1,8 @@
 import { Elysia, t } from 'elysia';
 import { ReviewService } from '../service/ReviewService';
-import { createReviewSchema, reviewIdSchema, updateReviewSchema } from '../validators/ReviewValidator';
-import { validate } from '../../../utils/validation';
 import { errorResponse, paginatedResponse, successResponse } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
+import { UserRole } from '../../../core/roles';
 
 const reviewService = new ReviewService();
 
@@ -15,8 +14,8 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
         '/product/:productId',
         async ({ params, query }) => {
             const { productId } = params;
-            const page = parseInt(query.page as string) || 1;
-            const limit = parseInt(query.limit as string) || 10;
+            const page = query.page ? parseInt(query.page) : 1;
+            const limit = query.limit ? parseInt(query.limit) : 10;
 
             const result = await reviewService.getProductReviews(productId, page, limit);
 
@@ -48,8 +47,7 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
     .post(
         '/',
         async ({ body, set, user }) => {
-            const validatedData = validate(createReviewSchema, body);
-            const review = await reviewService.createReview(user!.sub, validatedData);
+            const review = await reviewService.createReview(user!.sub, body);
 
             set.status = 201;
             return successResponse(review, 'Review created successfully', 201);
@@ -57,7 +55,7 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
         {
             body: t.Object({
                 productId: t.String(),
-                rating: t.Number(),
+                rating: t.Number({ minimum: 1, maximum: 5 }),
                 title: t.Optional(t.String()),
                 comment: t.Optional(t.String()),
             }),
@@ -71,8 +69,8 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
     .get(
         '/my-reviews',
         async ({ query, user }) => {
-            const page = parseInt(query.page as string) || 1;
-            const limit = parseInt(query.limit as string) || 10;
+            const page = query.page ? parseInt(query.page) : 1;
+            const limit = query.limit ? parseInt(query.limit) : 10;
 
             const result = await reviewService.getUserReviews(user!.sub, page, limit);
 
@@ -103,17 +101,15 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
         '/:id',
         async ({ params, body, user }) => {
             const { id } = params;
-            validate(reviewIdSchema, { id });
-            const validatedData = validate(updateReviewSchema, body);
 
-            const review = await reviewService.updateReview(id, user!.sub, validatedData);
+            const review = await reviewService.updateReview(id, user!.sub, body);
 
             return successResponse(review, 'Review updated successfully');
         },
         {
             params: t.Object({ id: t.String() }),
             body: t.Object({
-                rating: t.Optional(t.Number()),
+                rating: t.Optional(t.Number({ minimum: 1, maximum: 5 })),
                 title: t.Optional(t.String()),
                 comment: t.Optional(t.String()),
             }),
@@ -128,9 +124,8 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
         '/:id',
         async ({ params, user }) => {
             const { id } = params;
-            validate(reviewIdSchema, { id });
 
-            const isAdmin = user!.role === 'admin';
+            const isAdmin = user!.role === UserRole.ADMIN;
             await reviewService.deleteReview(id, user!.sub, isAdmin);
 
             return successResponse(null, 'Review deleted successfully');
@@ -148,7 +143,6 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
         '/:id/helpful',
         async ({ params }) => {
             const { id } = params;
-            validate(reviewIdSchema, { id });
 
             const review = await reviewService.markHelpful(id);
 

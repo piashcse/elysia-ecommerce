@@ -1,8 +1,6 @@
 import { Elysia, t } from 'elysia';
 import { WishlistService } from '../service/WishlistService';
-import { addToWishlistSchema, wishlistIdSchema } from '../validators/WishlistValidator';
-import { validate } from '../../../utils/validation';
-import { errorResponse, successResponse } from '../../../core/responses';
+import { successResponse } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
 
 const wishlistService = new WishlistService();
@@ -31,8 +29,8 @@ export const wishlistController = new Elysia({ prefix: '/wishlist', tags: ['Wish
   .post(
     '/items',
     async ({ body, set, user }) => {
-      const validatedData = validate(addToWishlistSchema, body);
-      const wishlistItem = await wishlistService.addToWishlist(user!.sub as string, validatedData.productId);
+      const { productId } = body;
+      const wishlistItem = await wishlistService.addToWishlist(user!.sub as string, productId);
       set.status = 201;
       return successResponse(wishlistItem, 'Item added to wishlist successfully', 201);
     },
@@ -54,7 +52,6 @@ export const wishlistController = new Elysia({ prefix: '/wishlist', tags: ['Wish
     '/items/:id',
     async ({ params }) => {
       const { id } = params;
-      validate(wishlistIdSchema, { id });
       await wishlistService.removeFromWishlist(id);
       return successResponse(null, 'Item removed from wishlist successfully');
     },

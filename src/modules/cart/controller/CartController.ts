@@ -1,8 +1,6 @@
 import { Elysia, t } from 'elysia';
 import { CartService } from '../service/CartService';
-import { addToCartSchema, cartItemIdSchema, updateCartItemSchema } from '../validators/CartValidator';
-import { validate } from '../../../utils/validation';
-import { errorResponse, successResponse } from '../../../core/responses';
+import { successResponse } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
 
 const cartService = new CartService();
@@ -31,14 +29,13 @@ export const cartController = new Elysia({ prefix: '/cart', tags: ['Cart'] })
   .post(
     '/items',
     async ({ body, user }) => {
-      const validatedData = validate(addToCartSchema, body);
-      const cart = await cartService.addToCart(user!.sub as string, validatedData);
+      const cart = await cartService.addToCart(user!.sub as string, body);
       return successResponse(cart, 'Item added to cart successfully');
     },
     {
       body: t.Object({
         productId: t.String(),
-        quantity: t.Number()
+        quantity: t.Number({ minimum: 1 })
       }),
       response: {
         200: t.Any(),
@@ -54,9 +51,7 @@ export const cartController = new Elysia({ prefix: '/cart', tags: ['Cart'] })
     '/items/:id',
     async ({ params, body }) => {
       const { id } = params;
-      validate(cartItemIdSchema, { id });
-      const validatedData = validate(updateCartItemSchema, body);
-      const cart = await cartService.updateCartItem(id, validatedData);
+      const cart = await cartService.updateCartItem(id, body);
       return successResponse(cart, 'Cart item updated successfully');
     },
     {
@@ -64,7 +59,7 @@ export const cartController = new Elysia({ prefix: '/cart', tags: ['Cart'] })
         id: t.String()
       }),
       body: t.Object({
-        quantity: t.Number()
+        quantity: t.Number({ minimum: 1 })
       }),
       response: {
         200: t.Any(),
@@ -80,7 +75,6 @@ export const cartController = new Elysia({ prefix: '/cart', tags: ['Cart'] })
     '/items/:id',
     async ({ params }) => {
       const { id } = params;
-      validate(cartItemIdSchema, { id });
       const cart = await cartService.removeCartItem(id);
       return successResponse(cart, 'Item removed from cart successfully');
     },

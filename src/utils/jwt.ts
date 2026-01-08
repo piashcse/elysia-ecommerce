@@ -1,8 +1,10 @@
+import { UserRole } from '../core/roles';
+
 // Define a type for the JWT payload
 export interface JwtPayload {
   sub: string; // user id
   email: string;
-  role: string;
+  role: UserRole;
   iat?: number;
   exp?: number;
 }
@@ -29,13 +31,13 @@ export const isAuthenticated = (context: any): boolean => {
  */
 export const isAdmin = (context: any): boolean => {
   const user = getCurrentUser(context);
-  return user?.role === 'admin';
+  return user?.role === UserRole.ADMIN;
 };
 
 /**
  * Check if the current user has a specific role
  */
-export const hasRole = (context: any, role: string): boolean => {
+export const hasRole = (context: any, role: UserRole): boolean => {
   const user = getCurrentUser(context);
   return user?.role === role;
 };

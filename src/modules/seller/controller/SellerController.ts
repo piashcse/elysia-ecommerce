@@ -2,13 +2,14 @@ import { Elysia, t } from 'elysia';
 import { SellerService } from '../service/SellerService';
 import { errorResponse, paginatedResponse, successResponse } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
+import { UserRole } from '../../../core/roles';
 
 const sellerService = new SellerService();
 
 export const sellerController = new Elysia({ prefix: '/seller', tags: ['Seller'] })
     .use(authPlugin)
     .guard({
-        hasRole: 'seller'
+        hasRole: UserRole.SELLER
     })
     .get('/products', async ({ user, query }) => {
         const userId = user!.sub as string;

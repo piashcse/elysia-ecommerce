@@ -9,7 +9,7 @@ import { helmetMiddleware } from './middlewares/helmet';
 import { defaultRateLimiter } from './middlewares/rateLimiter';
 import { errorHandler } from './middlewares/errorHandler';
 import { AppError } from './core/errors';
-import { errorResponse } from './core/responses';
+import { errorResponse, sanitizeData } from './core/responses';
 import { authController } from './modules/auth/controller/AuthController';
 import { sellerController } from './modules/seller/controller/SellerController';
 import { userController } from './modules/user/controller/UserController';
@@ -55,7 +55,12 @@ app.use(cors())
             name: 'jwt',
             secret: envConfig.JWT_SECRET,
         })
-    );
+    )
+    .onAfterHandle(({ response }) => {
+        if (response && typeof response === 'object' && !(response instanceof ReadableStream) && !(response instanceof Response) && !(response instanceof Blob)) {
+            return sanitizeData(response);
+        }
+    });
 
 // Register controllers
 app.use(authController)

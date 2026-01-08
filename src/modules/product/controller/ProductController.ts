@@ -1,9 +1,8 @@
 import { Elysia, t } from 'elysia';
 import { ProductService } from '../service/ProductService';
-import { createProductSchema, productIdSchema, updateProductSchema } from '../validators/ProductValidator';
-import { validate } from '../../../utils/validation';
 import { errorResponse, paginatedResponse, successResponse } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
+import { UserRole } from '../../../core/roles';
 
 const productService = new ProductService();
 
@@ -13,20 +12,19 @@ export const productController = new Elysia({ prefix: '/products', tags: ['Produ
   .post(
     '/',
     async ({ body, set }) => {
-      const validatedData = validate(createProductSchema, body);
-      const product = await productService.createProduct(validatedData);
+      const product = await productService.createProduct(body);
 
       set.status = 201;
       return successResponse(product, 'Product created successfully', 201);
     },
     {
       body: t.Object({
-        name: t.String(),
+        name: t.String({ minLength: 1 }),
         description: t.Optional(t.String()),
-        price: t.Number(),
+        price: t.Number({ minimum: 0 }),
         imageUrl: t.Optional(t.String()),
-        stockQuantity: t.Number(),
-        sku: t.String(),
+        stockQuantity: t.Number({ minimum: 0 }),
+        sku: t.String({ minLength: 1 }),
         isActive: t.Optional(t.Boolean()),
         categoryId: t.String(),
         sellerId: t.String(),
@@ -41,7 +39,7 @@ export const productController = new Elysia({ prefix: '/products', tags: ['Produ
         400: t.Any(),
         422: t.Any()
       },
-      hasRole: 'admin',
+      hasRole: UserRole.ADMIN,
       detail: { summary: 'Create a new product (Admin only)' }
     }
   )
@@ -51,16 +49,16 @@ export const productController = new Elysia({ prefix: '/products', tags: ['Produ
     '/',
     async ({ query }) => {
       const filters = {
-        search: query.search as string | undefined,
-        category: query.category as string | undefined,
-        minPrice: query.minPrice ? parseFloat(query.minPrice as string) : undefined,
-        maxPrice: query.maxPrice ? parseFloat(query.maxPrice as string) : undefined,
+        search: query.search,
+        category: query.category,
+        minPrice: query.minPrice ? parseFloat(query.minPrice) : undefined,
+        maxPrice: query.maxPrice ? parseFloat(query.maxPrice) : undefined,
         inStock: query.inStock ? query.inStock === 'true' : undefined,
         isActive: query.isActive ? query.isActive === 'true' : undefined,
       };
 
-      const page = parseInt(query.page as string) || 1;
-      const limit = parseInt(query.limit as string) || 10;
+      const page = query.page ? parseInt(query.page) : 1;
+      const limit = query.limit ? parseInt(query.limit) : 10;
 
       const { products, total } = await productService.getAllProducts(page, limit, filters);
 
@@ -106,8 +104,7 @@ export const productController = new Elysia({ prefix: '/products', tags: ['Produ
     '/:id',
     async ({ params, set }) => {
       const { id } = params;
-      validate(productIdSchema, { id });
-
+      // id validation is handled by params schema
       const product = await productService.findProductByIdWithDetails(id);
       if (!product) {
         set.status = 404;
@@ -118,7 +115,7 @@ export const productController = new Elysia({ prefix: '/products', tags: ['Produ
     },
     {
       params: t.Object({
-        id: t.String()
+        id: t.String() // Could utilize UUID format if strict
       }),
       response: {
         200: t.Object({
@@ -138,10 +135,8 @@ export const productController = new Elysia({ prefix: '/products', tags: ['Produ
     '/:id',
     async ({ params, body }) => {
       const { id } = params;
-      validate(productIdSchema, { id });
-      const validatedData = validate(updateProductSchema, body);
 
-      const updatedProduct = await productService.updateProduct(id, validatedData);
+      const updatedProduct = await productService.updateProduct(id, body);
 
       return successResponse(updatedProduct, 'Product updated successfully', 200);
     },
@@ -171,7 +166,7 @@ export const productController = new Elysia({ prefix: '/products', tags: ['Produ
         404: t.Any(),
         422: t.Any()
       },
-      hasRole: 'admin',
+      hasRole: UserRole.ADMIN,
       detail: { summary: 'Update product by ID (Admin only)' }
     }
   )
@@ -180,7 +175,6 @@ export const productController = new Elysia({ prefix: '/products', tags: ['Produ
     '/:id',
     async ({ params }) => {
       const { id } = params;
-      validate(productIdSchema, { id });
 
       await productService.deleteProduct(id);
 
@@ -199,7 +193,7 @@ export const productController = new Elysia({ prefix: '/products', tags: ['Produ
         }),
         404: t.Any()
       },
-      hasRole: 'admin',
+      hasRole: UserRole.ADMIN,
       detail: { summary: 'Delete product by ID (Admin only)' }
     }
   );

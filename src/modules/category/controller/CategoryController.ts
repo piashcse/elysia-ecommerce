@@ -1,9 +1,8 @@
 import { Elysia, t } from 'elysia';
 import { CategoryService } from '../service/CategoryService';
-import { categoryIdSchema, createCategorySchema, updateCategorySchema } from '../validators/CategoryValidator';
-import { validate } from '../../../utils/validation';
-import { errorResponse, paginatedResponse, successResponse } from '../../../core/responses';
+import { successResponse, paginatedResponse } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
+import { UserRole } from '../../../core/roles';
 
 const categoryService = new CategoryService();
 
@@ -13,23 +12,23 @@ export const categoryController = new Elysia({ prefix: '/categories', tags: ['Ca
   .post(
     '/',
     async ({ body, set }) => {
-      const validatedData = validate(createCategorySchema, body);
-      const category = await categoryService.createCategory(validatedData);
+      const category = await categoryService.createCategory(body);
 
       set.status = 201;
       return successResponse(category, 'Category created successfully', 201);
     },
     {
       body: t.Object({
-        name: t.String(),
+        name: t.String({ minLength: 1 }),
         description: t.Optional(t.String()),
+        isActive: t.Optional(t.Boolean()),
       }),
       response: {
         201: t.Any(),
         400: t.Any(),
         422: t.Any()
       },
-      hasRole: 'admin',
+      hasRole: UserRole.ADMIN,
       detail: { summary: 'Create a new category (Admin only)' }
     }
   )
@@ -38,11 +37,11 @@ export const categoryController = new Elysia({ prefix: '/categories', tags: ['Ca
   .get(
     '/',
     async ({ query }) => {
-      const page = parseInt(query.page as string) || 1;
-      const limit = parseInt(query.limit as string) || 10;
+      const page = query.page ? parseInt(query.page) : 1;
+      const limit = query.limit ? parseInt(query.limit) : 10;
 
       const filters = {
-        search: query.search as string | undefined,
+        search: query.search,
         isActive: query.isActive === 'true',
       };
 
@@ -78,12 +77,10 @@ export const categoryController = new Elysia({ prefix: '/categories', tags: ['Ca
     '/:id',
     async ({ params, set }) => {
       const { id } = params;
-      validate(categoryIdSchema, { id });
-
       const category = await categoryService.findCategoryById(id);
       if (!category) {
         set.status = 404;
-        return errorResponse('Category not found', 'NOT_FOUND', 404);
+        return successResponse(null, 'Category not found', 404);
       }
 
       return successResponse(category, 'Category retrieved successfully', 200);
@@ -105,10 +102,8 @@ export const categoryController = new Elysia({ prefix: '/categories', tags: ['Ca
     '/:id',
     async ({ params, body }) => {
       const { id } = params;
-      validate(categoryIdSchema, { id });
-      const validatedData = validate(updateCategorySchema, body);
 
-      const updatedCategory = await categoryService.updateCategory(id, validatedData);
+      const updatedCategory = await categoryService.updateCategory(id, body);
 
       return successResponse(updatedCategory, 'Category updated successfully', 200);
     },
@@ -119,13 +114,14 @@ export const categoryController = new Elysia({ prefix: '/categories', tags: ['Ca
       body: t.Object({
         name: t.Optional(t.String()),
         description: t.Optional(t.String()),
+        isActive: t.Optional(t.Boolean()),
       }),
       response: {
         200: t.Any(),
         400: t.Any(),
         404: t.Any()
       },
-      hasRole: 'admin',
+      hasRole: UserRole.ADMIN,
       detail: { summary: 'Update category by ID (Admin only)' }
     }
   )
@@ -135,8 +131,6 @@ export const categoryController = new Elysia({ prefix: '/categories', tags: ['Ca
     '/:id',
     async ({ params }) => {
       const { id } = params;
-      validate(categoryIdSchema, { id });
-
       await categoryService.deleteCategory(id);
 
       return successResponse(null, 'Category deleted successfully', 200);
@@ -145,7 +139,7 @@ export const categoryController = new Elysia({ prefix: '/categories', tags: ['Ca
       params: t.Object({
         id: t.String()
       }),
-      hasRole: 'admin',
+      hasRole: UserRole.ADMIN,
       response: {
         200: t.Any(),
         404: t.Any()

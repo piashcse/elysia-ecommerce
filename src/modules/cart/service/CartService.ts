@@ -28,11 +28,10 @@ export class CartService {
       return existingCart;
     }
 
-    const [newCart] = await db.insert(carts).values({
+    const newCartArray = await db.insert(carts).values({
       userId: userId,
     }).returning();
-
-    return newCart;
+    return newCartArray[0];
   }
 
   async findCartByUserOrSession(userId?: string, sessionId?: string): Promise<any | null> {
@@ -125,10 +124,11 @@ export class CartService {
     }
 
     // Find or create user's cart
-    let [cart] = await db.select().from(carts).where(eq(carts.userId, userId)).limit(1);
+    const cartResult = await db.select().from(carts).where(eq(carts.userId, userId)).limit(1);
+    let cart = cartResult[0];
 
     if (!cart) {
-      [cart] = await this.createCart(userId, undefined);
+      cart = await this.createCart(userId, undefined);
     }
 
     // Check if product already exists in cart
