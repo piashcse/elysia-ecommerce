@@ -1,7 +1,5 @@
 import { Elysia, t } from 'elysia';
 import { NotificationService } from '../service/NotificationService';
-import { notificationIdSchema, } from '../validators/NotificationValidator';
-import { validate } from '../../../utils/validation';
 import { errorResponse, paginatedResponse, successResponse } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
 
@@ -16,8 +14,8 @@ export const notificationController = new Elysia({ prefix: '/notifications', tag
   .get(
     '/',
     async ({ query, user }) => {
-      const page = parseInt(query.page as string) || 1;
-      const limit = parseInt(query.limit as string) || 10;
+      const page = query.page ? parseInt(query.page) : 1;
+      const limit = query.limit ? parseInt(query.limit) : 10;
       const { notifications, total } = await notificationService.getUserNotifications(user!.sub, page, limit);
 
       return paginatedResponse(
@@ -45,7 +43,6 @@ export const notificationController = new Elysia({ prefix: '/notifications', tag
     '/:id/read',
     async ({ params, user }) => {
       const { id } = params;
-      validate(notificationIdSchema, { id });
 
       const updatedNotification = await notificationService.markAsRead(id, user!.sub);
 
@@ -76,7 +73,6 @@ export const notificationController = new Elysia({ prefix: '/notifications', tag
     '/:id',
     async ({ params, user }) => {
       const { id } = params;
-      validate(notificationIdSchema, { id });
 
       await notificationService.deleteNotification(id, user!.sub);
 

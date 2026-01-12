@@ -51,6 +51,17 @@ export const createValidator = <T extends ZodSchema>(schema: T) => {
   };
 };
 
+/**
+ * Elysia hook to validate body, query, or params with a Zod schema
+ */
+export const zodValidate = (schema: ZodSchema, part: 'body' | 'query' | 'params' = 'body') => {
+    return {
+        onBeforeHandle: ({ [part]: data }: any) => {
+            validate(schema, data);
+        }
+    };
+};
+
 // Common Zod schemas that can be reused across the application
 
 // Pagination schema

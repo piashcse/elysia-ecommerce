@@ -80,3 +80,23 @@ export const paginatedResponse = <T>(
     },
   };
 };
+
+/**
+ * Recursively removes sensitive keys from an object
+ */
+export const sanitizeData = (data: any): any => {
+  if (Array.isArray(data)) {
+    return data.map(sanitizeData);
+  }
+  if (data !== null && typeof data === 'object' && !(data instanceof Date)) {
+    const sensitiveKeys = ['password', 'confirmPassword'];
+    const newObj: any = {};
+    for (const key in data) {
+      if (!sensitiveKeys.includes(key)) {
+        newObj[key] = sanitizeData(data[key]);
+      }
+    }
+    return newObj;
+  }
+  return data;
+};

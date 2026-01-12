@@ -1,17 +1,19 @@
+import { UserRole } from '../../../core/roles';
+
 // User DTOs (Data Transfer Objects)
 export interface CreateUserDto {
   email: string;
   password: string;
   firstName?: string;
   lastName?: string;
-  role?: string;
+  role?: UserRole;
 }
 
 export interface UpdateUserDto {
   firstName?: string;
   lastName?: string;
   email?: string;
-  role?: string;
+  role?: UserRole;
   isActive?: boolean;
 }
 
@@ -25,7 +27,7 @@ export interface UserResponseDto {
   email: string;
   firstName: string | null;
   lastName: string | null;
-  role: string;
+  role: UserRole;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;

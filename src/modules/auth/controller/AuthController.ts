@@ -1,9 +1,8 @@
 import { Elysia, t } from 'elysia';
 import { AuthService } from '../service/AuthService';
-import { createUserSchema, loginUserSchema } from '../../user/validators/UserValidator';
-import { validate } from '../../../utils/validation';
-import { errorResponse, successResponse } from '../../../core/responses';
+import { successResponse } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
+import { UserRole } from '../../../core/roles';
 
 const authService = new AuthService();
 
@@ -12,19 +11,21 @@ export const authController = new Elysia({ prefix: '/auth', tags: ['Auth'] })
     .post(
         '/register',
         async ({ body, set }) => {
-            const validatedData = validate(createUserSchema, body);
-            const user = await authService.register(validatedData);
+            const user = await authService.register({
+                ...body,
+                role: body.role ?? UserRole.CUSTOMER
+            });
 
             set.status = 201;
             return successResponse(user, 'User registered successfully', 201);
         },
         {
             body: t.Object({
-                email: t.String(),
-                password: t.String(),
-                firstName: t.Optional(t.String()),
-                lastName: t.Optional(t.String()),
-                role: t.Optional(t.Enum({ admin: 'admin', seller: 'seller', customer: 'customer' })),
+                email: t.String({ format: 'email' }),
+                password: t.String({ minLength: 6 }),
+                firstName: t.Optional(t.String({ minLength: 1 })),
+                lastName: t.Optional(t.String({ minLength: 1 })),
+                role: t.Optional(t.Enum(UserRole)),
             }),
             response: {
                 201: t.Object({
@@ -42,8 +43,7 @@ export const authController = new Elysia({ prefix: '/auth', tags: ['Auth'] })
     .post(
         '/login',
         async ({ body, jwt }) => {
-            const validatedData = validate(loginUserSchema, body);
-            const user = await authService.login(validatedData);
+            const user = await authService.login(body);
 
             const token = await jwt.sign({
                 sub: user.id,
@@ -55,7 +55,7 @@ export const authController = new Elysia({ prefix: '/auth', tags: ['Auth'] })
         },
         {
             body: t.Object({
-                email: t.String(),
+                email: t.String({ format: 'email' }),
                 password: t.String(),
             }),
             response: {

@@ -4,6 +4,7 @@ import {eq, sql} from 'drizzle-orm';
 import {CreateUserDto, UpdateUserDto} from '../dto/UserDto';
 import {comparePassword, hashPassword} from '../../../utils/auth';
 import {ConflictError, NotFoundError} from '../../../core/errors';
+import { UserRole } from '../../../core/roles';
 
 export class UserService {
   async createUser(createUserDto: CreateUserDto): Promise<any> {
@@ -20,7 +21,7 @@ export class UserService {
       password: hashedPassword,
       firstName: createUserDto.firstName,
       lastName: createUserDto.lastName,
-      role: (createUserDto.role as any) || 'customer',
+      role: (createUserDto.role as any) || UserRole.CUSTOMER,
     }).returning();
 
     return newUser;
@@ -117,7 +118,7 @@ export class UserService {
     return updatedUser;
   }
 
-  async updateRole(userId: string, role: string): Promise<any> {
+  async updateRole(userId: string, role: UserRole): Promise<any> {
     const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
 
     if (!user) throw new NotFoundError('User not found');

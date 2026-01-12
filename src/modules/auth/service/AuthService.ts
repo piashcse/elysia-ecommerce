@@ -4,6 +4,7 @@ import {eq} from 'drizzle-orm';
 import {comparePassword, hashPassword} from '../../../utils/auth';
 import {ConflictError, UnauthorizedError} from '../../../core/errors';
 import {CreateUserType, LoginUserType} from '../../user/validators/UserValidator';
+import { UserRole } from '../../../core/roles';
 
 export class AuthService {
     async register(data: CreateUserType) {
@@ -20,7 +21,7 @@ export class AuthService {
             password: hashedPassword,
             firstName: data.firstName,
             lastName: data.lastName,
-            role: (data.role as any) || 'customer',
+            role: (data.role as any) || UserRole.CUSTOMER,
         }).returning();
 
         if (!newUser) {

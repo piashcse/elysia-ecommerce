@@ -3,6 +3,7 @@ import {jwt} from '@elysiajs/jwt';
 import envConfig from '../config/env';
 import {errorResponse} from './responses';
 import {JwtPayload} from '../utils/jwt';
+import { UserRole } from './roles';
 
 export const authPlugin = new Elysia({ name: 'auth-plugin' })
     .use(
@@ -36,15 +37,30 @@ export const authPlugin = new Elysia({ name: 'auth-plugin' })
                 return;
             });
         },
-        hasRole: (role: 'admin' | 'user' | 'seller') => {
+        hasRole: (role: UserRole | UserRole[]) => {
             onBeforeHandle(({ user, set }: { user: JwtPayload | null, set: any }) => {
                 if (!user) {
                     set.status = 401;
                     return errorResponse('Authentication required', 'UNAUTHORIZED', 401);
                 }
-                if (user.role !== role) {
+                
+                const roles = Array.isArray(role) ? role : [role];
+                if (!roles.includes(user.role as UserRole)) {
                     set.status = 403;
-                    return errorResponse(`Access denied. ${role} role required.`, 'FORBIDDEN', 403);
+                    return errorResponse(`Access denied. ${roles.join(' or ')} role required.`, 'FORBIDDEN', 403);
+                }
+                return;
+            });
+        },
+        isOwner: (paramName: string = 'id') => {
+            onBeforeHandle(({ user, params, set }: { user: JwtPayload | null, params: any, set: any }) => {
+                if (!user) {
+                    set.status = 401;
+                    return errorResponse('Authentication required', 'UNAUTHORIZED', 401);
+                }
+                if (user.role !== UserRole.ADMIN && user.sub !== params[paramName]) {
+                    set.status = 403;
+                    return errorResponse('Access denied. Ownership or admin role required.', 'FORBIDDEN', 403);
                 }
                 return;
             });

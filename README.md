@@ -30,7 +30,8 @@ A modern, high-performance eCommerce backend built with Elysia.js, Bun, and Driz
 -   **API Documentation**: Interactive API documentation powered by Swagger UI.
 -   **Robust Security**: Middleware for rate limiting, CORS, and security headers (Helmet).
 -   **Comprehensive Logging**: Detailed logging for monitoring and debugging.
--   **Type-Safe & Validated**: Ensures data integrity with Zod schema validation and Drizzle ORM's type-safe queries.
+-   **Type-Safe & Validated**: Ensures data integrity with Zod schema validation (using a custom `zodValidate` hook) and Drizzle ORM's type-safe queries.
+-   **Automatic Sanitization**: Sensitive fields like `password` are automatically removed from all API responses using a global hook.
 
 ## 🏗️ Architecture & Best Practices
 

@@ -1,9 +1,8 @@
 import { Elysia, t } from 'elysia';
 import { UserService } from '../service/UserService';
-import { changePasswordSchema, updateUserSchema } from '../validators/UserValidator';
-import { validate } from '../../../utils/validation';
 import { errorResponse, paginatedResponse, successResponse } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
+import { UserRole } from '../../../core/roles';
 
 const userService = new UserService();
 
@@ -19,10 +18,7 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
         return errorResponse('User not found', 'NOT_FOUND', 404);
       }
 
-      // Don't return password in response
-      const { password, ...userWithoutPassword } = userData;
-
-      return successResponse(userWithoutPassword, 'Profile retrieved successfully');
+      return successResponse(userData, 'Profile retrieved successfully');
     },
     {
       detail: { summary: 'Get current user profile' },
@@ -43,17 +39,13 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
   .put(
     '/profile',
     async ({ user, body }) => {
-      const validatedData = validate(updateUserSchema, body);
-      const updatedUser = await userService.updateUser(user!.sub as string, validatedData);
+      const updatedUser = await userService.updateUser(user!.sub as string, body);
 
-      // Don't return password in response
-      const { password, ...userWithoutPassword } = updatedUser;
-
-      return successResponse(userWithoutPassword, 'Profile updated successfully');
+      return successResponse(updatedUser, 'Profile updated successfully');
     },
     {
       body: t.Object({
-        email: t.Optional(t.String()),
+        email: t.Optional(t.String({ format: 'email' })),
         firstName: t.Optional(t.String()),
         lastName: t.Optional(t.String()),
       }),
@@ -71,23 +63,20 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
   .put(
     '/change-password',
     async ({ user, body }) => {
-      const validatedData = validate(changePasswordSchema, body);
-
+      // Body is typed by schema, no need to cast to any if we trust inference or interface
+      const { currentPassword, newPassword } = body;
       const updatedUser = await userService.changePassword(
         user!.sub as string,
-        validatedData.currentPassword,
-        validatedData.newPassword
+        currentPassword,
+        newPassword
       );
 
-      // Don't return password in response
-      const { password, ...userWithoutPassword } = updatedUser;
-
-      return successResponse(userWithoutPassword, 'Password changed successfully');
+      return successResponse(updatedUser, 'Password changed successfully');
     },
     {
       body: t.Object({
-        currentPassword: t.String(),
-        newPassword: t.String(),
+        currentPassword: t.String({ minLength: 1 }),
+        newPassword: t.String({ minLength: 6 }),
       }),
       isAuth: true,
       response: {
@@ -103,16 +92,13 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
   .get(
     '/',
     async ({ query }) => {
-      const page = parseInt(query.page as string) || 1;
-      const limit = parseInt(query.limit as string) || 10;
+      const page = query.page ? parseInt(query.page) : 1;
+      const limit = query.limit ? parseInt(query.limit) : 10;
 
       const { users, total } = await userService.getAllUsers(page, limit);
 
-      // Don't return passwords in response
-      const usersWithoutPasswords = users.map(({ password, ...rest }) => rest);
-
       return paginatedResponse(
-        usersWithoutPasswords,
+        users,
         {
           page,
           limit,
@@ -127,7 +113,7 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
         page: t.Optional(t.String()),
         limit: t.Optional(t.String()),
       }),
-      hasRole: 'admin',
+      hasRole: UserRole.ADMIN,
       response: {
         200: t.Any()
       },
@@ -138,14 +124,8 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
   // Get user by ID (admin only or self)
   .get(
     '/:id',
-    async ({ user, params, set }) => {
+    async ({ params, set }) => {
       const { id } = params;
-
-      // Allow access if it's the user's own profile or if admin
-      if (user!.sub !== id && user!.role !== 'admin') {
-        set.status = 403;
-        return errorResponse('Access denied. You can only view your own profile or need admin role.', 'FORBIDDEN', 403);
-      }
 
       const userData = await userService.findUserById(id);
       if (!userData) {
@@ -153,16 +133,13 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
         return errorResponse('User not found', 'NOT_FOUND', 404);
       }
 
-      // Don't return password in response
-      const { password, ...userWithoutPassword } = userData;
-
-      return successResponse(userWithoutPassword, 'User retrieved successfully');
+      return successResponse(userData, 'User retrieved successfully');
     },
     {
       params: t.Object({
         id: t.String()
       }),
-      isAuth: true,
+      isOwner: 'id',
       response: {
         200: t.Any(),
         403: t.Any(),
@@ -177,31 +154,26 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
     '/:id',
     async ({ params, body }) => {
       const { id } = params;
-      const validatedData = validate(updateUserSchema, body);
+      const updatedUser = await userService.updateUser(id, body);
 
-      const updatedUser = await userService.updateUser(id, validatedData);
-
-      // Don't return password in response
-      const { password, ...userWithoutPassword } = updatedUser;
-
-      return successResponse(userWithoutPassword, 'User updated successfully');
+      return successResponse(updatedUser, 'User updated successfully');
     },
     {
       params: t.Object({
         id: t.String()
       }),
       body: t.Object({
-        email: t.Optional(t.String()),
+        email: t.Optional(t.String({ format: 'email' })),
         firstName: t.Optional(t.String()),
         lastName: t.Optional(t.String()),
       }),
-      hasRole: 'admin',
+      isOwner: 'id',
       response: {
         200: t.Any(),
         400: t.Any(),
         404: t.Any()
       },
-      detail: { summary: 'Update user by ID (Admin only)' }
+      detail: { summary: 'Update user by ID (Admin or Self)' }
     }
   )
 
@@ -219,11 +191,11 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
       params: t.Object({
         id: t.String()
       }),
-      hasRole: 'admin',
+      isOwner: 'id',
       response: {
         200: t.Any(),
         404: t.Any()
       },
-      detail: { summary: 'Delete user by ID (Admin only)' }
+      detail: { summary: 'Delete user by ID (Admin or Self)' }
     }
   );
