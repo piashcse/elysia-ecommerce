@@ -1,41 +1,25 @@
-import {db} from '../../../config/database';
-import {categories, products} from '../../../database/schema';
-import {and, desc, eq, gt, gte, ilike, lte, sql} from 'drizzle-orm';
-import {CreateProductDto, UpdateProductDto} from '../dto/ProductDto';
-import {NotFoundError} from '../../../core/errors';
+import { getDB } from '../../../config/database';
+import { categories, products } from '../../../database/schema';
+import { and, desc, eq, gt, gte, ilike, lte, sql } from 'drizzle-orm';
+import { CreateProductDto, UpdateProductDto } from '../dto/ProductDto';
+import { NotFoundError } from '../../../core/errors';
+import { BaseRepositoryImpl } from '../../../database/repositories/BaseRepository';
+import { cacheManager } from '../../../utils/cache';
 
-export class ProductService {
-  async createProduct(createProductDto: CreateProductDto): Promise<any> {
-    // Check if category exists
-    if (createProductDto.categoryId) {
-      const [category] = await db.select().from(categories).where(eq(categories.id, createProductDto.categoryId)).limit(1);
-      if (!category) {
-        throw new NotFoundError('Category not found');
-      }
-    }
-
-    const [newProduct] = await db.insert(products).values({
-      name: createProductDto.name,
-      description: createProductDto.description,
-      price: createProductDto.price.toString(),
-      imageUrl: createProductDto.imageUrl,
-      stockQuantity: createProductDto.stockQuantity,
-      isActive: createProductDto.isActive ?? true,
-      categoryId: createProductDto.categoryId,
-      sku: createProductDto.sku,
-      sellerId: createProductDto.sellerId,
-    }).returning();
-
-    return newProduct;
-  }
-
-  async findProductById(id: string): Promise<any | null> {
-    const [product] = await db.select().from(products).where(eq(products.id, id)).limit(1);
-    return product || null;
+// Create a specific repository for products
+class ProductRepository extends BaseRepositoryImpl<typeof products.$inferSelect, typeof products> {
+  constructor() {
+    super(products);
   }
 
   async findProductByIdWithDetails(id: string): Promise<any> {
-    const [product] = await db
+    // Try to get from cache first
+    const cachedProduct = await cacheManager.getCachedProduct(id);
+    if (cachedProduct) {
+      return cachedProduct;
+    }
+
+    const [product] = await this.db
       .select({
         id: products.id,
         name: products.name,
@@ -59,7 +43,122 @@ export class ProductService {
       .where(eq(products.id, id))
       .limit(1);
 
+    // Cache the result for future requests
+    if (product) {
+      await cacheManager.cacheProduct(id, product);
+    }
+
     return product || null;
+  }
+
+  async getProductsByCategory(
+    categoryId: string,
+    page: number = 1,
+    limit: number = 10
+  ): Promise<{ data: any[]; total: number; totalPages: number; currentPage: number }> {
+    const offset = (page - 1) * limit;
+    const cacheKey = `products:category:${categoryId}:${page}:${limit}`;
+
+    // Try to get from cache first
+    const cachedResult = await cacheManager.get<any>(cacheKey);
+    if (cachedResult) {
+      return cachedResult;
+    }
+
+    const productsResult = await this.db
+      .select()
+      .from(products)
+      .where(eq(products.categoryId, categoryId))
+      .orderBy(desc(products.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    const [countResult] = await this.db
+      .select({ count: sql<number>`count(*)` })
+      .from(products)
+      .where(eq(products.categoryId, categoryId));
+
+    const total = countResult ? Number(countResult.count) : 0;
+    const totalPages = Math.ceil(total / limit);
+
+    const result = { 
+      data: productsResult, 
+      total,
+      totalPages,
+      currentPage: page
+    };
+
+    // Cache the result for future requests (shorter TTL for frequently changing data)
+    await cacheManager.set(cacheKey, result, { ttl: 300 }); // 5 minutes
+
+    return result;
+  }
+
+  async updateProductStock(productId: string, quantity: number): Promise<any> {
+    const [product] = await this.db.select().from(products).where(eq(products.id, productId)).limit(1);
+
+    if (!product) {
+      throw new NotFoundError('Product not found');
+    }
+
+    const newStock = Number(product.stockQuantity) - quantity;
+    if (newStock < 0) {
+      throw new Error('Insufficient stock');
+    }
+
+    const [updatedProduct] = await this.db.update(products)
+      .set({ stockQuantity: newStock })
+      .where(eq(products.id, productId))
+      .returning();
+
+    // Invalidate the cached product
+    await cacheManager.del(`product:${productId}`);
+
+    return updatedProduct;
+  }
+}
+
+export class ProductService {
+  private productRepository: ProductRepository;
+
+  constructor() {
+    this.productRepository = new ProductRepository();
+  }
+
+  private get db() {
+    return getDB();
+  }
+
+  async createProduct(createProductDto: CreateProductDto): Promise<any> {
+    // Check if category exists
+    if (createProductDto.categoryId) {
+      const [category] = await this.db.select().from(categories).where(eq(categories.id, createProductDto.categoryId)).limit(1);
+      if (!category) {
+        throw new NotFoundError('Category not found');
+      }
+    }
+
+    const newProduct = await this.productRepository.create({
+      name: createProductDto.name,
+      description: createProductDto.description,
+      price: createProductDto.price.toString(),
+      imageUrl: createProductDto.imageUrl,
+      stockQuantity: createProductDto.stockQuantity,
+      isActive: createProductDto.isActive ?? true,
+      categoryId: createProductDto.categoryId,
+      sku: createProductDto.sku,
+      sellerId: createProductDto.sellerId,
+    });
+
+    return newProduct;
+  }
+
+  async findProductById(id: string): Promise<any | null> {
+    return await this.productRepository.findById(id);
+  }
+
+  async findProductByIdWithDetails(id: string): Promise<any> {
+    return await this.productRepository.findProductByIdWithDetails(id);
   }
 
   async updateProduct(id: string, updateProductDto: UpdateProductDto): Promise<any> {
@@ -71,7 +170,7 @@ export class ProductService {
 
     // If category is being updated, check if it exists
     if (updateProductDto.categoryId) {
-      const [category] = await db.select().from(categories).where(eq(categories.id, updateProductDto.categoryId)).limit(1);
+      const [category] = await this.db.select().from(categories).where(eq(categories.id, updateProductDto.categoryId)).limit(1);
       if (!category) {
         throw new NotFoundError('Category not found');
       }
@@ -82,10 +181,10 @@ export class ProductService {
       updateData.price = updateProductDto.price.toString();
     }
 
-    const [updatedProduct] = await db.update(products)
-      .set(updateData)
-      .where(eq(products.id, id))
-      .returning();
+    const updatedProduct = await this.productRepository.update(id, updateData);
+
+    // Invalidate the cached product
+    await cacheManager.del(`product:${id}`);
 
     return updatedProduct;
   }
@@ -97,7 +196,10 @@ export class ProductService {
       throw new NotFoundError('Product not found');
     }
 
-    await db.delete(products).where(eq(products.id, id));
+    await this.productRepository.delete(id);
+
+    // Invalidate the cached product
+    await cacheManager.del(`product:${id}`);
   }
 
   async getAllProducts(
@@ -112,8 +214,16 @@ export class ProductService {
       isActive?: boolean;
     } = {}
   ): Promise<{ products: any[]; total: number }> {
-    const offset = (page - 1) * limit;
+    // Create cache key based on filters
+    const cacheKey = `products:all:${page}:${limit}:${JSON.stringify(filters)}`;
+    
+    // Try to get from cache first
+    const cachedResult = await cacheManager.get<any>(cacheKey);
+    if (cachedResult) {
+      return cachedResult;
+    }
 
+    // Build custom query for complex filtering
     const conditions = [];
 
     if (filters.search) {
@@ -142,22 +252,27 @@ export class ProductService {
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-    const productsResult = await db
+    const productsResult = await this.db
       .select()
       .from(products)
       .where(whereClause)
       .orderBy(desc(products.createdAt))
       .limit(limit)
-      .offset(offset);
+      .offset((page - 1) * limit);
 
-    const [countResult] = await db
+    const [countResult] = await this.db
       .select({ count: sql<number>`count(*)` })
       .from(products)
       .where(whereClause);
 
     const total = countResult ? Number(countResult.count) : 0;
 
-    return { products: productsResult, total };
+    const result = { products: productsResult, total };
+
+    // Cache the result for future requests (shorter TTL for frequently changing data)
+    await cacheManager.set(cacheKey, result, { ttl: 300 }); // 5 minutes
+
+    return result;
   }
 
   async getProductsByCategory(
@@ -165,43 +280,11 @@ export class ProductService {
     page: number = 1,
     limit: number = 10
   ): Promise<{ products: any[]; total: number }> {
-    const offset = (page - 1) * limit;
-
-    const productsResult = await db
-      .select()
-      .from(products)
-      .where(eq(products.categoryId, categoryId))
-      .orderBy(desc(products.createdAt))
-      .limit(limit)
-      .offset(offset);
-
-    const [countResult] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(products)
-      .where(eq(products.categoryId, categoryId));
-
-    const total = countResult ? Number(countResult.count) : 0;
-
-    return { products: productsResult, total };
+    const result = await this.productRepository.getProductsByCategory(categoryId, page, limit);
+    return { products: result.data, total: result.total };
   }
 
   async updateProductStock(productId: string, quantity: number): Promise<any> {
-    const [product] = await db.select().from(products).where(eq(products.id, productId)).limit(1);
-
-    if (!product) {
-      throw new NotFoundError('Product not found');
-    }
-
-    const newStock = Number(product.stockQuantity) - quantity;
-    if (newStock < 0) {
-      throw new Error('Insufficient stock');
-    }
-
-    const [updatedProduct] = await db.update(products)
-      .set({ stockQuantity: newStock })
-      .where(eq(products.id, productId))
-      .returning();
-
-    return updatedProduct;
+    return await this.productRepository.updateProductStock(productId, quantity);
   }
 }

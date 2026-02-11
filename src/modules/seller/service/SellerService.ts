@@ -1,7 +1,7 @@
-import {db} from '../../../config/database';
-import {orderItems, orders, products} from '../../../database/schema';
-import {and, desc, eq, sql} from 'drizzle-orm';
-import {NotFoundError} from '../../../core/errors';
+import { db } from '../../../config/database';
+import { orderItems, orders, products } from '../../../database/schema';
+import { and, desc, eq, sql } from 'drizzle-orm';
+import { NotFoundError } from '../../../core/errors';
 
 export class SellerService {
     async getSellerProducts(sellerId: string, page: number = 1, limit: number = 10) {
@@ -73,7 +73,7 @@ export class SellerService {
         // We want to find all orders that have at least one item from this seller
         const sellerOrders = await db
             .select({
-                orderId: orders.id,
+                id: orders.id,
                 status: orders.status,
                 totalAmount: orders.totalAmount,
                 createdAt: orders.createdAt,
