@@ -1,5 +1,5 @@
 # Elysia E-commerce
-![Elysia](https://img.shields.io/badge/Elysia-1.4.16-6E56CF?style=flat)
+![Elysia](https://img.shields.io/badge/Elysia-1.4.24-6E56CF?style=flat)
 ![Bun](https://img.shields.io/badge/Bun-1.3.3-black?logo=bun&style=flat)
 ![Drizzle](https://img.shields.io/badge/Drizzle-0.45.1-0C4A6E?style=flat)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-8.16.3-336791?style=flat)
