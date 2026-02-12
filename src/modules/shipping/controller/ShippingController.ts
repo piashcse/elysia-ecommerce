@@ -1,6 +1,6 @@
 import { Elysia, t } from 'elysia';
 import { ShippingService } from '../service/ShippingService';
-import { errorResponse, paginatedResponse, successResponse } from '../../../core/responses';
+import { errorResponse, paginatedResponse, successResponse, successSchema, paginatedSchema, errorSchema } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
 import { UserRole } from '../../../core/roles';
 
@@ -8,12 +8,12 @@ const shippingService = new ShippingService();
 
 export const shippingController = new Elysia({ prefix: '/shipping-methods', tags: ['Shipping'] })
   .use(authPlugin)
+
   // Create a new shipping method (admin only)
   .post(
     '/',
     async ({ body, set }) => {
       const shippingMethod = await shippingService.createShippingMethod(body);
-
       set.status = 201;
       return successResponse(shippingMethod, 'Shipping method created successfully', 201);
     },
@@ -21,13 +21,13 @@ export const shippingController = new Elysia({ prefix: '/shipping-methods', tags
       body: t.Object({
         name: t.String({ minLength: 1 }),
         description: t.Optional(t.String()),
-        baseCost: t.Number({ minimum: 0 }),
-        costPerKg: t.Optional(t.Number({ minimum: 0 })),
-        estimatedDaysMin: t.Number({ minimum: 0 }),
-        estimatedDaysMax: t.Number({ minimum: 0 }),
+        baseCost: t.Numeric({ minimum: 0 }),
+        costPerKg: t.Optional(t.Numeric({ minimum: 0 })),
+        estimatedDaysMin: t.Numeric({ minimum: 0 }),
+        estimatedDaysMax: t.Numeric({ minimum: 0 }),
         isActive: t.Optional(t.Boolean()),
       }),
-      response: { 201: t.Any(), 400: t.Any(), 422: t.Any() },
+      response: { 201: successSchema(), 400: errorSchema, 422: errorSchema },
       hasRole: UserRole.ADMIN,
       detail: { summary: 'Create a new shipping method (Admin only)' }
     }
@@ -37,8 +37,8 @@ export const shippingController = new Elysia({ prefix: '/shipping-methods', tags
   .get(
     '/',
     async ({ query }) => {
-      const page = query.page ? parseInt(query.page) : 1;
-      const limit = query.limit ? parseInt(query.limit) : 10;
+      const page = query.page || 1;
+      const limit = query.limit || 10;
 
       const { shippingMethods, total } = await shippingService.getAllShippingMethods(page, limit);
 
@@ -55,10 +55,10 @@ export const shippingController = new Elysia({ prefix: '/shipping-methods', tags
     },
     {
       query: t.Object({
-        page: t.Optional(t.String()),
-        limit: t.Optional(t.String()),
+        page: t.Optional(t.Numeric()),
+        limit: t.Optional(t.Numeric()),
       }),
-      response: { 200: t.Any() },
+      response: { 200: paginatedSchema() },
       detail: { summary: 'Get all shipping methods' }
     }
   )
@@ -66,22 +66,15 @@ export const shippingController = new Elysia({ prefix: '/shipping-methods', tags
   // Get shipping method by ID
   .get(
     '/:id',
-    async ({ params, set }) => {
-      const { id } = params;
+    async ({ params }) => {
+      const shippingMethod = await shippingService.findShippingMethodById(params.id);
+      if (!shippingMethod) return errorResponse('Shipping method not found', 'NOT_FOUND', 404);
 
-      const shippingMethod = await shippingService.findShippingMethodById(id);
-      if (!shippingMethod) {
-        set.status = 404;
-        return errorResponse('Shipping method not found', 'NOT_FOUND', 404);
-      }
-
-      return successResponse(shippingMethod, 'Shipping method retrieved successfully', 200);
+      return successResponse(shippingMethod, 'Shipping method retrieved successfully');
     },
     {
-      params: t.Object({
-        id: t.String()
-      }),
-      response: { 200: t.Any(), 404: t.Any() },
+      params: t.Object({ id: t.String() }),
+      response: { 200: successSchema(), 404: errorSchema },
       detail: { summary: 'Get shipping method by ID' }
     }
   )
@@ -90,25 +83,21 @@ export const shippingController = new Elysia({ prefix: '/shipping-methods', tags
   .put(
     '/:id',
     async ({ params, body }) => {
-      const { id } = params;
-      const updatedShippingMethod = await shippingService.updateShippingMethod(id, body);
-
-      return successResponse(updatedShippingMethod, 'Shipping method updated successfully', 200);
+      const updatedShippingMethod = await shippingService.updateShippingMethod(params.id, body);
+      return successResponse(updatedShippingMethod, 'Shipping method updated successfully');
     },
     {
-      params: t.Object({
-        id: t.String()
-      }),
+      params: t.Object({ id: t.String() }),
       body: t.Object({
         name: t.Optional(t.String()),
         description: t.Optional(t.String()),
-        baseCost: t.Optional(t.Number({ minimum: 0 })),
-        costPerKg: t.Optional(t.Number({ minimum: 0 })),
-        estimatedDaysMin: t.Optional(t.Number({ minimum: 0 })),
-        estimatedDaysMax: t.Optional(t.Number({ minimum: 0 })),
+        baseCost: t.Optional(t.Numeric({ minimum: 0 })),
+        costPerKg: t.Optional(t.Numeric({ minimum: 0 })),
+        estimatedDaysMin: t.Optional(t.Numeric({ minimum: 0 })),
+        estimatedDaysMax: t.Optional(t.Numeric({ minimum: 0 })),
         isActive: t.Optional(t.Boolean()),
       }),
-      response: { 200: t.Any(), 400: t.Any(), 404: t.Any() },
+      response: { 200: successSchema(), 400: errorSchema, 404: errorSchema },
       hasRole: UserRole.ADMIN,
       detail: { summary: 'Update shipping method by ID (Admin only)' }
     }
@@ -118,17 +107,12 @@ export const shippingController = new Elysia({ prefix: '/shipping-methods', tags
   .delete(
     '/:id',
     async ({ params }) => {
-      const { id } = params;
-
-      await shippingService.deleteShippingMethod(id);
-
-      return successResponse(null, 'Shipping method deleted successfully', 200);
+      await shippingService.deleteShippingMethod(params.id);
+      return successResponse(null, 'Shipping method deleted successfully');
     },
     {
-      params: t.Object({
-        id: t.String()
-      }),
-      response: { 200: t.Any(), 404: t.Any() },
+      params: t.Object({ id: t.String() }),
+      response: { 200: successSchema(t.Null()), 404: errorSchema },
       hasRole: UserRole.ADMIN,
       detail: { summary: 'Delete shipping method by ID (Admin only)' }
     }

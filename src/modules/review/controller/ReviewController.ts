@@ -1,8 +1,9 @@
 import { Elysia, t } from 'elysia';
 import { ReviewService } from '../service/ReviewService';
-import { errorResponse, paginatedResponse, successResponse } from '../../../core/responses';
+import { paginatedResponse, successResponse, successSchema, paginatedSchema, errorSchema } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
 import { UserRole } from '../../../core/roles';
+import { eq } from 'drizzle-orm';
 
 const reviewService = new ReviewService();
 
@@ -13,32 +14,31 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
     .get(
         '/product/:productId',
         async ({ params, query }) => {
-            const { productId } = params;
-            const page = query.page ? parseInt(query.page) : 1;
-            const limit = query.limit ? parseInt(query.limit) : 10;
+            const page = query.page || 1;
+            const limit = query.limit || 10;
 
-            const result = await reviewService.getProductReviews(productId, page, limit);
+            const { items, total, averageRating } = await reviewService.getProductReviews(params.productId, page, limit);
 
             return paginatedResponse(
-                result.reviews,
+                items,
                 {
                     page,
                     limit,
-                    total: result.total,
-                    totalPages: Math.ceil(result.total / limit),
+                    total,
+                    totalPages: Math.ceil(total / limit),
                 },
                 'Reviews retrieved successfully',
                 200,
-                { averageRating: result.averageRating }
+                { averageRating }
             );
         },
         {
             params: t.Object({ productId: t.String() }),
             query: t.Object({
-                page: t.Optional(t.String()),
-                limit: t.Optional(t.String()),
+                page: t.Optional(t.Numeric()),
+                limit: t.Optional(t.Numeric()),
             }),
-            response: { 200: t.Any() },
+            response: { 200: paginatedSchema() },
             detail: { summary: 'Get all reviews for a product' }
         }
     )
@@ -48,7 +48,6 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
         '/',
         async ({ body, set, user }) => {
             const review = await reviewService.createReview(user!.sub, body);
-
             set.status = 201;
             return successResponse(review, 'Review created successfully', 201);
         },
@@ -60,7 +59,11 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
                 comment: t.Optional(t.String()),
             }),
             isAuth: true,
-            response: { 201: t.Any(), 400: t.Any(), 422: t.Any() },
+            response: {
+                201: successSchema(),
+                400: errorSchema,
+                422: errorSchema
+            },
             detail: { summary: 'Create a product review' }
         }
     )
@@ -69,29 +72,29 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
     .get(
         '/my-reviews',
         async ({ query, user }) => {
-            const page = query.page ? parseInt(query.page) : 1;
-            const limit = query.limit ? parseInt(query.limit) : 10;
+            const page = query.page || 1;
+            const limit = query.limit || 10;
 
-            const result = await reviewService.getUserReviews(user!.sub, page, limit);
+            const { items, total } = await reviewService.findAll(page, limit, [eq((reviewService as any).schema.userId, user!.sub)]);
 
             return paginatedResponse(
-                result.reviews,
+                items,
                 {
                     page,
                     limit,
-                    total: result.total,
-                    totalPages: Math.ceil(result.total / limit),
+                    total,
+                    totalPages: Math.ceil(total / limit),
                 },
                 'Your reviews retrieved successfully'
             );
         },
         {
             query: t.Object({
-                page: t.Optional(t.String()),
-                limit: t.Optional(t.String()),
+                page: t.Optional(t.Numeric()),
+                limit: t.Optional(t.Numeric()),
             }),
             isAuth: true,
-            response: { 200: t.Any() },
+            response: { 200: paginatedSchema() },
             detail: { summary: 'Get current user reviews' }
         }
     )
@@ -100,21 +103,22 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
     .put(
         '/:id',
         async ({ params, body, user }) => {
-            const { id } = params;
-
-            const review = await reviewService.updateReview(id, user!.sub, body);
-
+            const review = await reviewService.updateReview(params.id, user!.sub, body);
             return successResponse(review, 'Review updated successfully');
         },
         {
             params: t.Object({ id: t.String() }),
-            body: t.Object({
-                rating: t.Optional(t.Number({ minimum: 1, maximum: 5 })),
-                title: t.Optional(t.String()),
-                comment: t.Optional(t.String()),
-            }),
+            body: t.Partial(t.Object({
+                rating: t.Number({ minimum: 1, maximum: 5 }),
+                title: t.String(),
+                comment: t.String(),
+            })),
             isAuth: true,
-            response: { 200: t.Any(), 400: t.Any(), 404: t.Any() },
+            response: {
+                200: successSchema(),
+                400: errorSchema,
+                404: errorSchema
+            },
             detail: { summary: 'Update your review' }
         }
     )
@@ -123,17 +127,18 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
     .delete(
         '/:id',
         async ({ params, user }) => {
-            const { id } = params;
-
             const isAdmin = user!.role === UserRole.ADMIN;
-            await reviewService.deleteReview(id, user!.sub, isAdmin);
-
+            await reviewService.deleteReview(params.id, user!.sub, isAdmin);
             return successResponse(null, 'Review deleted successfully');
         },
         {
             params: t.Object({ id: t.String() }),
             isAuth: true,
-            response: { 200: t.Any(), 403: t.Any(), 404: t.Any() },
+            response: {
+                200: successSchema(t.Null()),
+                403: errorSchema,
+                404: errorSchema
+            },
             detail: { summary: 'Delete your review' }
         }
     )
@@ -142,15 +147,15 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
     .post(
         '/:id/helpful',
         async ({ params }) => {
-            const { id } = params;
-
-            const review = await reviewService.markHelpful(id);
-
+            const review = await reviewService.markHelpful(params.id);
             return successResponse(review, 'Review marked as helpful');
         },
         {
             params: t.Object({ id: t.String() }),
-            response: { 200: t.Any(), 404: t.Any() },
+            response: {
+                200: successSchema(),
+                404: errorSchema
+            },
             detail: { summary: 'Mark review as helpful' }
         }
     );

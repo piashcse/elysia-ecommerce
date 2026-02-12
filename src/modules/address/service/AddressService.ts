@@ -1,12 +1,16 @@
-import {db} from '../../../config/database';
-import {addresses} from '../../../database/schema';
-import {and, eq} from 'drizzle-orm';
-import {CreateAddressDto, UpdateAddressDto} from '../dto/AddressDto';
-import {NotFoundError} from '../../../core/errors';
+import { db } from '../../../config/database';
+import { addresses } from '../../../database/schema';
+import { and, eq } from 'drizzle-orm';
+import { CreateAddressDto, UpdateAddressDto } from '../dto/AddressDto';
+import { NotFoundError } from '../../../core/errors';
+import { BaseService } from '../../../core/base.service';
 
-export class AddressService {
+export class AddressService extends BaseService<typeof addresses> {
+    constructor() {
+        super(addresses);
+    }
+
     async createAddress(userId: string, createAddressDto: CreateAddressDto): Promise<any> {
-        // If setting as default, unset other default addresses of the same type
         if (createAddressDto.isDefault) {
             await db
                 .update(addresses)
@@ -17,21 +21,11 @@ export class AddressService {
                 ));
         }
 
-        const [newAddress] = await db.insert(addresses).values({
+        return this.create({
+            ...createAddressDto,
             userId,
-            type: createAddressDto.type as any,
-            fullName: createAddressDto.fullName,
-            phoneNumber: createAddressDto.phoneNumber,
-            addressLine1: createAddressDto.addressLine1,
-            addressLine2: createAddressDto.addressLine2,
-            city: createAddressDto.city,
-            state: createAddressDto.state,
-            postalCode: createAddressDto.postalCode,
-            country: createAddressDto.country,
-            isDefault: createAddressDto.isDefault ?? false,
-        }).returning();
-
-        return newAddress;
+            isActive: true
+        });
     }
 
     async getAddressById(addressId: string, userId: string): Promise<any | null> {
@@ -49,28 +43,19 @@ export class AddressService {
 
     async getUserAddresses(userId: string, type?: string): Promise<any[]> {
         const conditions = [eq(addresses.userId, userId)];
+        if (type) conditions.push(eq(addresses.type, type as any));
 
-        if (type) {
-            conditions.push(eq(addresses.type, type as any));
-        }
-
-        const userAddresses = await db
+        return db
             .select()
             .from(addresses)
             .where(and(...conditions))
             .orderBy(addresses.isDefault);
-
-        return userAddresses;
     }
 
     async updateAddress(addressId: string, userId: string, updateAddressDto: UpdateAddressDto): Promise<any> {
         const address = await this.getAddressById(addressId, userId);
+        if (!address) throw new NotFoundError('Address not found');
 
-        if (!address) {
-            throw new NotFoundError('Address not found');
-        }
-
-        // If setting as default, unset other default addresses of the same type
         if (updateAddressDto.isDefault) {
             const targetType = updateAddressDto.type || address.type;
             await db
@@ -82,33 +67,20 @@ export class AddressService {
                 ));
         }
 
-        const [updatedAddress] = await db
-            .update(addresses)
-            .set(updateAddressDto as any)
-            .where(eq(addresses.id, addressId))
-            .returning();
-
-        return updatedAddress;
+        return this.update(addressId, updateAddressDto);
     }
 
     async deleteAddress(addressId: string, userId: string): Promise<void> {
         const address = await this.getAddressById(addressId, userId);
+        if (!address) throw new NotFoundError('Address not found');
 
-        if (!address) {
-            throw new NotFoundError('Address not found');
-        }
-
-        await db.delete(addresses).where(eq(addresses.id, addressId));
+        return this.delete(addressId);
     }
 
     async setDefaultAddress(addressId: string, userId: string): Promise<any> {
         const address = await this.getAddressById(addressId, userId);
+        if (!address) throw new NotFoundError('Address not found');
 
-        if (!address) {
-            throw new NotFoundError('Address not found');
-        }
-
-        // Unset other default addresses of the same type
         await db
             .update(addresses)
             .set({ isDefault: false })
@@ -117,27 +89,6 @@ export class AddressService {
                 eq(addresses.type, address.type)
             ));
 
-        // Set this address as default
-        const [updatedAddress] = await db
-            .update(addresses)
-            .set({ isDefault: true })
-            .where(eq(addresses.id, addressId))
-            .returning();
-
-        return updatedAddress;
-    }
-
-    async getDefaultAddress(userId: string, type: string): Promise<any | null> {
-        const [address] = await db
-            .select()
-            .from(addresses)
-            .where(and(
-                eq(addresses.userId, userId),
-                eq(addresses.type, type as any),
-                eq(addresses.isDefault, true)
-            ))
-            .limit(1);
-
-        return address || null;
+        return this.update(addressId, { isDefault: true });
     }
 }

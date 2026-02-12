@@ -1,76 +1,54 @@
-import {db} from '../../../config/database';
-import {orderItems, orders, products} from '../../../database/schema';
-import {and, desc, eq, sql} from 'drizzle-orm';
-import {NotFoundError} from '../../../core/errors';
+import { db } from '../../../config/database';
+import { orderItems, orders, products } from '../../../database/schema';
+import { and, eq, sql } from 'drizzle-orm';
+import { NotFoundError } from '../../../core/errors';
+import { BaseService } from '../../../core/base.service';
 
-export class SellerService {
-    async getSellerProducts(sellerId: string, page: number = 1, limit: number = 10) {
-        const offset = (page - 1) * limit;
-
-        const sellerProducts = await db
-            .select()
-            .from(products)
-            .where(eq(products.sellerId, sellerId))
-            .orderBy(desc(products.createdAt))
-            .limit(limit)
-            .offset(offset);
-
-        const [countResult] = await db
-            .select({ count: sql<number>`count(*)` })
-            .from(products)
-            .where(eq(products.sellerId, sellerId));
-
-        return {
-            products: sellerProducts,
-            total: countResult ? Number(countResult.count) : 0,
-        };
+export class SellerService extends BaseService<typeof products> {
+    constructor() {
+        super(products);
     }
 
-    async createProduct(sellerId: string, data: any) {
-        const [newProduct] = await db.insert(products).values({
+    async getSellerProducts(sellerId: string, page: number = 1, limit: number = 10) {
+        return this.findAll(page, limit, [eq(products.sellerId, sellerId)]);
+    }
+
+    async createSellerProduct(sellerId: string, data: any) {
+        return this.create({
             ...data,
             sellerId,
-        }).returning();
-        return newProduct;
+        });
     }
 
-    async updateProduct(sellerId: string, productId: string, data: any) {
-        const [product] = await db
+    async updateSellerProduct(sellerId: string, productId: string, data: any) {
+        const product = await db
             .select()
             .from(products)
             .where(and(eq(products.id, productId), eq(products.sellerId, sellerId)))
             .limit(1);
 
-        if (!product) {
+        if (product.length === 0) {
             throw new NotFoundError('Product not found or you do not have permission to update it');
         }
 
-        const [updatedProduct] = await db
-            .update(products)
-            .set({ ...data, updatedAt: new Date() })
-            .where(eq(products.id, productId))
-            .returning();
-
-        return updatedProduct;
+        return this.update(productId, data);
     }
 
-    async deleteProduct(sellerId: string, productId: string) {
-        const [product] = await db
+    async deleteSellerProduct(sellerId: string, productId: string) {
+        const product = await db
             .select()
             .from(products)
             .where(and(eq(products.id, productId), eq(products.sellerId, sellerId)))
             .limit(1);
 
-        if (!product) {
+        if (product.length === 0) {
             throw new NotFoundError('Product not found or you do not have permission to delete it');
         }
 
-        await db.delete(products).where(eq(products.id, productId));
+        return this.delete(productId);
     }
 
     async getSellerOrders(sellerId: string) {
-        // This is more complex as an order can contain items from multiple sellers
-        // We want to find all orders that have at least one item from this seller
         const sellerOrders = await db
             .select({
                 orderId: orders.id,

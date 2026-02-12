@@ -1,37 +1,26 @@
-import {db} from '../../../config/database';
-import {categories, products} from '../../../database/schema';
-import {and, desc, eq, gt, gte, ilike, lte, sql} from 'drizzle-orm';
-import {CreateProductDto, UpdateProductDto} from '../dto/ProductDto';
-import {NotFoundError} from '../../../core/errors';
+import { db } from '../../../config/database';
+import { categories, products } from '../../../database/schema';
+import { and, desc, eq, gt, gte, ilike, lte, sql } from 'drizzle-orm';
+import { CreateProductDto, UpdateProductDto } from '../dto/ProductDto';
+import { NotFoundError } from '../../../core/errors';
+import { BaseService } from '../../../core/base.service';
 
-export class ProductService {
-  async createProduct(createProductDto: CreateProductDto): Promise<any> {
-    // Check if category exists
-    if (createProductDto.categoryId) {
-      const [category] = await db.select().from(categories).where(eq(categories.id, createProductDto.categoryId)).limit(1);
-      if (!category) {
-        throw new NotFoundError('Category not found');
-      }
-    }
-
-    const [newProduct] = await db.insert(products).values({
-      name: createProductDto.name,
-      description: createProductDto.description,
-      price: createProductDto.price.toString(),
-      imageUrl: createProductDto.imageUrl,
-      stockQuantity: createProductDto.stockQuantity,
-      isActive: createProductDto.isActive ?? true,
-      categoryId: createProductDto.categoryId,
-      sku: createProductDto.sku,
-      sellerId: createProductDto.sellerId,
-    }).returning();
-
-    return newProduct;
+export class ProductService extends BaseService<typeof products> {
+  constructor() {
+    super(products);
   }
 
-  async findProductById(id: string): Promise<any | null> {
-    const [product] = await db.select().from(products).where(eq(products.id, id)).limit(1);
-    return product || null;
+  async createProduct(createProductDto: CreateProductDto): Promise<any> {
+    if (createProductDto.categoryId) {
+      const [category] = await db.select().from(categories).where(eq(categories.id, createProductDto.categoryId)).limit(1);
+      if (!category) throw new NotFoundError('Category not found');
+    }
+
+    return this.create({
+      ...createProductDto,
+      price: createProductDto.price.toString(),
+      isActive: createProductDto.isActive ?? true,
+    });
   }
 
   async findProductByIdWithDetails(id: string): Promise<any> {
@@ -63,18 +52,11 @@ export class ProductService {
   }
 
   async updateProduct(id: string, updateProductDto: UpdateProductDto): Promise<any> {
-    const product = await this.findProductById(id);
+    const product = await this.findByIdOrFail(id, 'Product');
 
-    if (!product) {
-      throw new NotFoundError('Product not found');
-    }
-
-    // If category is being updated, check if it exists
     if (updateProductDto.categoryId) {
       const [category] = await db.select().from(categories).where(eq(categories.id, updateProductDto.categoryId)).limit(1);
-      if (!category) {
-        throw new NotFoundError('Category not found');
-      }
+      if (!category) throw new NotFoundError('Category not found');
     }
 
     const updateData: any = { ...updateProductDto };
@@ -82,22 +64,11 @@ export class ProductService {
       updateData.price = updateProductDto.price.toString();
     }
 
-    const [updatedProduct] = await db.update(products)
-      .set(updateData)
-      .where(eq(products.id, id))
-      .returning();
-
-    return updatedProduct;
+    return this.update(id, updateData);
   }
 
   async deleteProduct(id: string): Promise<void> {
-    const product = await this.findProductById(id);
-
-    if (!product) {
-      throw new NotFoundError('Product not found');
-    }
-
-    await db.delete(products).where(eq(products.id, id));
+    return this.delete(id);
   }
 
   async getAllProducts(
@@ -111,78 +82,25 @@ export class ProductService {
       inStock?: boolean;
       isActive?: boolean;
     } = {}
-  ): Promise<{ products: any[]; total: number }> {
-    const offset = (page - 1) * limit;
-
+  ): Promise<{ items: any[]; total: number }> {
     const conditions = [];
 
-    if (filters.search) {
-      conditions.push(ilike(products.name, `%${filters.search}%`));
-    }
+    if (filters.search) conditions.push(ilike(products.name, `%${filters.search}%`));
+    if (filters.category) conditions.push(eq(products.categoryId, filters.category));
+    if (filters.minPrice !== undefined) conditions.push(gte(products.price, filters.minPrice.toString()));
+    if (filters.maxPrice !== undefined) conditions.push(lte(products.price, filters.maxPrice.toString()));
+    if (filters.inStock) conditions.push(gt(products.stockQuantity, 0));
+    if (filters.isActive !== undefined) conditions.push(eq(products.isActive, filters.isActive));
 
-    if (filters.category) {
-      conditions.push(eq(products.categoryId, filters.category));
-    }
-
-    if (filters.minPrice !== undefined) {
-      conditions.push(gte(products.price, filters.minPrice.toString()));
-    }
-
-    if (filters.maxPrice !== undefined) {
-      conditions.push(lte(products.price, filters.maxPrice.toString()));
-    }
-
-    if (filters.inStock) {
-      conditions.push(gt(products.stockQuantity, 0));
-    }
-
-    if (filters.isActive !== undefined) {
-      conditions.push(eq(products.isActive, filters.isActive));
-    }
-
-    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-
-    const productsResult = await db
-      .select()
-      .from(products)
-      .where(whereClause)
-      .orderBy(desc(products.createdAt))
-      .limit(limit)
-      .offset(offset);
-
-    const [countResult] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(products)
-      .where(whereClause);
-
-    const total = countResult ? Number(countResult.count) : 0;
-
-    return { products: productsResult, total };
+    return this.findAll(page, limit, conditions);
   }
 
   async getProductsByCategory(
     categoryId: string,
     page: number = 1,
     limit: number = 10
-  ): Promise<{ products: any[]; total: number }> {
-    const offset = (page - 1) * limit;
-
-    const productsResult = await db
-      .select()
-      .from(products)
-      .where(eq(products.categoryId, categoryId))
-      .orderBy(desc(products.createdAt))
-      .limit(limit)
-      .offset(offset);
-
-    const [countResult] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(products)
-      .where(eq(products.categoryId, categoryId));
-
-    const total = countResult ? Number(countResult.count) : 0;
-
-    return { products: productsResult, total };
+  ): Promise<{ items: any[]; total: number }> {
+    return this.findAll(page, limit, [eq(products.categoryId, categoryId)]);
   }
 
   async updateProductStock(productId: string, quantity: number): Promise<any> {

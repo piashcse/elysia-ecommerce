@@ -1,3 +1,5 @@
+import { t } from 'elysia';
+
 // Response interfaces
 export interface ApiResponse<T = any> {
   success: boolean;
@@ -100,3 +102,37 @@ export const sanitizeData = (data: any): any => {
   }
   return data;
 };
+
+// Common Elysia Schemas for responses
+export const successSchema = (dataSchema: any = t.Any()) => t.Object({
+  success: t.Boolean(),
+  statusCode: t.Number(),
+  message: t.String(),
+  data: dataSchema
+});
+
+export const errorSchema = t.Object({
+  success: t.Boolean(),
+  statusCode: t.Number(),
+  message: t.String(),
+  error: t.Object({
+    code: t.String(),
+    message: t.String(),
+    details: t.Optional(t.Any())
+  })
+});
+
+export const paginatedSchema = (itemSchema: any = t.Any()) => t.Object({
+  success: t.Boolean(),
+  statusCode: t.Number(),
+  message: t.String(),
+  data: t.Object({
+    items: t.Array(itemSchema),
+    meta: t.Object({
+      page: t.Number(),
+      limit: t.Number(),
+      total: t.Number(),
+      totalPages: t.Number()
+    })
+  })
+});

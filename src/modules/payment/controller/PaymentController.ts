@@ -1,6 +1,6 @@
 import { Elysia, t } from 'elysia';
 import { PaymentService } from '../service/PaymentService';
-import { errorResponse, paginatedResponse, successResponse } from '../../../core/responses';
+import { errorResponse, paginatedResponse, successResponse, successSchema, paginatedSchema, errorSchema } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
 import { UserRole } from '../../../core/roles';
 
@@ -15,10 +15,6 @@ export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payme
   .post(
     '/',
     async ({ body, set }) => {
-      // Cast body to CreatePaymentDto because 'method' is string in schema but specific union in DTO
-      // Or just let it flow if Service accepts string and validates it.
-      // PaymentService expects CreatePaymentDto.
-      // We should probably check if we can tighten the schema.
       const payment = await paymentService.createPayment(body as any);
       set.status = 201;
       return successResponse(payment, 'Payment created successfully', 201);
@@ -34,9 +30,13 @@ export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payme
           t.Literal('cash_on_delivery')
         ]),
         amount: t.Number(),
-        metadata: t.Optional(t.Record(t.String(), t.Any())) // t.Unknown is safer but Any maps to explicit any
+        metadata: t.Optional(t.Record(t.String(), t.Any()))
       }),
-      response: { 201: t.Any(), 400: t.Any(), 422: t.Any() },
+      response: {
+        201: successSchema(),
+        400: errorSchema,
+        422: errorSchema
+      },
       detail: { summary: 'Create initial payment record' }
     }
   )
@@ -67,7 +67,11 @@ export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payme
           paypalEmail: t.Optional(t.String())
         })
       }),
-      response: { 200: t.Any(), 400: t.Any(), 422: t.Any() },
+      response: {
+        200: successSchema(),
+        400: errorSchema,
+        422: errorSchema
+      },
       detail: { summary: 'Process payment with gateway simulation' }
     }
   )
@@ -77,8 +81,8 @@ export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payme
     '/',
     async ({ query, user }) => {
       const isAdmin = user?.role === UserRole.ADMIN;
-      const page = query.page ? parseInt(query.page) : 1;
-      const limit = query.limit ? parseInt(query.limit) : 10;
+      const page = query.page || 1;
+      const limit = query.limit || 10;
 
       const filters = {
         status: query.status,
@@ -89,10 +93,10 @@ export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payme
         userId: isAdmin ? query.userId : (user!.sub as string),
       };
 
-      const { payments, total } = await paymentService.getPayments(page, limit, filters);
+      const { items, total } = await paymentService.getPayments(page, limit, filters);
 
       return paginatedResponse(
-        payments,
+        items,
         {
           page,
           limit,
@@ -104,8 +108,8 @@ export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payme
     },
     {
       query: t.Object({
-        page: t.Optional(t.String()),
-        limit: t.Optional(t.String()),
+        page: t.Optional(t.Numeric()),
+        limit: t.Optional(t.Numeric()),
         status: t.Optional(t.String()),
         method: t.Optional(t.String()),
         dateFrom: t.Optional(t.String()),
@@ -113,7 +117,9 @@ export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payme
         orderId: t.Optional(t.String()),
         userId: t.Optional(t.String()),
       }),
-      response: { 200: t.Any() },
+      response: {
+        200: paginatedSchema()
+      },
       detail: { summary: 'Get payments (Admin: all, Customer: own)' }
     }
   )
@@ -121,29 +127,23 @@ export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payme
   // Get payment by ID
   .get(
     '/:id',
-    async ({ params, set, user }) => {
-      const { id } = params;
+    async ({ params, user }) => {
+      const payment = await paymentService.getPaymentById(params.id);
+      if (!payment) throw new Error('Payment not found');
 
-      const payment = await paymentService.getPaymentById(id);
-      if (!payment) {
-        set.status = 404;
-        return errorResponse('Payment not found', 'NOT_FOUND', 404);
-      }
-
-      // Check if user is admin or owner of order associated with payment
-      // user.sub is string, payment.order.userId is string
       if (user?.role !== UserRole.ADMIN && payment.order.userId !== user?.sub) {
-        set.status = 403;
-        return errorResponse('Access denied. You can only view your own payments.', 'FORBIDDEN', 403);
+        throw new Error('Access denied');
       }
 
       return successResponse(payment, 'Payment retrieved successfully');
     },
     {
-      params: t.Object({
-        id: t.String()
-      }),
-      response: { 200: t.Any(), 403: t.Any(), 404: t.Any() },
+      params: t.Object({ id: t.String() }),
+      response: {
+        200: successSchema(),
+        403: errorSchema,
+        404: errorSchema
+      },
       detail: { summary: 'Get payment details by ID' }
     }
   )
@@ -152,15 +152,16 @@ export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payme
   .post(
     '/:id/refund',
     async ({ params }) => {
-      const { id } = params;
-      const payment = await paymentService.refundPayment(id);
+      const payment = await paymentService.refundPayment(params.id);
       return successResponse(payment, 'Payment refunded successfully');
     },
     {
-      params: t.Object({
-        id: t.String()
-      }),
-      response: { 200: t.Any(), 400: t.Any(), 404: t.Any() },
+      params: t.Object({ id: t.String() }),
+      response: {
+        200: successSchema(),
+        400: errorSchema,
+        404: errorSchema
+      },
       hasRole: UserRole.ADMIN,
       detail: { summary: 'Refund a completed payment (Admin only)' }
     }
