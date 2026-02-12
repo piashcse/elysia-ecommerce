@@ -1,6 +1,6 @@
 import { Elysia, t } from 'elysia';
 import { WishlistService } from '../service/WishlistService';
-import { successResponse } from '../../../core/responses';
+import { successResponse, successSchema, errorSchema } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
 
 const wishlistService = new WishlistService();
@@ -19,7 +19,7 @@ export const wishlistController = new Elysia({ prefix: '/wishlist', tags: ['Wish
     },
     {
       response: {
-        200: t.Any()
+        200: successSchema(t.Array(t.Any()))
       },
       detail: { summary: "Get current user's wishlist" }
     }
@@ -29,8 +29,7 @@ export const wishlistController = new Elysia({ prefix: '/wishlist', tags: ['Wish
   .post(
     '/items',
     async ({ body, set, user }) => {
-      const { productId } = body;
-      const wishlistItem = await wishlistService.addToWishlist(user!.sub as string, productId);
+      const wishlistItem = await wishlistService.addToWishlist(user!.sub as string, body.productId);
       set.status = 201;
       return successResponse(wishlistItem, 'Item added to wishlist successfully', 201);
     },
@@ -39,9 +38,9 @@ export const wishlistController = new Elysia({ prefix: '/wishlist', tags: ['Wish
         productId: t.String()
       }),
       response: {
-        201: t.Any(),
-        400: t.Any(),
-        422: t.Any()
+        201: successSchema(),
+        400: errorSchema,
+        422: errorSchema
       },
       detail: { summary: 'Add product to wishlist' }
     }
@@ -51,17 +50,14 @@ export const wishlistController = new Elysia({ prefix: '/wishlist', tags: ['Wish
   .delete(
     '/items/:id',
     async ({ params }) => {
-      const { id } = params;
-      await wishlistService.removeFromWishlist(id);
+      await wishlistService.delete(params.id);
       return successResponse(null, 'Item removed from wishlist successfully');
     },
     {
-      params: t.Object({
-        id: t.String()
-      }),
+      params: t.Object({ id: t.String() }),
       response: {
-        200: t.Any(),
-        404: t.Any()
+        200: successSchema(t.Null()),
+        404: errorSchema
       },
       detail: { summary: 'Remove item from wishlist' }
     }
@@ -71,12 +67,14 @@ export const wishlistController = new Elysia({ prefix: '/wishlist', tags: ['Wish
   .get(
     '/count',
     async ({ user }) => {
-      const count = await wishlistService.getWishlistCountForUser(user!.sub as string);
-      return successResponse({ count }, 'Wishlist count retrieved successfully');
+      const wishlist = await wishlistService.getWishlistForUser(user!.sub as string);
+      return successResponse({ count: wishlist.length }, 'Wishlist count retrieved successfully');
     },
     {
       response: {
-        200: t.Any()
+        200: successSchema(t.Object({
+          count: t.Number()
+        }))
       },
       detail: { summary: 'Get total wishlist count' }
     }

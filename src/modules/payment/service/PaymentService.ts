@@ -1,61 +1,47 @@
-import {db} from '../../../config/database';
-import {orders, payments} from '../../../database/schema';
-import {and, desc, eq, gte, lte, sql} from 'drizzle-orm';
-import {CreatePaymentDto, ProcessPaymentDto, UpdatePaymentDto} from '../dto/PaymentDto';
-import {ConflictError, NotFoundError, ValidationError} from '../../../core/errors';
+import { db } from '../../../config/database';
+import { orders, payments } from '../../../database/schema';
+import { and, desc, eq, gte, lte, sql } from 'drizzle-orm';
+import { CreatePaymentDto, ProcessPaymentDto, UpdatePaymentDto } from '../dto/PaymentDto';
+import { ConflictError, NotFoundError, ValidationError } from '../../../core/errors';
+import { BaseService } from '../../../core/base.service';
 
-export class PaymentService {
+export class PaymentService extends BaseService<typeof payments> {
+  constructor() {
+    super(payments);
+  }
+
   async createPayment(createPaymentDto: CreatePaymentDto): Promise<any> {
     const [order] = await db.select().from(orders).where(eq(orders.id, createPaymentDto.orderId)).limit(1);
-    if (!order) {
-      throw new NotFoundError('Order not found');
-    }
+    if (!order) throw new NotFoundError('Order not found');
 
-    const existingPayment = await db.select().from(payments).where(eq(payments.orderId, createPaymentDto.orderId)).limit(1);
-    if (existingPayment.length > 0) {
-      throw new ConflictError('Payment already exists for this order');
-    }
+    const [existingPayment] = await db.select().from(payments).where(eq(payments.orderId, createPaymentDto.orderId)).limit(1);
+    if (existingPayment) throw new ConflictError('Payment already exists for this order');
 
     if (Number(createPaymentDto.amount) !== Number(order.totalAmount)) {
       throw new ValidationError('Payment amount does not match order total');
     }
 
-    const [newPayment] = await db.insert(payments).values({
-      orderId: createPaymentDto.orderId,
-      amount: createPaymentDto.amount.toString(),
+    return this.create({
+      ...createPaymentDto,
       status: 'pending',
-      method: createPaymentDto.method,
-      transactionId: createPaymentDto.transactionId,
-      paymentGateway: createPaymentDto.paymentGateway,
-    }).returning();
-
-    return newPayment;
+    });
   }
 
   async processPayment(processPaymentDto: ProcessPaymentDto): Promise<any> {
     const [order] = await db.select().from(orders).where(eq(orders.id, processPaymentDto.orderId)).limit(1);
-    if (!order) {
-      throw new NotFoundError('Order not found');
-    }
+    if (!order) throw new NotFoundError('Order not found');
 
     let [payment] = await db.select().from(payments).where(eq(payments.orderId, processPaymentDto.orderId)).limit(1);
 
     if (!payment) {
-      [payment] = await db.insert(payments).values({
+      payment = await this.create({
         orderId: processPaymentDto.orderId,
         amount: processPaymentDto.amount.toString(),
         status: 'pending',
         method: processPaymentDto.method,
-      }).returning();
+      });
     } else {
-      [payment] = await db.update(payments)
-        .set({ method: processPaymentDto.method })
-        .where(eq(payments.id, payment.id))
-        .returning();
-    }
-
-    if (!payment) {
-      throw new Error('Failed to create or update payment');
+      payment = await this.update(payment.id, { method: processPaymentDto.method });
     }
 
     this.validatePaymentDetails(processPaymentDto.method, processPaymentDto.paymentDetails);
@@ -63,13 +49,10 @@ export class PaymentService {
     try {
       const paymentResult = await this.simulatePayment(processPaymentDto);
 
-      const [updatedPayment] = await db.update(payments)
-        .set({
-          status: paymentResult.status as any,
-          transactionId: paymentResult.transactionId,
-        })
-        .where(eq(payments.id, payment.id))
-        .returning();
+      const updatedPayment = await this.update(payment.id, {
+        status: paymentResult.status as any,
+        transactionId: paymentResult.transactionId,
+      });
 
       if (paymentResult.status === 'completed') {
         await db.update(orders)
@@ -79,10 +62,7 @@ export class PaymentService {
 
       return updatedPayment;
     } catch (error) {
-      const [failedPayment] = await db.update(payments)
-        .set({ status: 'failed' })
-        .where(eq(payments.id, payment.id))
-        .returning();
+      await this.update(payment.id, { status: 'failed' });
       throw error;
     }
   }
@@ -111,12 +91,12 @@ export class PaymentService {
         } else {
           reject(new Error('Payment processing failed'));
         }
-      }, 1000);
+      }, 500);
     });
   }
 
   async getPaymentById(paymentId: string): Promise<any | null> {
-    const [payment] = await db
+    const [result] = await db
       .select({
         payment: payments,
         order: orders,
@@ -126,7 +106,8 @@ export class PaymentService {
       .where(eq(payments.id, paymentId))
       .limit(1);
 
-    return payment || null;
+    if (!result) return null;
+    return { ...result.payment, order: result.order };
   }
 
   async getPayments(
@@ -140,7 +121,7 @@ export class PaymentService {
       orderId?: string;
       userId?: string;
     } = {}
-  ): Promise<{ payments: any[]; total: number }> {
+  ): Promise<{ items: any[]; total: number }> {
     const offset = (page - 1) * limit;
 
     const conditions = [];
@@ -149,17 +130,20 @@ export class PaymentService {
     if (filters.dateFrom) conditions.push(gte(payments.createdAt, new Date(filters.dateFrom)));
     if (filters.dateTo) conditions.push(lte(payments.createdAt, new Date(filters.dateTo)));
     if (filters.orderId) conditions.push(eq(payments.orderId, filters.orderId));
-    if (filters.userId) conditions.push(eq(orders.userId, filters.userId));
+
+    // If we need to filter by userId, we HAVE to join with orders
+    let query = db
+      .select({ payment: payments, order: orders })
+      .from(payments)
+      .leftJoin(orders, eq(payments.orderId, orders.id));
+
+    if (filters.userId) {
+      conditions.push(eq(orders.userId, filters.userId));
+    }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-    const paymentsResult = await db
-      .select({
-        payment: payments,
-        order: orders,
-      })
-      .from(payments)
-      .leftJoin(orders, eq(payments.orderId, orders.id))
+    const items = await query
       .where(whereClause)
       .orderBy(desc(payments.createdAt))
       .limit(limit)
@@ -174,63 +158,17 @@ export class PaymentService {
     const total = countResult ? Number(countResult.count) : 0;
 
     return {
-      payments: paymentsResult.map(result => ({
-        ...result.payment,
-        order: result.order
-      })),
+      items: items.map(r => ({ ...r.payment, order: r.order })),
       total
     };
   }
 
-  async updatePayment(paymentId: string, updatePaymentDto: UpdatePaymentDto): Promise<any> {
-    const [payment] = await db.select().from(payments).where(eq(payments.id, paymentId)).limit(1);
-    if (!payment) throw new NotFoundError('Payment not found');
-    if (payment.status === 'completed' || payment.status === 'failed') {
-      throw new ConflictError('Cannot update a completed or failed payment');
-    }
-
-    const [updatedPayment] = await db.update(payments)
-      .set(updatePaymentDto as any)
-      .where(eq(payments.id, paymentId))
-      .returning();
-
-    return updatedPayment;
-  }
-
   async refundPayment(paymentId: string): Promise<any> {
-    const [payment] = await db.select().from(payments).where(eq(payments.id, paymentId)).limit(1);
-    if (!payment) throw new NotFoundError('Payment not found');
+    const payment = await this.findByIdOrFail(paymentId, 'Payment');
     if (payment.status !== 'completed') {
       throw new ConflictError('Cannot refund a payment that is not completed');
     }
 
-    const [updatedPayment] = await db.update(payments)
-      .set({ status: 'refunded' })
-      .where(eq(payments.id, paymentId))
-      .returning();
-
-    return updatedPayment;
-  }
-
-  async getPaymentStats(userId?: string) {
-    const conditions = userId ? [eq(orders.userId, userId)] : [];
-    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-
-    const paymentsResult = await db.select({ payment: payments }).from(payments)
-      .leftJoin(orders, eq(payments.orderId, orders.id))
-      .where(whereClause);
-
-    const totalPayments = paymentsResult.length;
-    const successfulPayments = paymentsResult.filter(p => p.payment.status === 'completed').length;
-    const totalRevenue = paymentsResult
-      .filter(p => p.payment.status === 'completed')
-      .reduce((sum, p) => sum + Number(p.payment.amount), 0);
-
-    return {
-      totalPayments,
-      successfulPayments,
-      totalRevenue,
-      successRate: totalPayments > 0 ? (successfulPayments / totalPayments) * 100 : 0,
-    };
+    return this.update(paymentId, { status: 'refunded' });
   }
 }

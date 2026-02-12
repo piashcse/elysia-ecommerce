@@ -1,6 +1,6 @@
 import { Elysia, t } from 'elysia';
 import { UserService } from '../service/UserService';
-import { errorResponse, paginatedResponse, successResponse } from '../../../core/responses';
+import { paginatedResponse, successResponse, successSchema, paginatedSchema, errorSchema } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
 import { UserRole } from '../../../core/roles';
 
@@ -11,26 +11,16 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
   // Get current user profile
   .get(
     '/profile',
-    async ({ user, set }) => {
-      const userData = await userService.findUserById(user!.sub as string);
-      if (!userData) {
-        set.status = 404;
-        return errorResponse('User not found', 'NOT_FOUND', 404);
-      }
-
+    async ({ user }) => {
+      const userData = await userService.findByIdOrFail(user!.sub as string, 'User');
       return successResponse(userData, 'Profile retrieved successfully');
     },
     {
       detail: { summary: 'Get current user profile' },
       isAuth: true,
       response: {
-        200: t.Object({
-          success: t.Boolean(),
-          statusCode: t.Number(),
-          message: t.String(),
-          data: t.Any()
-        }),
-        404: t.Any()
+        200: successSchema(),
+        404: errorSchema
       }
     }
   )
@@ -40,7 +30,6 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
     '/profile',
     async ({ user, body }) => {
       const updatedUser = await userService.updateUser(user!.sub as string, body);
-
       return successResponse(updatedUser, 'Profile updated successfully');
     },
     {
@@ -51,9 +40,9 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
       }),
       isAuth: true,
       response: {
-        200: t.Any(),
-        400: t.Any(),
-        422: t.Any()
+        200: successSchema(),
+        400: errorSchema,
+        422: errorSchema
       },
       detail: { summary: 'Update current user profile' }
     }
@@ -63,12 +52,10 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
   .put(
     '/change-password',
     async ({ user, body }) => {
-      // Body is typed by schema, no need to cast to any if we trust inference or interface
-      const { currentPassword, newPassword } = body;
       const updatedUser = await userService.changePassword(
         user!.sub as string,
-        currentPassword,
-        newPassword
+        body.currentPassword,
+        body.newPassword
       );
 
       return successResponse(updatedUser, 'Password changed successfully');
@@ -80,9 +67,9 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
       }),
       isAuth: true,
       response: {
-        200: t.Any(),
-        400: t.Any(),
-        401: t.Any()
+        200: successSchema(),
+        400: errorSchema,
+        401: errorSchema
       },
       detail: { summary: 'Change user password' }
     }
@@ -92,30 +79,25 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
   .get(
     '/',
     async ({ query }) => {
-      const page = query.page ? parseInt(query.page) : 1;
-      const limit = query.limit ? parseInt(query.limit) : 10;
+      const page = query.page || 1;
+      const limit = query.limit || 10;
+      const { items, total } = await userService.findAll(page, limit);
 
-      const { users, total } = await userService.getAllUsers(page, limit);
-
-      return paginatedResponse(
-        users,
-        {
-          page,
-          limit,
-          total,
-          totalPages: Math.ceil(total / limit),
-        },
-        'Users retrieved successfully'
-      );
+      return paginatedResponse(items, {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      }, 'Users retrieved successfully');
     },
     {
       query: t.Object({
-        page: t.Optional(t.String()),
-        limit: t.Optional(t.String()),
+        page: t.Optional(t.Numeric()),
+        limit: t.Optional(t.Numeric()),
       }),
       hasRole: UserRole.ADMIN,
       response: {
-        200: t.Any()
+        200: paginatedSchema()
       },
       detail: { summary: 'Get all users (Admin only)' }
     }
@@ -124,26 +106,17 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
   // Get user by ID (admin only or self)
   .get(
     '/:id',
-    async ({ params, set }) => {
-      const { id } = params;
-
-      const userData = await userService.findUserById(id);
-      if (!userData) {
-        set.status = 404;
-        return errorResponse('User not found', 'NOT_FOUND', 404);
-      }
-
+    async ({ params }) => {
+      const userData = await userService.findByIdOrFail(params.id, 'User');
       return successResponse(userData, 'User retrieved successfully');
     },
     {
-      params: t.Object({
-        id: t.String()
-      }),
+      params: t.Object({ id: t.String() }),
       isOwner: 'id',
       response: {
-        200: t.Any(),
-        403: t.Any(),
-        404: t.Any()
+        200: successSchema(),
+        403: errorSchema,
+        404: errorSchema
       },
       detail: { summary: 'Get user by ID' }
     }
@@ -153,15 +126,11 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
   .put(
     '/:id',
     async ({ params, body }) => {
-      const { id } = params;
-      const updatedUser = await userService.updateUser(id, body);
-
+      const updatedUser = await userService.updateUser(params.id, body);
       return successResponse(updatedUser, 'User updated successfully');
     },
     {
-      params: t.Object({
-        id: t.String()
-      }),
+      params: t.Object({ id: t.String() }),
       body: t.Object({
         email: t.Optional(t.String({ format: 'email' })),
         firstName: t.Optional(t.String()),
@@ -169,9 +138,9 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
       }),
       isOwner: 'id',
       response: {
-        200: t.Any(),
-        400: t.Any(),
-        404: t.Any()
+        200: successSchema(),
+        400: errorSchema,
+        404: errorSchema
       },
       detail: { summary: 'Update user by ID (Admin or Self)' }
     }
@@ -181,20 +150,15 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
   .delete(
     '/:id',
     async ({ params }) => {
-      const { id } = params;
-
-      await userService.deleteUser(id);
-
+      await userService.delete(params.id);
       return successResponse(null, 'User deleted successfully');
     },
     {
-      params: t.Object({
-        id: t.String()
-      }),
+      params: t.Object({ id: t.String() }),
       isOwner: 'id',
       response: {
-        200: t.Any(),
-        404: t.Any()
+        200: successSchema(t.Null()),
+        404: errorSchema
       },
       detail: { summary: 'Delete user by ID (Admin or Self)' }
     }

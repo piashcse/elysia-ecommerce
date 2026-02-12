@@ -1,6 +1,6 @@
 import { Elysia, t } from 'elysia';
 import { CouponService } from '../service/CouponService';
-import { errorResponse, paginatedResponse, successResponse } from '../../../core/responses';
+import { paginatedResponse, successResponse, successSchema, paginatedSchema, errorSchema } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
 import { UserRole } from '../../../core/roles';
 
@@ -12,13 +12,11 @@ export const couponController = new Elysia({ prefix: '/coupons', tags: ['Coupon'
   .post(
     '/',
     async ({ body, set }) => {
-      // DTO likely expects startDate/endDate as Date objects?
-      const payload: any = { ...body };
-      if (payload.startDate) payload.startDate = new Date(payload.startDate);
-      if (payload.endDate) payload.endDate = new Date(payload.endDate);
-
-      const coupon = await couponService.createCoupon(payload);
-
+      const coupon = await couponService.createCoupon({
+        ...body,
+        startDate: new Date(body.startDate),
+        endDate: new Date(body.endDate),
+      } as any);
       set.status = 201;
       return successResponse(coupon, 'Coupon created successfully', 201);
     },
@@ -30,89 +28,65 @@ export const couponController = new Elysia({ prefix: '/coupons', tags: ['Coupon'
         discountValue: t.Number({ minimum: 0 }),
         minOrderAmount: t.Optional(t.Number({ minimum: 0 })),
         maxDiscountAmount: t.Optional(t.Number({ minimum: 0 })),
-        usageLimit: t.Optional(t.Number({ minimum: 0 })),
-        isActive: t.Optional(t.Boolean()),
-        startDate: t.String(), // ISO Date string
-        endDate: t.String(),   // ISO Date string
+        startDate: t.String(),
+        endDate: t.String(),
+        usageLimit: t.Optional(t.Number({ minimum: 1 })),
+        isActive: t.Optional(t.Boolean())
       }),
-      response: { 201: t.Any(), 400: t.Any(), 422: t.Any() },
+      response: {
+        201: successSchema(),
+        400: errorSchema,
+        422: errorSchema
+      },
       hasRole: UserRole.ADMIN,
       detail: { summary: 'Create a new coupon (Admin only)' }
     }
   )
 
-  // Get all coupons
+  // Get all coupons (admin only)
   .get(
     '/',
     async ({ query }) => {
-      const page = query.page ? parseInt(query.page) : 1;
-      const limit = query.limit ? parseInt(query.limit) : 10;
+      const page = query.page || 1;
+      const limit = query.limit || 10;
+      const { items, total } = await couponService.findAll(page, limit);
 
-      const { coupons, total } = await couponService.getAllCoupons(page, limit);
-
-      return paginatedResponse(
-        coupons,
-        {
-          page,
-          limit,
-          total,
-          totalPages: Math.ceil(total / limit),
-        },
-        'Coupons retrieved successfully'
-      );
+      return paginatedResponse(items, {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      }, 'Coupons retrieved successfully');
     },
     {
       query: t.Object({
-        page: t.Optional(t.String()),
-        limit: t.Optional(t.String()),
+        page: t.Optional(t.Numeric()),
+        limit: t.Optional(t.Numeric()),
       }),
-      response: { 200: t.Any() },
-      detail: { summary: 'Get all coupons' }
-    }
-  )
-
-  // Get coupon by ID
-  .get(
-    '/:id',
-    async ({ params, set }) => {
-      const { id } = params;
-
-      const coupon = await couponService.findCouponById(id);
-      if (!coupon) {
-        set.status = 404;
-        return errorResponse('Coupon not found', 'NOT_FOUND', 404);
-      }
-
-      return successResponse(coupon, 'Coupon retrieved successfully', 200);
-    },
-    {
-      params: t.Object({
-        id: t.String()
-      }),
-      response: { 200: t.Any(), 404: t.Any() },
-      detail: { summary: 'Get coupon by ID' }
+      hasRole: UserRole.ADMIN,
+      response: {
+        200: paginatedSchema()
+      },
+      detail: { summary: 'Get all coupons (Admin only)' }
     }
   )
 
   // Get coupon by code
   .get(
     '/code/:code',
-    async ({ params, set }) => {
-      const { code } = params;
-
-      const coupon = await couponService.getCouponByCode(code);
+    async ({ params }) => {
+      const coupon = await couponService.getCouponByCode(params.code);
       if (!coupon) {
-        set.status = 404;
-        return errorResponse('Coupon not found', 'NOT_FOUND', 404);
+        return successResponse(null, 'Coupon not found', 404);
       }
-
-      return successResponse(coupon, 'Coupon retrieved successfully', 200);
+      return successResponse(coupon, 'Coupon retrieved successfully');
     },
     {
-      params: t.Object({
-        code: t.String()
-      }),
-      response: { 200: t.Any(), 404: t.Any() },
+      params: t.Object({ code: t.String() }),
+      response: {
+        200: successSchema(),
+        404: successSchema(t.Null())
+      },
       detail: { summary: 'Get coupon by code' }
     }
   )
@@ -121,20 +95,15 @@ export const couponController = new Elysia({ prefix: '/coupons', tags: ['Coupon'
   .put(
     '/:id',
     async ({ params, body }) => {
-      const { id } = params;
+      const updateData = { ...body };
+      if (body.startDate) (updateData as any).startDate = new Date(body.startDate);
+      if (body.endDate) (updateData as any).endDate = new Date(body.endDate);
 
-      const payload: any = { ...body };
-      if (payload.startDate) payload.startDate = new Date(payload.startDate);
-      if (payload.endDate) payload.endDate = new Date(payload.endDate);
-
-      const updatedCoupon = await couponService.updateCoupon(id, payload);
-
-      return successResponse(updatedCoupon, 'Coupon updated successfully', 200);
+      const updatedCoupon = await couponService.updateCoupon(params.id, updateData as any);
+      return successResponse(updatedCoupon, 'Coupon updated successfully');
     },
     {
-      params: t.Object({
-        id: t.String()
-      }),
+      params: t.Object({ id: t.String() }),
       body: t.Object({
         code: t.Optional(t.String()),
         description: t.Optional(t.String()),
@@ -142,12 +111,16 @@ export const couponController = new Elysia({ prefix: '/coupons', tags: ['Coupon'
         discountValue: t.Optional(t.Number()),
         minOrderAmount: t.Optional(t.Number()),
         maxDiscountAmount: t.Optional(t.Number()),
-        usageLimit: t.Optional(t.Number()),
-        isActive: t.Optional(t.Boolean()),
         startDate: t.Optional(t.String()),
         endDate: t.Optional(t.String()),
+        usageLimit: t.Optional(t.Number()),
+        isActive: t.Optional(t.Boolean())
       }),
-      response: { 200: t.Any(), 400: t.Any(), 404: t.Any() },
+      response: {
+        200: successSchema(),
+        400: errorSchema,
+        404: errorSchema
+      },
       hasRole: UserRole.ADMIN,
       detail: { summary: 'Update coupon by ID (Admin only)' }
     }
@@ -157,17 +130,15 @@ export const couponController = new Elysia({ prefix: '/coupons', tags: ['Coupon'
   .delete(
     '/:id',
     async ({ params }) => {
-      const { id } = params;
-
-      await couponService.deleteCoupon(id);
-
-      return successResponse(null, 'Coupon deleted successfully', 200);
+      await couponService.delete(params.id);
+      return successResponse(null, 'Coupon deleted successfully');
     },
     {
-      params: t.Object({
-        id: t.String()
-      }),
-      response: { 200: t.Any(), 404: t.Any() },
+      params: t.Object({ id: t.String() }),
+      response: {
+        200: successSchema(t.Null()),
+        404: errorSchema
+      },
       hasRole: UserRole.ADMIN,
       detail: { summary: 'Delete coupon by ID (Admin only)' }
     }

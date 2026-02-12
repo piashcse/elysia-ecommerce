@@ -1,6 +1,6 @@
 import { Elysia, t } from 'elysia';
 import { CategoryService } from '../service/CategoryService';
-import { successResponse, paginatedResponse } from '../../../core/responses';
+import { paginatedResponse, successResponse, successSchema, paginatedSchema, errorSchema } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
 import { UserRole } from '../../../core/roles';
 
@@ -13,7 +13,6 @@ export const categoryController = new Elysia({ prefix: '/categories', tags: ['Ca
     '/',
     async ({ body, set }) => {
       const category = await categoryService.createCategory(body);
-
       set.status = 201;
       return successResponse(category, 'Category created successfully', 201);
     },
@@ -24,74 +23,60 @@ export const categoryController = new Elysia({ prefix: '/categories', tags: ['Ca
         isActive: t.Optional(t.Boolean()),
       }),
       response: {
-        201: t.Any(),
-        400: t.Any(),
-        422: t.Any()
+        201: successSchema(),
+        400: errorSchema,
+        409: errorSchema,
+        422: errorSchema
       },
       hasRole: UserRole.ADMIN,
       detail: { summary: 'Create a new category (Admin only)' }
     }
   )
 
-  // Get all categories with filters and pagination
+  // Get all categories
   .get(
     '/',
     async ({ query }) => {
-      const page = query.page ? parseInt(query.page) : 1;
-      const limit = query.limit ? parseInt(query.limit) : 10;
-
+      const page = query.page || 1;
+      const limit = query.limit || 10;
       const filters = {
         search: query.search,
-        isActive: query.isActive === 'true',
+        isActive: query.isActive,
       };
 
-      const { categories, total } = await categoryService.getAllCategories(page, limit, filters);
+      const { items, total } = await categoryService.findAll(page, limit);
 
-      return paginatedResponse(
-        categories,
-        {
-          page,
-          limit,
-          total,
-          totalPages: Math.ceil(total / limit),
-        },
-        'Categories retrieved successfully'
-      );
+      return paginatedResponse(items, {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      }, 'Categories retrieved successfully');
     },
     {
       query: t.Object({
+        page: t.Optional(t.Numeric()),
+        limit: t.Optional(t.Numeric()),
         search: t.Optional(t.String()),
-        isActive: t.Optional(t.String()),
-        page: t.Optional(t.String()),
-        limit: t.Optional(t.String()),
+        isActive: t.Optional(t.Boolean()),
       }),
-      response: {
-        200: t.Any()
-      },
-      detail: { summary: 'Get all categories' }
+      response: { 200: paginatedSchema() },
+      detail: { summary: 'Get all categories with pagination' }
     }
   )
 
   // Get category by ID
   .get(
     '/:id',
-    async ({ params, set }) => {
-      const { id } = params;
-      const category = await categoryService.findCategoryById(id);
-      if (!category) {
-        set.status = 404;
-        return successResponse(null, 'Category not found', 404);
-      }
-
-      return successResponse(category, 'Category retrieved successfully', 200);
+    async ({ params }) => {
+      const category = await categoryService.findByIdOrFail(params.id, 'Category');
+      return successResponse(category, 'Category retrieved successfully');
     },
     {
-      params: t.Object({
-        id: t.String()
-      }),
+      params: t.Object({ id: t.String() }),
       response: {
-        200: t.Any(),
-        404: t.Any()
+        200: successSchema(),
+        404: errorSchema
       },
       detail: { summary: 'Get category by ID' }
     }
@@ -101,25 +86,22 @@ export const categoryController = new Elysia({ prefix: '/categories', tags: ['Ca
   .put(
     '/:id',
     async ({ params, body }) => {
-      const { id } = params;
-
-      const updatedCategory = await categoryService.updateCategory(id, body);
-
-      return successResponse(updatedCategory, 'Category updated successfully', 200);
+      const updatedCategory = await categoryService.updateCategory(params.id, body);
+      return successResponse(updatedCategory, 'Category updated successfully');
     },
     {
-      params: t.Object({
-        id: t.String()
-      }),
+      params: t.Object({ id: t.String() }),
       body: t.Object({
         name: t.Optional(t.String()),
         description: t.Optional(t.String()),
         isActive: t.Optional(t.Boolean()),
       }),
       response: {
-        200: t.Any(),
-        400: t.Any(),
-        404: t.Any()
+        200: successSchema(),
+        400: errorSchema,
+        404: errorSchema,
+        409: errorSchema,
+        422: errorSchema
       },
       hasRole: UserRole.ADMIN,
       detail: { summary: 'Update category by ID (Admin only)' }
@@ -130,20 +112,41 @@ export const categoryController = new Elysia({ prefix: '/categories', tags: ['Ca
   .delete(
     '/:id',
     async ({ params }) => {
-      const { id } = params;
-      await categoryService.deleteCategory(id);
-
-      return successResponse(null, 'Category deleted successfully', 200);
+      await categoryService.deleteCategory(params.id);
+      return successResponse(null, 'Category deleted successfully');
     },
     {
-      params: t.Object({
-        id: t.String()
-      }),
-      hasRole: UserRole.ADMIN,
+      params: t.Object({ id: t.String() }),
       response: {
-        200: t.Any(),
-        404: t.Any()
+        200: successSchema(t.Null()),
+        404: errorSchema,
+        400: errorSchema
       },
+      hasRole: UserRole.ADMIN,
       detail: { summary: 'Delete category by ID (Admin only)' }
+    }
+  )
+
+  // Get category with its products
+  .get(
+    '/:id/products',
+    async ({ params, query }) => {
+      const page = query.page || 1;
+      const limit = query.limit || 10;
+      const result = await categoryService.getCategoryWithProducts(params.id, page, limit);
+
+      return successResponse(result, 'Category products retrieved successfully');
+    },
+    {
+      params: t.Object({ id: t.String() }),
+      query: t.Object({
+        page: t.Optional(t.Numeric()),
+        limit: t.Optional(t.Numeric()),
+      }),
+      response: {
+        200: successSchema(),
+        404: errorSchema
+      },
+      detail: { summary: 'Get products in a specific category' }
     }
   );
