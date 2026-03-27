@@ -18,7 +18,7 @@ export const errorHandler = new Elysia({ name: 'errorHandler' })
 
     // Set appropriate status code
     if (code === 'VALIDATION' || code === 'PARSE') {
-      set.status = 400;
+      set.status = 422; // Standardized to 422 for validation errors
       let message = error.message;
       let details = error;
 
@@ -34,7 +34,7 @@ export const errorHandler = new Elysia({ name: 'errorHandler' })
       return errorResponse(
         message,
         code.toString(),
-        400,
+        422,
         details
       );
     }

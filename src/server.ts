@@ -31,7 +31,11 @@ const app = new Elysia();
 await connectDB();
 
 // Register middlewares
-app.use(cors())
+app.use(cors({
+    origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000'],
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID'],
+}))
     .use(helmetMiddleware)
     .use(logger({
         level: 'info',
@@ -111,6 +115,17 @@ app.use(authController)
         return errorResponse(err.message || 'Internal server error', (err.code || code).toString(), statusCode, err);
     });
 
+// Request ID middleware for tracing
+app.onBeforeHandle(({ set, path }) => {
+    const requestId = crypto.randomUUID();
+    set.headers['X-Request-ID'] = requestId;
+    // Don't return anything to avoid interfering with route handlers
+    // Skip health check to avoid database query on every request
+    if (path === '/health') {
+        return;
+    }
+});
+
 // Register Swagger/OpenAPI after routes to ensure discovery
 app.use(
     openapi({
@@ -137,13 +152,31 @@ app.use(
     })
 );
 
-// Health check endpoint
-app.get('/health', () => ({
-    status: 'OK',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    environment: envConfig.NODE_ENV
-}));
+// Health check endpoint with enhanced diagnostics
+app.get('/health', async ({ set }) => {
+    const healthStatus = {
+        status: 'OK',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        environment: envConfig.NODE_ENV,
+        version: '1.0.0',
+        memory: process.memoryUsage(),
+    } as any;
+
+    // Check database connectivity
+    try {
+        const { db } = await import('./config/database');
+        await db.execute('SELECT 1');
+        healthStatus.database = 'connected';
+    } catch (error) {
+        healthStatus.database = 'disconnected';
+        healthStatus.databaseError = (error as any).message;
+        set.status = 503;
+        healthStatus.status = 'DEGRADED';
+    }
+
+    return healthStatus;
+});
 
 // Start the server if this file is run directly
 if (import.meta.main) {

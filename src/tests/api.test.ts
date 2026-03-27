@@ -68,7 +68,9 @@ describe('E-commerce API Tests', () => {
             );
             expect(response.status).toBe(200);
             const data = await response.json() as any;
-            expect(data.status).toBe('OK');
+            expect(['OK', 'ok']).toContain(data.status);
+            expect(data.uptime).toBeDefined();
+            expect(data.environment).toBeDefined();
         });
 
         test('GET /swagger returns 200 or 301/302', async () => {

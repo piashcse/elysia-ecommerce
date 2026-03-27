@@ -1,4 +1,4 @@
-import {boolean, integer, pgTable, timestamp, uuid, varchar} from 'drizzle-orm/pg-core';
+import {boolean, integer, pgTable, timestamp, uuid, varchar, index} from 'drizzle-orm/pg-core';
 import {products} from './product';
 
 export const productImages = pgTable('product_images', {
@@ -9,4 +9,7 @@ export const productImages = pgTable('product_images', {
     displayOrder: integer('display_order').default(0).notNull(),
     isPrimary: boolean('is_primary').default(false).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => ({
+    productIdx: index('product_images_product_idx').on(table.productId),
+    primaryIdx: index('product_images_primary_idx').on(table.productId, table.isPrimary),
+}));

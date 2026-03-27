@@ -3,8 +3,29 @@ import { PaymentService } from '../service/PaymentService';
 import { errorResponse, paginatedResponse, successResponse, successSchema, paginatedSchema, errorSchema } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
 import { UserRole } from '../../../core/roles';
+import { PAGINATION } from '../../../core/constants';
 
 const paymentService = new PaymentService();
+
+// Payment details validation schemas
+const cardDetailsSchema = t.Object({
+  cardNumber: t.Optional(t.String({ pattern: '^[0-9]{13,19}$' })),
+  cardExpiry: t.Optional(t.String({ pattern: '^(0[1-9]|1[0-2])\/[0-9]{2}$' })),
+  cardCvv: t.Optional(t.String({ pattern: '^[0-9]{3,4}$' })),
+  cardHolderName: t.Optional(t.String({ minLength: 1, maxLength: 100 })),
+});
+
+const paypalDetailsSchema = t.Object({
+  paypalEmail: t.Optional(t.String({ format: 'email', maxLength: 255 })),
+});
+
+const paymentMethodSchema = t.Union([
+  t.Literal('credit_card'),
+  t.Literal('debit_card'),
+  t.Literal('paypal'),
+  t.Literal('bank_transfer'),
+  t.Literal('cash_on_delivery')
+]);
 
 export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payment'] })
   .use(authPlugin)
@@ -22,15 +43,9 @@ export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payme
     {
       body: t.Object({
         orderId: t.String(),
-        method: t.Union([
-          t.Literal('credit_card'),
-          t.Literal('debit_card'),
-          t.Literal('paypal'),
-          t.Literal('bank_transfer'),
-          t.Literal('cash_on_delivery')
-        ]),
-        amount: t.Number(),
-        metadata: t.Optional(t.Record(t.String(), t.Any()))
+        method: paymentMethodSchema,
+        amount: t.Number({ minimum: 0.01, maximum: 999999.99 }),
+        metadata: t.Optional(t.Record(t.String(), t.Any())),
       }),
       response: {
         201: successSchema(),
@@ -51,21 +66,9 @@ export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payme
     {
       body: t.Object({
         orderId: t.String(),
-        method: t.Union([
-          t.Literal('credit_card'),
-          t.Literal('debit_card'),
-          t.Literal('paypal'),
-          t.Literal('bank_transfer'),
-          t.Literal('cash_on_delivery')
-        ]),
-        amount: t.Number(),
-        paymentDetails: t.Object({
-          cardNumber: t.Optional(t.String()),
-          cardExpiry: t.Optional(t.String()),
-          cardCvv: t.Optional(t.String()),
-          cardHolderName: t.Optional(t.String()),
-          paypalEmail: t.Optional(t.String())
-        })
+        method: paymentMethodSchema,
+        amount: t.Number({ minimum: 0.01, maximum: 999999.99 }),
+        paymentDetails: t.Union([cardDetailsSchema, paypalDetailsSchema]),
       }),
       response: {
         200: successSchema(),
@@ -81,8 +84,8 @@ export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payme
     '/',
     async ({ query, user }) => {
       const isAdmin = user?.role === UserRole.ADMIN;
-      const page = query.page || 1;
-      const limit = query.limit || 10;
+      const page = query.page || PAGINATION.DEFAULT_PAGE;
+      const limit = Math.min(query.limit || PAGINATION.DEFAULT_LIMIT, PAGINATION.MAX_LIMIT);
 
       const filters = {
         status: query.status,
@@ -108,10 +111,10 @@ export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payme
     },
     {
       query: t.Object({
-        page: t.Optional(t.Numeric()),
-        limit: t.Optional(t.Numeric()),
+        page: t.Optional(t.Numeric({ minimum: 1 })),
+        limit: t.Optional(t.Numeric({ minimum: 1, maximum: PAGINATION.MAX_LIMIT })),
         status: t.Optional(t.String()),
-        method: t.Optional(t.String()),
+        method: t.Optional(paymentMethodSchema),
         dateFrom: t.Optional(t.String()),
         dateTo: t.Optional(t.String()),
         orderId: t.Optional(t.String()),

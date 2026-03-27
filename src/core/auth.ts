@@ -1,17 +1,9 @@
 import {Elysia} from 'elysia';
-import {jwt} from '@elysiajs/jwt';
-import envConfig from '../config/env';
 import {errorResponse} from './responses';
 import {JwtPayload} from '../utils/jwt';
 import { UserRole } from './roles';
 
 export const authPlugin = new Elysia({ name: 'auth-plugin' })
-    .use(
-        jwt({
-            name: 'jwt',
-            secret: envConfig.JWT_SECRET,
-        })
-    )
     .derive({ as: 'global' }, async ({ jwt, headers }): Promise<{ user: JwtPayload | null }> => {
         const authHeader = headers['authorization'];
         if (!authHeader || !authHeader.startsWith('Bearer ')) {

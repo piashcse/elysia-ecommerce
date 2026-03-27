@@ -1,4 +1,4 @@
-import {pgTable, text, timestamp, uuid, varchar} from 'drizzle-orm/pg-core';
+import {pgTable, text, timestamp, uuid, varchar, index} from 'drizzle-orm/pg-core';
 
 export const categories = pgTable('categories', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -6,4 +6,6 @@ export const categories = pgTable('categories', {
   description: text('description'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => ({
+  nameIdx: index('categories_name_idx').on(table.name),
+}));

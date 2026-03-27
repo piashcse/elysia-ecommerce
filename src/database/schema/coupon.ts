@@ -1,4 +1,6 @@
-import {boolean, integer, numeric, pgEnum, pgTable, text, timestamp, uuid, varchar} from 'drizzle-orm/pg-core';
+import {boolean, integer, numeric, pgEnum, pgTable, text, timestamp, uuid, varchar, index} from 'drizzle-orm/pg-core';
+import {users} from './user';
+import {orders} from './order';
 
 export const discountTypeEnum = pgEnum('discount_type', ['percentage', 'fixed']);
 
@@ -17,12 +19,19 @@ export const coupons = pgTable('coupons', {
     endDate: timestamp('end_date', { withTimezone: true }).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => ({
+    codeIdx: index('coupons_code_idx').on(table.code),
+    activeIdx: index('coupons_active_idx').on(table.isActive, table.startDate, table.endDate),
+}));
 
 export const couponUsage = pgTable('coupon_usage', {
     id: uuid('id').defaultRandom().primaryKey(),
     couponId: uuid('coupon_id').notNull().references(() => coupons.id, { onDelete: 'cascade' }),
-    userId: uuid('user_id').notNull(),
-    orderId: uuid('order_id'),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    orderId: uuid('order_id').references(() => orders.id, { onDelete: 'set null' }),
     usedAt: timestamp('used_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => ({
+    couponIdx: index('coupon_usage_coupon_idx').on(table.couponId),
+    userIdx: index('coupon_usage_user_idx').on(table.userId),
+    orderIdx: index('coupon_usage_order_idx').on(table.orderId),
+}));
