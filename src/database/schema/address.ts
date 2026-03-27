@@ -1,4 +1,4 @@
-import {boolean, pgEnum, pgTable, timestamp, uuid, varchar} from 'drizzle-orm/pg-core';
+import {boolean, pgEnum, pgTable, timestamp, uuid, varchar, index} from 'drizzle-orm/pg-core';
 import {users} from './user';
 
 export const addressTypeEnum = pgEnum('address_type', ['shipping', 'billing', 'both']);
@@ -18,4 +18,7 @@ export const addresses = pgTable('addresses', {
     isDefault: boolean('is_default').default(false).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => ({
+    userIdx: index('addresses_user_idx').on(table.userId),
+    userDefaultIdx: index('addresses_user_default_idx').on(table.userId, table.isDefault),
+}));

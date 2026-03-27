@@ -1,7 +1,9 @@
 import 'dotenv/config';
 
-// For debugging - log environment variables
-console.log('Raw process.env.DB_NAME:', process.env.DB_NAME);
+// For debugging - log environment variables (development only)
+if (process.env.NODE_ENV === 'development') {
+  console.log('Raw process.env.DB_NAME:', process.env.DB_NAME);
+}
 
 // Environment configuration loader
 interface EnvironmentConfig {
@@ -52,6 +54,12 @@ const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
 
 if (missingEnvVars.length > 0) {
   console.error(`Missing required environment variables: ${missingEnvVars.join(', ')}`);
+  process.exit(1);
+}
+
+// Security warning for weak JWT secret in production
+if (process.env.NODE_ENV === 'production' && process.env.JWT_SECRET === defaults.JWT_SECRET) {
+  console.error('ERROR: Default JWT_SECRET detected in production. Please set a strong, random secret.');
   process.exit(1);
 }
 

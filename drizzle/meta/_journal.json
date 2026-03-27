@@ -15,6 +15,20 @@
       "when": 1767342318726,
       "tag": "0001_gorgeous_orphan",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1774542211095,
+      "tag": "0002_worried_husk",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1774605343669,
+      "tag": "0003_naive_gamora",
+      "breakpoints": true
     }
   ]
 }

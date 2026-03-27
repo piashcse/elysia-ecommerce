@@ -1,9 +1,10 @@
 # Elysia E-commerce
-![Elysia](https://img.shields.io/badge/Elysia-1.4.16-6E56CF?style=flat)
-![Bun](https://img.shields.io/badge/Bun-1.3.3-black?logo=bun&style=flat)
+![Elysia](https://img.shields.io/badge/Elysia-1.4.28-6E56CF?style=flat)
+![Bun](https://img.shields.io/badge/Bun-1.3.11-black?logo=bun&style=flat)
 ![Drizzle](https://img.shields.io/badge/Drizzle-0.45.1-0C4A6E?style=flat)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-8.16.3-336791?style=flat)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-8.20.0-336791?style=flat)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9.3-3178C6?style=flat)
+![Zod](https://img.shields.io/badge/Zod-4.3.6-3E67B1?style=flat)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg?style=flat)](https://www.apache.org/licenses/LICENSE-2.0)
 <a href="https://github.com/piashcse">
   <img alt="Author" src="https://img.shields.io/static/v1?label=GitHub&message=piashcse&color=C51162&style=flat"/>
@@ -47,19 +48,19 @@ This project adheres to modern software architecture principles to ensure it is 
 
 ## 🛠 Tech Stack
 
--   **Runtime**: [Bun](https://bun.sh/) - Fast JavaScript runtime with built-in bundler, transpiler, and package manager
--   **Framework**: [Elysia.js](https://elysiajs.com/) - Fast, friendly, and type-safe web framework for Bun
--   **Database**: [PostgreSQL](https://www.postgresql.org/) - Powerful, open-source object-relational database system
--   **ORM**: [Drizzle ORM](https://orm.drizzle.team/) - TypeScript ORM with a focus on type safety and runtime efficiency
--   **Authentication**: [JWT](https://jwt.io/) (JSON Web Tokens) - Secure token-based authentication system
+-   **Runtime**: [Bun](https://bun.sh/) 1.3.11 - Fast JavaScript runtime with built-in bundler, transpiler, and package manager
+-   **Framework**: [Elysia.js](https://elysiajs.com/) 1.4.28 - Fast, friendly, and type-safe web framework for Bun
+-   **Database**: [PostgreSQL](https://www.postgresql.org/) 8.20.0 - Powerful, open-source object-relational database system
+-   **ORM**: [Drizzle ORM](https://orm.drizzle.team/) 0.45.1 - TypeScript ORM with a focus on type safety and runtime efficiency
+-   **Authentication**: [JWT](https://jwt.io/) 1.4.1 (JSON Web Tokens) - Secure token-based authentication system
 -   **API Documentation**: [Swagger UI](https://swagger.io/tools/swagger-ui/) - Interactive API documentation interface
--   **Validation**: [Zod](https://zod.dev/) - TypeScript-first schema validation with static type inference
--   **Security**: [Helmet](https://helmetjs.github.io/), [CORS](https://github.com/elysiajs/@elysiajs/cors), [Rate Limiting](https://www.npmjs.com/package/rate-limiter-flexible) - Comprehensive security middleware
--   **Password Hashing**: [bcryptjs](https://www.npmjs.com/package/bcryptjs) - Robust password hashing library
--   **Environment Variables**: [dotenv](https://www.npmjs.com/package/dotenv) - Zero-dependency module to load environment variables
+-   **Validation**: [Zod](https://zod.dev/) 4.3.6 - TypeScript-first schema validation with static type inference
+-   **Security**: [Helmet](https://helmetjs.github.io/), [CORS](https://github.com/elysiajs/@elysiajs/cors), [Rate Limiting](https://www.npmjs.com/package/rate-limiter-flexible) 9.1.1 - Comprehensive security middleware
+-   **Password Hashing**: [bcryptjs](https://www.npmjs.com/package/bcryptjs) 3.0.3 - Robust password hashing library
+-   **Environment Variables**: [dotenv](https://www.npmjs.com/package/dotenv) 17.3.1 - Zero-dependency module to load environment variables
 -   **Logging**: [@bogeychan/elysia-logger](https://github.com/BogeyChan/elysia-logger) - Elysia.js logger plugin for structured logging
 -   **Data Transformation**: [class-transformer](https://www.npmjs.com/package/class-transformer) - Transform plain objects to class instances
--   **Data Validation**: [class-validator](https://www.npmjs.com/package/class-validator) - Decorator-based validation library
+-   **Data Validation**: [class-validator](https://www.npmjs.com/package/class-validator) 0.14.4 - Decorator-based validation library
 
 ## 🗂️ Project Structure
 

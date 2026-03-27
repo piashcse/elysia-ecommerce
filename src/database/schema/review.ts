@@ -1,4 +1,4 @@
-import {boolean, integer, pgTable, text, timestamp, uuid, varchar} from 'drizzle-orm/pg-core';
+import {boolean, integer, pgTable, text, timestamp, uuid, varchar, index} from 'drizzle-orm/pg-core';
 import {products} from './product';
 import {users} from './user';
 
@@ -14,4 +14,9 @@ export const reviews = pgTable('reviews', {
     isApproved: boolean('is_approved').default(false).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => ({
+    productIdx: index('reviews_product_idx').on(table.productId),
+    userIdx: index('reviews_user_idx').on(table.userId),
+    ratingIdx: index('reviews_rating_idx').on(table.rating),
+    approvedIdx: index('reviews_approved_idx').on(table.isApproved),
+}));

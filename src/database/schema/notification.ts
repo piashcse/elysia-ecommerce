@@ -1,4 +1,4 @@
-import {boolean, pgEnum, pgTable, text, timestamp, uuid, varchar} from 'drizzle-orm/pg-core';
+import {boolean, pgEnum, pgTable, text, timestamp, uuid, varchar, index} from 'drizzle-orm/pg-core';
 import {users} from './user';
 
 export const notificationTypeEnum = pgEnum('notification_type', [
@@ -23,4 +23,8 @@ export const notifications = pgTable('notifications', {
     link: varchar('link', { length: 500 }),
     isRead: boolean('is_read').default(false).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => ({
+    userIdx: index('notifications_user_idx').on(table.userId),
+    userReadIdx: index('notifications_user_read_idx').on(table.userId, table.isRead),
+    typeIdx: index('notifications_type_idx').on(table.type),
+}));

@@ -4,8 +4,20 @@ import { errorResponse, paginatedResponse, successResponse, successSchema, pagin
 import { authPlugin } from '../../../core/auth';
 import { UserRole } from '../../../core/roles';
 import { NotFoundError } from '../../../core/errors';
+import { PAGINATION } from '../../../core/constants';
 
 const orderService = new OrderService();
+
+// Address validation schema
+const addressSchema = t.Object({
+  firstName: t.String({ minLength: 1, maxLength: 100 }),
+  lastName: t.String({ minLength: 1, maxLength: 100 }),
+  address: t.String({ minLength: 1, maxLength: 500 }),
+  city: t.String({ minLength: 1, maxLength: 100 }),
+  state: t.String({ minLength: 1, maxLength: 100 }),
+  zipCode: t.String({ minLength: 1, maxLength: 20 }),
+  country: t.String({ minLength: 1, maxLength: 100 }),
+});
 
 export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] })
   .use(authPlugin)
@@ -25,28 +37,15 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
         items: t.Array(
           t.Object({
             productId: t.String(),
-            quantity: t.Number({ minimum: 1 })
-          })
+            quantity: t.Number({ minimum: 1, maximum: 999 })
+          }),
+          { minItems: 1, maxItems: 50 }
         ),
-        shippingAddress: t.Object({
-          firstName: t.String({ minLength: 1 }),
-          lastName: t.String({ minLength: 1 }),
-          address: t.String({ minLength: 1 }),
-          city: t.String({ minLength: 1 }),
-          state: t.String({ minLength: 1 }),
-          zipCode: t.String({ minLength: 1 }),
-          country: t.String({ minLength: 1 })
-        }),
-        billingAddress: t.Optional(t.Object({
-          firstName: t.String({ minLength: 1 }),
-          lastName: t.String({ minLength: 1 }),
-          address: t.String({ minLength: 1 }),
-          city: t.String({ minLength: 1 }),
-          state: t.String({ minLength: 1 }),
-          zipCode: t.String({ minLength: 1 }),
-          country: t.String({ minLength: 1 })
-        })),
-        notes: t.Optional(t.String())
+        shippingAddress: addressSchema,
+        billingAddress: t.Optional(addressSchema),
+        notes: t.Optional(t.String({ maxLength: 1000 })),
+        couponCode: t.Optional(t.String({ maxLength: 50 })),
+        shippingMethodId: t.Optional(t.String()),
       }),
       response: {
         201: successSchema(),
@@ -62,8 +61,8 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
     '/',
     async ({ query, user }) => {
       const isAdmin = user?.role === UserRole.ADMIN;
-      const page = query.page || 1;
-      const limit = query.limit || 10;
+      const page = query.page || PAGINATION.DEFAULT_PAGE;
+      const limit = Math.min(query.limit || PAGINATION.DEFAULT_LIMIT, PAGINATION.MAX_LIMIT);
 
       const filters = {
         status: query.status,
@@ -83,8 +82,8 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
     },
     {
       query: t.Object({
-        page: t.Optional(t.Numeric()),
-        limit: t.Optional(t.Numeric()),
+        page: t.Optional(t.Numeric({ minimum: 1 })),
+        limit: t.Optional(t.Numeric({ minimum: 1, maximum: PAGINATION.MAX_LIMIT })),
         status: t.Optional(t.String()),
         dateFrom: t.Optional(t.String()),
         dateTo: t.Optional(t.String()),
