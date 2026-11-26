@@ -1,13 +1,47 @@
 import { Elysia, t } from 'elysia';
 import { UserService } from '../service/UserService';
-import { paginatedResponse, successResponse, successSchema, paginatedSchema, errorSchema } from '../../../core/responses';
+import { errorResponse, paginatedResponse, successResponse, successSchema, paginatedSchema, errorSchema } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
 import { UserRole } from '../../../core/roles';
+import { PASSWORD, PAGINATION } from '../../../core/constants';
+import { ForbiddenError } from '../../../core/errors';
+import { getPagination } from '../../../utils/validation';
 
 const userService = new UserService();
 
+const passwordSchema = t.String({ minLength: PASSWORD.MIN_LENGTH, maxLength: PASSWORD.MAX_LENGTH });
+
 export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
   .use(authPlugin)
+  // Create a user with any role (admin only)
+  .post(
+    '/',
+    async ({ body, set }) => {
+      const user = await userService.createUser({
+        ...body,
+        role: body.role as UserRole | undefined,
+      } as any);
+      set.status = 201;
+      return successResponse(user, 'User created successfully', 201);
+    },
+    {
+      body: t.Object({
+        email: t.String({ format: 'email', maxLength: 255 }),
+        password: passwordSchema,
+        firstName: t.Optional(t.String({ maxLength: 100 })),
+        lastName: t.Optional(t.String({ maxLength: 100 })),
+        role: t.Optional(t.Enum(UserRole)),
+      }),
+      hasRole: UserRole.ADMIN,
+      response: {
+        201: successSchema(),
+        409: errorSchema,
+        422: errorSchema,
+      },
+      detail: { summary: 'Create a user (Admin only)' }
+    }
+  )
+
   // Get current user profile
   .get(
     '/profile',
@@ -34,14 +68,15 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
     },
     {
       body: t.Object({
-        email: t.Optional(t.String({ format: 'email' })),
-        firstName: t.Optional(t.String()),
-        lastName: t.Optional(t.String()),
+        email: t.Optional(t.String({ format: 'email', maxLength: 255 })),
+        firstName: t.Optional(t.String({ maxLength: 100 })),
+        lastName: t.Optional(t.String({ maxLength: 100 })),
       }),
       isAuth: true,
       response: {
         200: successSchema(),
         400: errorSchema,
+        409: errorSchema,
         422: errorSchema
       },
       detail: { summary: 'Update current user profile' }
@@ -52,24 +87,25 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
   .put(
     '/change-password',
     async ({ user, body }) => {
-      const updatedUser = await userService.changePassword(
+      await userService.changePassword(
         user!.sub as string,
         body.currentPassword,
         body.newPassword
       );
 
-      return successResponse(updatedUser, 'Password changed successfully');
+      return successResponse(null, 'Password changed successfully; all sessions have been signed out');
     },
     {
       body: t.Object({
-        currentPassword: t.String({ minLength: 1 }),
-        newPassword: t.String({ minLength: 6 }),
+        currentPassword: t.String({ minLength: 1, maxLength: PASSWORD.MAX_LENGTH }),
+        newPassword: passwordSchema,
       }),
       isAuth: true,
       response: {
-        200: successSchema(),
+        200: successSchema(t.Null()),
         400: errorSchema,
-        401: errorSchema
+        403: errorSchema,
+        422: errorSchema
       },
       detail: { summary: 'Change user password' }
     }
@@ -79,9 +115,11 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
   .get(
     '/',
     async ({ query }) => {
-      const page = query.page || 1;
-      const limit = query.limit || 10;
-      const { items, total } = await userService.findAll(page, limit);
+      const { page, limit } = getPagination(query);
+      const { items, total } = await userService.getUsers(page, limit, {
+        role: query.role as UserRole | undefined,
+        search: query.search,
+      });
 
       return paginatedResponse(items, {
         page,
@@ -92,8 +130,10 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
     },
     {
       query: t.Object({
-        page: t.Optional(t.Numeric()),
-        limit: t.Optional(t.Numeric()),
+        page: t.Optional(t.Integer({ minimum: 1 })),
+        limit: t.Optional(t.Integer({ minimum: 1, maximum: PAGINATION.MAX_LIMIT })),
+        role: t.Optional(t.Enum(UserRole)),
+        search: t.Optional(t.String({ maxLength: 100 })),
       }),
       hasRole: UserRole.ADMIN,
       response: {
@@ -111,7 +151,7 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
       return successResponse(userData, 'User retrieved successfully');
     },
     {
-      params: t.Object({ id: t.String() }),
+      params: t.Object({ id: t.String({ format: 'uuid' }) }),
       isOwner: 'id',
       response: {
         200: successSchema(),
@@ -122,43 +162,53 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
     }
   )
 
-  // Update user by ID (admin only)
+  // Update user by ID (admin can update role/status; self can update profile)
   .put(
     '/:id',
-    async ({ params, body }) => {
-      const updatedUser = await userService.updateUser(params.id, body);
+    async ({ params, body, user }) => {
+      const isAdmin = user?.role === UserRole.ADMIN;
+      if (!isAdmin && (body.role !== undefined || body.isActive !== undefined)) {
+        throw new ForbiddenError('Only admins can change roles or account status');
+      }
+
+      const updatedUser = await userService.updateUser(params.id, body as any);
       return successResponse(updatedUser, 'User updated successfully');
     },
     {
-      params: t.Object({ id: t.String() }),
+      params: t.Object({ id: t.String({ format: 'uuid' }) }),
       body: t.Object({
-        email: t.Optional(t.String({ format: 'email' })),
-        firstName: t.Optional(t.String()),
-        lastName: t.Optional(t.String()),
+        email: t.Optional(t.String({ format: 'email', maxLength: 255 })),
+        firstName: t.Optional(t.String({ maxLength: 100 })),
+        lastName: t.Optional(t.String({ maxLength: 100 })),
+        role: t.Optional(t.Enum(UserRole)),
+        isActive: t.Optional(t.Boolean()),
       }),
       isOwner: 'id',
       response: {
         200: successSchema(),
         400: errorSchema,
-        404: errorSchema
+        403: errorSchema,
+        404: errorSchema,
+        409: errorSchema
       },
       detail: { summary: 'Update user by ID (Admin or Self)' }
     }
   )
 
-  // Delete user by ID (admin only)
+  // Delete user by ID (admin or self, last admin protected)
   .delete(
     '/:id',
     async ({ params }) => {
-      await userService.delete(params.id);
+      await userService.deleteUser(params.id);
       return successResponse(null, 'User deleted successfully');
     },
     {
-      params: t.Object({ id: t.String() }),
+      params: t.Object({ id: t.String({ format: 'uuid' }) }),
       isOwner: 'id',
       response: {
         200: successSchema(t.Null()),
-        404: errorSchema
+        404: errorSchema,
+        409: errorSchema
       },
       detail: { summary: 'Delete user by ID (Admin or Self)' }
     }

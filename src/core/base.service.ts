@@ -1,19 +1,25 @@
 import { db } from '../config/database';
 import { eq, sql, desc, and } from 'drizzle-orm';
-import { NotFoundError } from './errors';
+import { NotFoundError, ValidationError } from './errors';
+import { isUuid } from '../utils/validation';
+import { PAGINATION } from './constants';
 
 export class BaseService<T extends any> {
     constructor(protected schema: any) { }
 
     async findAll(page: number = 1, limit: number = 10, conditions: any[] = []): Promise<{ items: any[]; total: number }> {
-        const offset = (page - 1) * limit;
+        const safePage = Number.isFinite(page) ? Math.max(1, Math.trunc(page)) : PAGINATION.DEFAULT_PAGE;
+        const safeLimit = Number.isFinite(limit)
+            ? Math.min(PAGINATION.MAX_LIMIT, Math.max(1, Math.trunc(limit)))
+            : PAGINATION.DEFAULT_LIMIT;
+        const offset = (safePage - 1) * safeLimit;
         const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
         const items = await db
             .select()
             .from(this.schema)
             .where(whereClause)
-            .limit(limit)
+            .limit(safeLimit)
             .offset(offset)
             .orderBy(desc((this.schema as any).createdAt));
 
@@ -28,6 +34,10 @@ export class BaseService<T extends any> {
     }
 
     async findById(id: string): Promise<any> {
+        if (!isUuid(id)) {
+            throw new ValidationError('Invalid resource ID format');
+        }
+
         const [item] = await db.select().from(this.schema).where(eq((this.schema as any).id, id)).limit(1);
         return item || null;
     }
@@ -47,9 +57,15 @@ export class BaseService<T extends any> {
 
     async update(id: string, data: any): Promise<any> {
         await this.findByIdOrFail(id);
+
+        const updateData = { ...data };
+        if ((this.schema as any).updatedAt) {
+            updateData.updatedAt = new Date();
+        }
+
         const [updatedItem] = (await db
             .update(this.schema)
-            .set(data)
+            .set(updateData)
             .where(eq((this.schema as any).id, id))
             .returning()) as any[];
         return updatedItem;

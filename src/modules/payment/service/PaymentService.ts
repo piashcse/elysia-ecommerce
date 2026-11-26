@@ -44,6 +44,10 @@ export class PaymentService extends BaseService<typeof payments> {
       payment = await this.update(payment.id, { method: processPaymentDto.method });
     }
 
+    if (!payment) {
+      throw new NotFoundError('Payment not found');
+    }
+
     this.validatePaymentDetails(processPaymentDto.method, processPaymentDto.paymentDetails);
 
     try {

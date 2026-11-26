@@ -34,9 +34,8 @@ export class CartService extends BaseService<typeof carts> {
       .leftJoin(products, eq(cartItems.productId, products.id))
       .where(eq(carts.id, cartId));
 
-    if (results.length === 0) throw new NotFoundError('Cart not found');
-
-    const cart = results[0].cart;
+    const cart = results[0]?.cart;
+    if (!cart) throw new NotFoundError('Cart not found');
     let totalItems = 0;
     let totalAmount = 0;
 
@@ -66,6 +65,7 @@ export class CartService extends BaseService<typeof carts> {
 
     let [cart] = await db.select().from(carts).where(eq(carts.userId, userId)).limit(1);
     if (!cart) cart = await this.createCart(userId);
+    if (!cart) throw new NotFoundError('Cart not found');
 
     const [existingItem] = await db
       .select()

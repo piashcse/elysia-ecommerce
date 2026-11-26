@@ -8,7 +8,7 @@ export const createPaymentSchema = z.object({
   orderId: z.string().uuid('Order ID must be a valid UUID'),
   method: z.enum(paymentMethods),
   amount: z.coerce.number().positive('Amount must be a positive number'),
-  metadata: z.record(z.any()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
 });
 
 export const processPaymentSchema = z.object({
@@ -27,7 +27,7 @@ export const processPaymentSchema = z.object({
 export const updatePaymentSchema = z.object({
   status: z.enum(paymentStatuses),
   transactionId: z.string().optional(),
-  metadata: z.record(z.any()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
 });
 
 export const paymentIdSchema = z.object({

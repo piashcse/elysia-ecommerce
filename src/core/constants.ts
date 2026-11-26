@@ -11,20 +11,25 @@ export const PAGINATION = {
 
 // Rate limiting
 export const RATE_LIMIT = {
-  AUTH: { points: 5, duration: 60 },      // 5 requests per minute for auth
-  DEFAULT: { points: 100, duration: 60 },  // 100 requests per minute for general API
+  AUTH: { points: 10, duration: 60 },      // 10 auth requests per minute per IP
+  DEFAULT: { points: 100, duration: 60 },  // 100 requests per minute per IP
   STRICT: { points: 10, duration: 60 },    // 10 requests per minute for sensitive operations
 } as const;
 
 // Password requirements
 export const PASSWORD = {
-  MIN_LENGTH: 6,
+  MIN_LENGTH: 8,
   MAX_LENGTH: 128,
 } as const;
 
+// JWT claims
+export const JWT_ISSUER = 'elysia-ecommerce';
+export const JWT_AUDIENCE = 'elysia-ecommerce-api';
+
 // Token expiration
 export const TOKEN = {
-  JWT_EXPIRY: '24h',
+  ACCESS_EXPIRY: '15m',
+  REFRESH_EXPIRY: '30d',
   RESET_PASSWORD_EXPIRY: '1h',
   EMAIL_VERIFICATION_EXPIRY: '24h',
 } as const;
@@ -50,6 +55,7 @@ export const ORDER_STATUS = {
   SHIPPED: 'shipped',
   DELIVERED: 'delivered',
   CANCELLED: 'cancelled',
+  REFUNDED: 'refunded',
 } as const;
 
 // Payment status

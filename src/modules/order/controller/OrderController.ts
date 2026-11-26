@@ -124,7 +124,7 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
   .put(
     '/:id',
     async ({ params, body }) => {
-      const order = await orderService.updateOrder(params.id, body);
+      const order = await orderService.updateOrder(params.id, body as any);
       return successResponse(order, 'Order updated successfully');
     },
     {

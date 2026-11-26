@@ -5,10 +5,10 @@ import { UserRole } from '../../../core/roles';
 export const userRoles = [UserRole.ADMIN, UserRole.SELLER, UserRole.CUSTOMER] as const;
 
 export const createUserSchema = z.object({
-  email: z.string().email('Invalid email format'),
-  password: z.string().min(6, 'Password must be at least 6 characters long'),
-  firstName: z.string().min(1, 'First name is required').max(50).optional(),
-  lastName: z.string().min(1, 'Last name is required').max(50).optional(),
+  email: z.string().email('Invalid email format').max(255),
+  password: z.string().min(8, 'Password must be at least 8 characters long').max(128),
+  firstName: z.string().min(1, 'First name is required').max(100).optional(),
+  lastName: z.string().min(1, 'Last name is required').max(100).optional(),
   role: z.enum(userRoles).optional().default(UserRole.CUSTOMER),
 });
 
@@ -26,8 +26,8 @@ export const loginUserSchema = z.object({
 });
 
 export const changePasswordSchema = z.object({
-  currentPassword: z.string().min(1, 'Current password is required'),
-  newPassword: z.string().min(6, 'New password must be at least 6 characters long'),
+  currentPassword: z.string().min(1, 'Current password is required').max(128),
+  newPassword: z.string().min(8, 'New password must be at least 8 characters long').max(128),
 });
 
 export const userIdSchema = z.object({

@@ -1,66 +1,78 @@
 import 'dotenv/config';
+import { z } from 'zod';
 
-// For debugging - log environment variables (development only)
-if (process.env.NODE_ENV === 'development') {
-  console.log('Raw process.env.DB_NAME:', process.env.DB_NAME);
-}
+const booleanString = z
+  .enum(['true', 'false'])
+  .default('false')
+  .transform((value) => value === 'true');
 
-// Environment configuration loader
-interface EnvironmentConfig {
-  NODE_ENV: string;
-  PORT: number;
-  DB_HOST: string;
-  DB_PORT: number;
-  DB_USER: string;
-  DB_USERNAME?: string; // Optional - for compatibility with common env var name
-  DB_PASSWORD: string;
-  DB_NAME: string;
-  DB_SSL: string;
-  JWT_SECRET: string;
-  LOG_LEVEL: string;
-}
+const envSchema = z.object({
+  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  PORT: z.coerce.number().int().min(1).max(65535).default(3000),
+  APP_URL: z.string().url().default('http://localhost:3000'),
 
-// Default values
-const defaults = {
-  NODE_ENV: 'development',
-  PORT: 3000,
-  DB_HOST: 'localhost',
-  DB_PORT: 5432,
-  DB_USER: 'postgres',
-  DB_PASSWORD: 'postgres',
-  DB_NAME: 'ecommerce_db',
-  DB_SSL: 'false',
-  JWT_SECRET: 'super-secret-key',
-  LOG_LEVEL: 'info',
-};
+  DB_HOST: z.string().min(1).default('localhost'),
+  DB_PORT: z.coerce.number().int().min(1).max(65535).default(5432),
+  DB_USER: z.string().min(1).default('postgres'),
+  DB_PASSWORD: z.string().default('postgres'),
+  DB_NAME: z.string().min(1).default('ecommerce_db'),
+  DB_SSL: booleanString,
 
-// Load environment variables with defaults
-export const envConfig: EnvironmentConfig = {
-  NODE_ENV: process.env.NODE_ENV || defaults.NODE_ENV,
-  PORT: parseInt(process.env.PORT || defaults.PORT.toString(), 10),
-  DB_HOST: process.env.DB_HOST || defaults.DB_HOST,
-  DB_PORT: parseInt(process.env.DB_PORT || defaults.DB_PORT.toString(), 10),
-  DB_USER: process.env.DB_USER || process.env.DB_USERNAME || defaults.DB_USER, // Support both DB_USER and DB_USERNAME
-  DB_PASSWORD: process.env.DB_PASSWORD || defaults.DB_PASSWORD,
-  DB_NAME: process.env.DB_NAME || defaults.DB_NAME,
-  DB_SSL: process.env.DB_SSL || defaults.DB_SSL,
-  JWT_SECRET: process.env.JWT_SECRET || defaults.JWT_SECRET,
-  LOG_LEVEL: process.env.LOG_LEVEL || defaults.LOG_LEVEL,
-};
+  JWT_SECRET: z.string().min(16, 'JWT_SECRET must be at least 16 characters'),
+  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 
-// Validate required environment variables
-const requiredEnvVars = ['JWT_SECRET'];
-const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
+  ALLOWED_ORIGINS: z.string().default('http://localhost:3000,http://localhost:3005'),
+  TRUST_PROXY: booleanString,
+  REQUIRE_EMAIL_VERIFICATION: booleanString,
 
-if (missingEnvVars.length > 0) {
-  console.error(`Missing required environment variables: ${missingEnvVars.join(', ')}`);
+  MAIL_FROM: z.string().default('no-reply@elysia-ecom.local'),
+  MAIL_WEBHOOK_URL: z.string().url().optional(),
+});
+
+const parsed = envSchema.safeParse({
+  NODE_ENV: process.env.NODE_ENV,
+  PORT: process.env.PORT,
+  APP_URL: process.env.APP_URL,
+  DB_HOST: process.env.DB_HOST,
+  DB_PORT: process.env.DB_PORT,
+  DB_USER: process.env.DB_USER || process.env.DB_USERNAME,
+  DB_PASSWORD: process.env.DB_PASSWORD,
+  DB_NAME: process.env.DB_NAME,
+  DB_SSL: process.env.DB_SSL,
+  JWT_SECRET: process.env.JWT_SECRET,
+  LOG_LEVEL: process.env.LOG_LEVEL,
+  ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS,
+  TRUST_PROXY: process.env.TRUST_PROXY,
+  REQUIRE_EMAIL_VERIFICATION: process.env.REQUIRE_EMAIL_VERIFICATION,
+  MAIL_FROM: process.env.MAIL_FROM,
+  MAIL_WEBHOOK_URL: process.env.MAIL_WEBHOOK_URL,
+});
+
+if (!parsed.success) {
+  const issues = parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join(', ');
+  console.error(`Invalid environment configuration: ${issues}`);
   process.exit(1);
 }
 
-// Security warning for weak JWT secret in production
-if (process.env.NODE_ENV === 'production' && process.env.JWT_SECRET === defaults.JWT_SECRET) {
-  console.error('ERROR: Default JWT_SECRET detected in production. Please set a strong, random secret.');
+const env = parsed.data;
+
+if (env.NODE_ENV === 'production' && env.JWT_SECRET.length < 32) {
+  console.error('JWT_SECRET must be at least 32 characters in production');
   process.exit(1);
 }
+
+if (env.NODE_ENV === 'production' && env.JWT_SECRET === 'super-secret-key') {
+  console.error('Refusing to start with the default JWT_SECRET in production');
+  process.exit(1);
+}
+
+export const envConfig = {
+  ...env,
+  ALLOWED_ORIGINS: env.ALLOWED_ORIGINS.split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean),
+};
+
+export type EnvConfig = typeof envConfig;
 
 export default envConfig;

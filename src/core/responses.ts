@@ -91,7 +91,19 @@ export const sanitizeData = (data: any): any => {
     return data.map(sanitizeData);
   }
   if (data !== null && typeof data === 'object' && !(data instanceof Date)) {
-    const sensitiveKeys = ['password', 'confirmPassword'];
+    const sensitiveKeys = [
+      'password',
+      'confirmPassword',
+      'passwordHash',
+      'emailVerificationToken',
+      'emailVerificationExpires',
+      'passwordResetToken',
+      'passwordResetExpires',
+      'tokenVersion',
+      'cardNumber',
+      'cardCvv',
+      'cardExpiry',
+    ];
     const newObj: any = {};
     for (const key in data) {
       if (!sensitiveKeys.includes(key)) {
