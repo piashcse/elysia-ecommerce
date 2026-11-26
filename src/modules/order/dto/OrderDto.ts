@@ -1,4 +1,4 @@
-import {OrderStatus} from '../entity/Order';
+import { OrderStatus } from '../validators/OrderValidator';
 
 // Order DTOs (Data Transfer Objects)
 export interface CreateOrderDto {

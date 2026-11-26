@@ -1,51 +1,54 @@
-import {createHash} from 'crypto';
-
 /**
- * Hash a password using bcrypt
+ * Password hashing utilities.
+ *
+ * New passwords use Argon2id via Bun.password. Legacy bcrypt hashes (created by
+ * older versions of this project) are still verified so existing accounts keep
+ * working; they are upgraded to Argon2id on the next successful login.
  */
+const isBcryptHash = (hash: string): boolean => /^\$2[aby]\$\d{2}\$/.test(hash);
+
 export const hashPassword = async (password: string): Promise<string> => {
-  const bcrypt = await import('bcryptjs');
-  return bcrypt.hash(password, 12);
+  return Bun.password.hash(password, {
+    algorithm: 'argon2id',
+    memoryCost: 19456,
+    timeCost: 2,
+  });
 };
 
-/**
- * Compare a plain text password with a hashed password
- */
 export const comparePassword = async (password: string, hashedPassword: string): Promise<boolean> => {
-  const bcrypt = await import('bcryptjs');
-  return bcrypt.compare(password, hashedPassword);
-};
-
-/**
- * Generate a random string of specified length
- */
-export const generateRandomString = (length: number): string => {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let result = '';
-  for (let i = 0; i < length; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  if (isBcryptHash(hashedPassword)) {
+    const bcrypt = await import('bcryptjs');
+    return bcrypt.compare(password, hashedPassword);
   }
-  return result;
+
+  return Bun.password.verify(password, hashedPassword);
+};
+
+export const passwordNeedsRehash = (hashedPassword: string): boolean => isBcryptHash(hashedPassword);
+
+/**
+ * Generate a cryptographically secure random token.
+ */
+export const generateRandomString = (length = 32): string => {
+  const bytes = crypto.getRandomValues(new Uint8Array(length));
+  return Buffer.from(bytes).toString('base64url');
 };
 
 /**
- * Generate a hash from a string using SHA-256
+ * Generate a hash from a string using SHA-256.
  */
 export const sha256Hash = (input: string): string => {
-  return createHash('sha256').update(input).digest('hex');
+  const hasher = new Bun.CryptoHasher('sha256');
+  hasher.update(input);
+  return hasher.digest('hex');
 };
 
 /**
- * Validate email format
+ * Validate email format.
  */
 export const isValidEmail = (email: string): boolean => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailRegex.test(email);
 };
 
-/**
- * Generate a unique identifier
- */
-export const generateId = (): string => {
-  return Date.now().toString(36) + Math.random().toString(36).substr(2);
-};
+export const normalizeEmail = (email: string): string => email.trim().toLowerCase();

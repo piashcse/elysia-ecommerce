@@ -5,16 +5,27 @@ export interface JwtPayload {
   sub: string; // user id
   email: string;
   role: UserRole;
+  ver: number; // token version
+  type: 'access' | 'refresh';
   iat?: number;
   exp?: number;
+  iss?: string;
+  aud?: string;
+}
+
+export interface CurrentUser {
+  sub: string;
+  email: string;
+  role: UserRole;
+  ver: number;
 }
 
 /**
  * Extract user information from the request context
  */
-export const getCurrentUser = (context: any): JwtPayload | null => {
+export const getCurrentUser = (context: any): CurrentUser | null => {
   if (context.user) {
-    return context.user as JwtPayload;
+    return context.user as CurrentUser;
   }
   return null;
 };

@@ -1,60 +1,111 @@
-import {Elysia} from 'elysia';
-import {errorResponse} from './responses';
-import {JwtPayload} from '../utils/jwt';
+import { Elysia } from 'elysia';
+import { eq } from 'drizzle-orm';
+import { db } from '../config/database';
+import { users } from '../database/schema';
+import { errorResponse } from './responses';
+import { JwtPayload, CurrentUser } from '../utils/jwt';
 import { UserRole } from './roles';
+import { jwtPlugin } from './jwt';
+import { JWT_AUDIENCE, JWT_ISSUER } from './constants';
+
+const unauthorized = (set: any, message = 'Authentication required') => {
+  set.status = 401;
+  return errorResponse(message, 'UNAUTHORIZED', 401);
+};
+
+const forbidden = (set: any, message = 'Access denied') => {
+  set.status = 403;
+  return errorResponse(message, 'FORBIDDEN', 403);
+};
+
+const securityDetail = { security: [{ bearerAuth: [] }] };
 
 export const authPlugin = new Elysia({ name: 'auth-plugin' })
-    .derive({ as: 'global' }, async ({ jwt, headers }): Promise<{ user: JwtPayload | null }> => {
+    .use(jwtPlugin)
+    .derive({ as: 'global' }, async ({ jwt, headers }): Promise<{ user: CurrentUser | null }> => {
         const authHeader = headers['authorization'];
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
             return { user: null };
         }
-        const token = authHeader.split(' ')[1];
+
+        const token = authHeader.slice(7).trim();
+        if (!token) return { user: null };
+
         try {
-            const payload = await jwt.verify(token);
-            if (!payload) return { user: null };
-            return { user: payload as unknown as JwtPayload };
-        } catch (error) {
+            const payload = (await jwt.verify(token, {
+                issuer: JWT_ISSUER,
+                audience: JWT_AUDIENCE,
+            })) as JwtPayload | false;
+            if (!payload || payload.type !== 'access' || !payload.sub) {
+                return { user: null };
+            }
+
+            // Always load the current user so role changes, deactivation, and
+            // logout-all (tokenVersion bump) take effect immediately.
+            const [current] = await db
+                .select({
+                    id: users.id,
+                    email: users.email,
+                    role: users.role,
+                    isActive: users.isActive,
+                    tokenVersion: users.tokenVersion,
+                })
+                .from(users)
+                .where(eq(users.id, payload.sub))
+                .limit(1);
+
+            if (!current || !current.isActive || current.tokenVersion !== payload.ver) {
+                return { user: null };
+            }
+
+            return {
+                user: {
+                    sub: current.id,
+                    email: current.email,
+                    role: current.role,
+                    ver: current.tokenVersion,
+                },
+            };
+        } catch {
             return { user: null };
         }
     })
-    .macro(({ onBeforeHandle }) => ({
+    .macro({
         isAuth: (enabled: boolean) => {
             if (!enabled) return;
-            onBeforeHandle(({ user, set }: { user: JwtPayload | null, set: any }) => {
-                if (!user) {
-                    set.status = 401;
-                    return errorResponse('Authentication required', 'UNAUTHORIZED', 401);
-                }
-                return;
-            });
+
+            return {
+                detail: securityDetail,
+                beforeHandle({ user, set }: any) {
+                    if (!user) return unauthorized(set);
+                    return undefined;
+                },
+            };
         },
         hasRole: (role: UserRole | UserRole[]) => {
-            onBeforeHandle(({ user, set }: { user: JwtPayload | null, set: any }) => {
-                if (!user) {
-                    set.status = 401;
-                    return errorResponse('Authentication required', 'UNAUTHORIZED', 401);
-                }
-                
-                const roles = Array.isArray(role) ? role : [role];
-                if (!roles.includes(user.role as UserRole)) {
-                    set.status = 403;
-                    return errorResponse(`Access denied. ${roles.join(' or ')} role required.`, 'FORBIDDEN', 403);
-                }
-                return;
-            });
+            const roles = Array.isArray(role) ? role : [role];
+
+            return {
+                detail: securityDetail,
+                beforeHandle({ user, set }: any) {
+                    if (!user) return unauthorized(set);
+                    if (!roles.includes(user.role as UserRole)) {
+                        return forbidden(set, `Access denied. ${roles.join(' or ')} role required.`);
+                    }
+                    return undefined;
+                },
+            };
         },
         isOwner: (paramName: string = 'id') => {
-            onBeforeHandle(({ user, params, set }: { user: JwtPayload | null, params: any, set: any }) => {
-                if (!user) {
-                    set.status = 401;
-                    return errorResponse('Authentication required', 'UNAUTHORIZED', 401);
-                }
-                if (user.role !== UserRole.ADMIN && user.sub !== params[paramName]) {
-                    set.status = 403;
-                    return errorResponse('Access denied. Ownership or admin role required.', 'FORBIDDEN', 403);
-                }
-                return;
-            });
+            return {
+                detail: securityDetail,
+                beforeHandle({ user, params, set }: any) {
+                    if (!user) return unauthorized(set);
+                    if (user.role !== UserRole.ADMIN && user.sub !== params?.[paramName]) {
+                        return forbidden(set, 'Access denied. Ownership or admin role required.');
+                    }
+                    return undefined;
+                },
+            };
         },
-    }));
+    });

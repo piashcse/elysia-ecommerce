@@ -1,53 +1,252 @@
-import {db} from '../../../config/database';
-import {users} from '../../../database/schema';
-import {eq} from 'drizzle-orm';
-import {comparePassword, hashPassword} from '../../../utils/auth';
-import {ConflictError, UnauthorizedError} from '../../../core/errors';
-import {CreateUserType, LoginUserType} from '../../user/validators/UserValidator';
+import { and, eq, gt, sql } from 'drizzle-orm';
+import { db } from '../../../config/database';
+import { users } from '../../../database/schema';
+import {
+  comparePassword,
+  generateRandomString,
+  hashPassword,
+  normalizeEmail,
+  passwordNeedsRehash,
+  sha256Hash,
+} from '../../../utils/auth';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  UnauthorizedError,
+  ValidationError,
+} from '../../../core/errors';
+import { CreateUserType, LoginUserType } from '../../user/validators/UserValidator';
 import { UserRole } from '../../../core/roles';
+import { TOKEN } from '../../../core/constants';
+import envConfig from '../../../config/env';
+import { mailService } from '../../../services/mail.service';
+
+const VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
+const RESET_TTL_MS = 60 * 60 * 1000;
+
+const safeUser = (user: any) => {
+  const {
+    password,
+    emailVerificationToken,
+    emailVerificationExpires,
+    passwordResetToken,
+    passwordResetExpires,
+    ...safe
+  } = user;
+  return safe;
+};
 
 export class AuthService {
-    async register(data: CreateUserType) {
-        // Check if user already exists
-        const [existingUser] = await db.select().from(users).where(eq(users.email, data.email)).limit(1);
-        if (existingUser) {
-            throw new ConflictError('User with this email already exists');
-        }
+  private async sendVerificationEmail(user: { id: string; email: string }, token: string) {
+    const link = `${envConfig.APP_URL}/verify-email?token=${encodeURIComponent(token)}`;
+    await mailService
+      .send({
+        to: user.email,
+        subject: 'Verify your email address',
+        text: `Hi,\n\nPlease verify your email address by opening this link:\n${link}\n\nThis link expires in 24 hours.`,
+        html: `<p>Hi,</p><p>Please verify your email address:</p><p><a href="${link}">Verify email</a></p><p>This link expires in 24 hours.</p>`,
+      })
+      .catch((error) => {
+        console.error('Failed to send verification email:', (error as Error).message);
+      });
+  }
 
-        const hashedPassword = await hashPassword(data.password);
+  private async sendPasswordResetEmail(user: { email: string }, token: string) {
+    const link = `${envConfig.APP_URL}/reset-password?token=${encodeURIComponent(token)}`;
+    await mailService
+      .send({
+        to: user.email,
+        subject: 'Reset your password',
+        text: `Hi,\n\nReset your password by opening this link:\n${link}\n\nThis link expires in 1 hour. If you did not request this, ignore this email.`,
+        html: `<p>Hi,</p><p>Reset your password:</p><p><a href="${link}">Reset password</a></p><p>This link expires in 1 hour. If you did not request this, ignore this email.</p>`,
+      })
+      .catch((error) => {
+        console.error('Failed to send password reset email:', (error as Error).message);
+      });
+  }
 
-        const [newUser] = await db.insert(users).values({
-            email: data.email,
-            password: hashedPassword,
-            firstName: data.firstName,
-            lastName: data.lastName,
-            role: (data.role as any) || UserRole.CUSTOMER,
-        }).returning();
+  async register(data: Omit<CreateUserType, 'role'>) {
+    const email = normalizeEmail(data.email);
 
-        if (!newUser) {
-            throw new Error('Failed to create user');
-        }
-
-        const { password, ...userWithoutPassword } = newUser;
-        return userWithoutPassword;
+    const [existingUser] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+    if (existingUser) {
+      throw new ConflictError('User with this email already exists');
     }
 
-    async login(data: LoginUserType) {
-        const [user] = await db.select().from(users).where(eq(users.email, data.email)).limit(1);
-        if (!user) {
-            throw new UnauthorizedError('Invalid email or password');
-        }
+    const hashedPassword = await hashPassword(data.password);
+    const verificationToken = generateRandomString(32);
+    const verificationHash = sha256Hash(verificationToken);
 
-        const isPasswordValid = await comparePassword(data.password, user.password);
-        if (!isPasswordValid) {
-            throw new UnauthorizedError('Invalid email or password');
-        }
+    const [newUser] = await db
+      .insert(users)
+      .values({
+        email,
+        password: hashedPassword,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        // Public registration must never assign a privileged role.
+        role: UserRole.CUSTOMER,
+        emailVerified: false,
+        emailVerificationToken: verificationHash,
+        emailVerificationExpires: new Date(Date.now() + VERIFICATION_TTL_MS),
+      })
+      .returning();
 
-        if (!user.isActive) {
-            throw new UnauthorizedError('User account is deactivated');
-        }
-
-        const { password, ...userWithoutPassword } = user;
-        return userWithoutPassword;
+    if (!newUser) {
+      throw new Error('Failed to create user');
     }
+
+    await this.sendVerificationEmail(newUser, verificationToken);
+    return safeUser(newUser);
+  }
+
+  async login(data: LoginUserType, meta: { userAgent?: string | null } = {}) {
+    const email = normalizeEmail(data.email);
+    const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+
+    if (!user) {
+      throw new UnauthorizedError('Invalid email or password');
+    }
+
+    const isPasswordValid = await comparePassword(data.password, user.password);
+    if (!isPasswordValid) {
+      throw new UnauthorizedError('Invalid email or password');
+    }
+
+    if (!user.isActive) {
+      throw new UnauthorizedError('User account is deactivated');
+    }
+
+    if (envConfig.REQUIRE_EMAIL_VERIFICATION && !user.emailVerified) {
+      throw new ForbiddenError('Email address has not been verified', 'EMAIL_NOT_VERIFIED');
+    }
+
+    let password = user.password;
+    if (passwordNeedsRehash(password)) {
+      password = await hashPassword(data.password);
+    }
+
+    const [updatedUser] = await db
+      .update(users)
+      .set({ password, lastLoginAt: new Date(), updatedAt: new Date() })
+      .where(eq(users.id, user.id))
+      .returning();
+
+    return safeUser(updatedUser ?? user);
+  }
+
+  async getSessionUser(userId: string, tokenVersion: number) {
+    const [user] = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        role: users.role,
+        isActive: users.isActive,
+        tokenVersion: users.tokenVersion,
+      })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    if (!user || !user.isActive || user.tokenVersion !== tokenVersion) {
+      throw new UnauthorizedError('Session is no longer valid');
+    }
+
+    return user;
+  }
+
+  async logout(userId: string): Promise<void> {
+    await db
+      .update(users)
+      .set({ tokenVersion: sql`${users.tokenVersion} + 1`, updatedAt: new Date() })
+      .where(eq(users.id, userId));
+  }
+
+  async verifyEmail(token: string): Promise<void> {
+    const hash = sha256Hash(token);
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(and(eq(users.emailVerificationToken, hash), gt(users.emailVerificationExpires, new Date())))
+      .limit(1);
+
+    if (!user) {
+      throw new ValidationError('Verification link is invalid or has expired', 'INVALID_VERIFICATION_TOKEN');
+    }
+
+    await db
+      .update(users)
+      .set({
+        emailVerified: true,
+        emailVerificationToken: null,
+        emailVerificationExpires: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, user.id));
+  }
+
+  async resendVerification(userId: string): Promise<void> {
+    const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    if (!user) throw new NotFoundError('User not found');
+    if (user.emailVerified) {
+      throw new ConflictError('Email address is already verified', 'EMAIL_ALREADY_VERIFIED');
+    }
+
+    const token = generateRandomString(32);
+    await db
+      .update(users)
+      .set({
+        emailVerificationToken: sha256Hash(token),
+        emailVerificationExpires: new Date(Date.now() + VERIFICATION_TTL_MS),
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, user.id));
+
+    await this.sendVerificationEmail(user, token);
+  }
+
+  async forgotPassword(emailInput: string): Promise<void> {
+    const email = normalizeEmail(emailInput);
+    const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+
+    // Always return success to avoid account enumeration.
+    if (!user || !user.isActive) return;
+
+    const token = generateRandomString(32);
+    await db
+      .update(users)
+      .set({
+        passwordResetToken: sha256Hash(token),
+        passwordResetExpires: new Date(Date.now() + RESET_TTL_MS),
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, user.id));
+
+    await this.sendPasswordResetEmail(user, token);
+  }
+
+  async resetPassword(token: string, newPassword: string): Promise<void> {
+    const hash = sha256Hash(token);
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(and(eq(users.passwordResetToken, hash), gt(users.passwordResetExpires, new Date())))
+      .limit(1);
+
+    if (!user) {
+      throw new ValidationError('Password reset link is invalid or has expired', 'INVALID_RESET_TOKEN');
+    }
+
+    await db
+      .update(users)
+      .set({
+        password: await hashPassword(newPassword),
+        passwordResetToken: null,
+        passwordResetExpires: null,
+        tokenVersion: sql`${users.tokenVersion} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, user.id));
+  }
 }

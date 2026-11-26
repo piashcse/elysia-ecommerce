@@ -1,17 +1,24 @@
-import {Elysia} from 'elysia';
+import { Elysia } from 'elysia';
+import envConfig from '../config/env';
 
 export const helmetMiddleware = new Elysia({ name: 'helmet' })
-  .onBeforeHandle(({ set }) => {
-    // Set basic security headers
+  .onBeforeHandle({ as: 'global' }, ({ set, request }) => {
+    const path = new URL(request.url).pathname;
+
     set.headers['X-Content-Type-Options'] = 'nosniff';
     set.headers['X-Frame-Options'] = 'DENY';
-    set.headers['X-XSS-Protection'] = '1; mode=block';
     set.headers['Referrer-Policy'] = 'no-referrer';
+    set.headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()';
+    set.headers['Cross-Origin-Opener-Policy'] = 'same-origin';
 
-    // Strict-Transport-Security
-    set.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains; preload';
+    if (envConfig.NODE_ENV === 'production') {
+      set.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains; preload';
+    }
 
-    // Content Security Policy
-    set.headers['Content-Security-Policy'] =
-      "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data: https:;";
+    // Swagger UI relies on inline scripts/styles; keep the API CSP strict but
+    // do not break the docs page.
+    if (!path.startsWith('/swagger') && !path.startsWith('/docs')) {
+      set.headers['Content-Security-Policy'] =
+        "default-src 'none'; frame-ancestors 'none'; base-uri 'none'";
+    }
   });

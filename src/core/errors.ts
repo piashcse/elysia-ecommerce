@@ -12,6 +12,7 @@ export class AppError extends Error {
     errorCode?: string
   ) {
     super(message);
+    this.name = this.constructor.name;
     this.statusCode = statusCode;
     this.isOperational = isOperational;
     this.errorCode = errorCode;
@@ -26,44 +27,44 @@ export class AppError extends Error {
 
 // Specific error classes
 export class ValidationError extends AppError {
-  constructor(message: string, errorCode?: string) {
-    super(message, 400, true, '', errorCode);
-    this.name = 'ValidationError';
+  constructor(message: string, errorCode = 'VALIDATION_ERROR') {
+    super(message, 422, true, '', errorCode);
   }
 }
 
 export class NotFoundError extends AppError {
-  constructor(message: string = 'Resource not found', errorCode?: string) {
-    super(message, 404, true, '', errorCode || 'NOT_FOUND');
-    this.name = 'NotFoundError';
+  constructor(message: string = 'Resource not found', errorCode = 'NOT_FOUND') {
+    super(message, 404, true, '', errorCode);
   }
 }
 
 export class UnauthorizedError extends AppError {
-  constructor(message: string = 'Unauthorized', errorCode?: string) {
-    super(message, 401, true, '', errorCode || 'UNAUTHORIZED');
-    this.name = 'UnauthorizedError';
+  constructor(message: string = 'Unauthorized', errorCode = 'UNAUTHORIZED') {
+    super(message, 401, true, '', errorCode);
   }
 }
 
 export class ForbiddenError extends AppError {
-  constructor(message: string = 'Forbidden', errorCode?: string) {
-    super(message, 403, true, '', errorCode || 'FORBIDDEN');
-    this.name = 'ForbiddenError';
+  constructor(message: string = 'Forbidden', errorCode = 'FORBIDDEN') {
+    super(message, 403, true, '', errorCode);
   }
 }
 
 export class ConflictError extends AppError {
-  constructor(message: string = 'Conflict', errorCode?: string) {
-    super(message, 409, true, '', errorCode || 'CONFLICT');
-    this.name = 'ConflictError';
+  constructor(message: string = 'Conflict', errorCode = 'CONFLICT') {
+    super(message, 409, true, '', errorCode);
+  }
+}
+
+export class TooManyRequestsError extends AppError {
+  constructor(message: string = 'Too many requests', errorCode = 'RATE_LIMIT_EXCEEDED') {
+    super(message, 429, true, '', errorCode);
   }
 }
 
 export class InternalServerError extends AppError {
-  constructor(message: string = 'Internal Server Error', errorCode?: string) {
-    super(message, 500, true, '', errorCode || 'INTERNAL_SERVER_ERROR');
-    this.name = 'InternalServerError';
+  constructor(message: string = 'Internal server error', errorCode = 'INTERNAL_SERVER_ERROR') {
+    super(message, 500, true, '', errorCode);
   }
 }
 
@@ -74,6 +75,8 @@ export enum ErrorCodes {
   UNAUTHORIZED = 'UNAUTHORIZED',
   FORBIDDEN = 'FORBIDDEN',
   CONFLICT = 'CONFLICT',
+  RATE_LIMIT_EXCEEDED = 'RATE_LIMIT_EXCEEDED',
+  EMAIL_NOT_VERIFIED = 'EMAIL_NOT_VERIFIED',
   INTERNAL_SERVER_ERROR = 'INTERNAL_SERVER_ERROR',
   DATABASE_ERROR = 'DATABASE_ERROR',
   AUTHENTICATION_ERROR = 'AUTHENTICATION_ERROR',
