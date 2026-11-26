@@ -2,7 +2,7 @@ import {z} from 'zod';
 
 export const createNotificationSchema = z.object({
   userId: z.string().uuid(),
-  type: z.enum(['order_confirmation', 'order_shipped', 'order_delivered', 'order_cancelled', 'payment_success', 'payment_failed', 'low_stock', 'price_drop', 'promotional', 'system']),
+  type: z.enum(['order_confirmation', 'order_shipped', 'order_delivered', 'order_cancelled', 'payment_success', 'payment_failed', 'payment_refunded', 'low_stock', 'price_drop', 'promotional', 'system']),
   title: z.string().min(1).max(200),
   message: z.string().min(1),
   link: z.string().url().optional(),

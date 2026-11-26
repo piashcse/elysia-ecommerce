@@ -13,6 +13,7 @@ import { BaseService } from '../../../core/base.service';
 import { UserRole } from '../../../core/roles';
 import { PAGINATION } from '../../../core/constants';
 import envConfig from '../../../config/env';
+import { NotificationService } from '../../notification/service/NotificationService';
 
 const toCents = (value: number | string): number => Math.round(Number(value) * 100);
 const fromCents = (cents: number): string => (cents / 100).toFixed(2);
@@ -29,6 +30,8 @@ const assertOwner = (actor: Actor, orderUserId: string | null) => {
 };
 
 export class PaymentService extends BaseService<typeof payments> {
+  private notificationService = new NotificationService();
+
   constructor() {
     super(payments);
   }
@@ -114,6 +117,10 @@ export class PaymentService extends BaseService<typeof payments> {
         .set({ status: 'processing', updatedAt: new Date() })
         .where(eq(orders.id, order.id));
 
+      if (order.userId) {
+        await this.notificationService.notifyOrderStatus(order.userId, order.id, 'processing');
+      }
+
       return updated;
     }
 
@@ -136,11 +143,18 @@ export class PaymentService extends BaseService<typeof payments> {
           .update(orders)
           .set({ status: 'processing', updatedAt: new Date() })
           .where(eq(orders.id, order.id));
+
+        if (order.userId) {
+          await this.notificationService.notifyPaymentCompleted(order.userId, order.id);
+        }
       }
 
       return updatedPayment;
     } catch (error) {
       await this.update(payment.id, { status: 'failed' });
+      if (order.userId) {
+        await this.notificationService.notifyPaymentFailed(order.userId, order.id);
+      }
       throw error;
     }
   }
@@ -249,7 +263,7 @@ export class PaymentService extends BaseService<typeof payments> {
   }
 
   async refundPayment(paymentId: string, amount?: number): Promise<any> {
-    return db.transaction(async (tx) => {
+    const refundedPayment = await db.transaction(async (tx) => {
       const [payment] = await tx.select().from(payments).where(eq(payments.id, paymentId)).limit(1).for('update');
       if (!payment) throw new NotFoundError('Payment not found');
 
@@ -305,6 +319,19 @@ export class PaymentService extends BaseService<typeof payments> {
 
       return updatedPayment;
     });
+
+    if (refundedPayment?.orderId) {
+      const [order] = await db
+        .select({ userId: orders.userId })
+        .from(orders)
+        .where(eq(orders.id, refundedPayment.orderId))
+        .limit(1);
+      if (order?.userId) {
+        await this.notificationService.notifyPaymentRefunded(order.userId, refundedPayment.orderId);
+      }
+    }
+
+    return refundedPayment;
   }
 
   async completeOfflinePayment(paymentId: string): Promise<any> {
@@ -329,10 +356,15 @@ export class PaymentService extends BaseService<typeof payments> {
       .returning();
 
     if (payment.orderId) {
-      await db
+      const [order] = await db
         .update(orders)
         .set({ status: 'processing', updatedAt: new Date() })
-        .where(eq(orders.id, payment.orderId));
+        .where(eq(orders.id, payment.orderId))
+        .returning({ userId: orders.userId });
+
+      if (order?.userId) {
+        await this.notificationService.notifyPaymentCompleted(order.userId, payment.orderId);
+      }
     }
 
     return updated;

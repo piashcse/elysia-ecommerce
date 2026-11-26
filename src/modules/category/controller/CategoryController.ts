@@ -3,48 +3,48 @@ import { CategoryService } from '../service/CategoryService';
 import { paginatedResponse, successResponse, successSchema, paginatedSchema, errorSchema } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
 import { UserRole } from '../../../core/roles';
+import { PAGINATION } from '../../../core/constants';
+import { getPagination } from '../../../utils/validation';
 
 const categoryService = new CategoryService();
 
 export const categoryController = new Elysia({ prefix: '/categories', tags: ['Category'] })
   .use(authPlugin)
-  // Create a new category (admin only)
   .post(
     '/',
     async ({ body, set }) => {
-      const category = await categoryService.createCategory(body);
+      const category = await categoryService.createCategory(body as any);
       set.status = 201;
       return successResponse(category, 'Category created successfully', 201);
     },
     {
       body: t.Object({
-        name: t.String({ minLength: 1 }),
-        description: t.Optional(t.String()),
+        name: t.String({ minLength: 1, maxLength: 100 }),
+        description: t.Optional(t.String({ maxLength: 5000 })),
+        imageUrl: t.Optional(t.String({ format: 'uri', maxLength: 500 })),
         isActive: t.Optional(t.Boolean()),
       }),
+      hasRole: UserRole.ADMIN,
       response: {
         201: successSchema(),
         400: errorSchema,
         409: errorSchema,
         422: errorSchema
       },
-      hasRole: UserRole.ADMIN,
       detail: { summary: 'Create a new category (Admin only)' }
     }
   )
 
-  // Get all categories
   .get(
     '/',
-    async ({ query }) => {
-      const page = query.page || 1;
-      const limit = query.limit || 10;
-      const filters = {
-        search: query.search,
-        isActive: query.isActive,
-      };
+    async ({ query, user }) => {
+      const { page, limit } = getPagination(query);
+      const isAdmin = user?.role === UserRole.ADMIN;
 
-      const { items, total } = await categoryService.findAll(page, limit);
+      const { items, total } = await categoryService.getAllCategories(page, limit, {
+        search: query.search,
+        isActive: isAdmin ? query.isActive : true,
+      });
 
       return paginatedResponse(items, {
         page,
@@ -55,9 +55,9 @@ export const categoryController = new Elysia({ prefix: '/categories', tags: ['Ca
     },
     {
       query: t.Object({
-        page: t.Optional(t.Numeric()),
-        limit: t.Optional(t.Numeric()),
-        search: t.Optional(t.String()),
+        page: t.Optional(t.Integer({ minimum: 1 })),
+        limit: t.Optional(t.Integer({ minimum: 1, maximum: PAGINATION.MAX_LIMIT })),
+        search: t.Optional(t.String({ maxLength: 100 })),
         isActive: t.Optional(t.Boolean()),
       }),
       response: { 200: paginatedSchema() },
@@ -65,7 +65,6 @@ export const categoryController = new Elysia({ prefix: '/categories', tags: ['Ca
     }
   )
 
-  // Get category by ID
   .get(
     '/:id',
     async ({ params }) => {
@@ -73,7 +72,7 @@ export const categoryController = new Elysia({ prefix: '/categories', tags: ['Ca
       return successResponse(category, 'Category retrieved successfully');
     },
     {
-      params: t.Object({ id: t.String() }),
+      params: t.Object({ id: t.String({ format: 'uuid' }) }),
       response: {
         200: successSchema(),
         404: errorSchema
@@ -82,20 +81,21 @@ export const categoryController = new Elysia({ prefix: '/categories', tags: ['Ca
     }
   )
 
-  // Update category by ID (admin only)
   .put(
     '/:id',
     async ({ params, body }) => {
-      const updatedCategory = await categoryService.updateCategory(params.id, body);
+      const updatedCategory = await categoryService.updateCategory(params.id, body as any);
       return successResponse(updatedCategory, 'Category updated successfully');
     },
     {
-      params: t.Object({ id: t.String() }),
+      params: t.Object({ id: t.String({ format: 'uuid' }) }),
       body: t.Object({
-        name: t.Optional(t.String()),
-        description: t.Optional(t.String()),
+        name: t.Optional(t.String({ minLength: 1, maxLength: 100 })),
+        description: t.Optional(t.String({ maxLength: 5000 })),
+        imageUrl: t.Optional(t.String({ format: 'uri', maxLength: 500 })),
         isActive: t.Optional(t.Boolean()),
       }),
+      hasRole: UserRole.ADMIN,
       response: {
         200: successSchema(),
         400: errorSchema,
@@ -103,12 +103,10 @@ export const categoryController = new Elysia({ prefix: '/categories', tags: ['Ca
         409: errorSchema,
         422: errorSchema
       },
-      hasRole: UserRole.ADMIN,
       detail: { summary: 'Update category by ID (Admin only)' }
     }
   )
 
-  // Delete category by ID (admin only)
   .delete(
     '/:id',
     async ({ params }) => {
@@ -116,32 +114,35 @@ export const categoryController = new Elysia({ prefix: '/categories', tags: ['Ca
       return successResponse(null, 'Category deleted successfully');
     },
     {
-      params: t.Object({ id: t.String() }),
+      params: t.Object({ id: t.String({ format: 'uuid' }) }),
+      hasRole: UserRole.ADMIN,
       response: {
         200: successSchema(t.Null()),
         404: errorSchema,
-        400: errorSchema
+        409: errorSchema
       },
-      hasRole: UserRole.ADMIN,
       detail: { summary: 'Delete category by ID (Admin only)' }
     }
   )
 
-  // Get category with its products
   .get(
     '/:id/products',
-    async ({ params, query }) => {
-      const page = query.page || 1;
-      const limit = query.limit || 10;
-      const result = await categoryService.getCategoryWithProducts(params.id, page, limit);
+    async ({ params, query, user }) => {
+      const { page, limit } = getPagination(query);
+      const isAdmin = user?.role === UserRole.ADMIN;
+
+      const result = await categoryService.getCategoryWithProducts(params.id, page, limit, {
+        isActive: isAdmin ? query.isActive : true,
+      });
 
       return successResponse(result, 'Category products retrieved successfully');
     },
     {
-      params: t.Object({ id: t.String() }),
+      params: t.Object({ id: t.String({ format: 'uuid' }) }),
       query: t.Object({
-        page: t.Optional(t.Numeric()),
-        limit: t.Optional(t.Numeric()),
+        page: t.Optional(t.Integer({ minimum: 1 })),
+        limit: t.Optional(t.Integer({ minimum: 1, maximum: PAGINATION.MAX_LIMIT })),
+        isActive: t.Optional(t.Boolean()),
       }),
       response: {
         200: successSchema(),

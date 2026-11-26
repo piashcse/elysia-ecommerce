@@ -4,9 +4,10 @@ export interface CreateProductDto {
   price: number;
   imageUrl?: string;
   stockQuantity: number;
+  weightGrams?: number;
   sku: string;
   isActive?: boolean;
-  categoryId: string;
+  categoryId?: string;
   sellerId: string;
 }
 
@@ -16,6 +17,7 @@ export interface UpdateProductDto {
   price?: number;
   imageUrl?: string;
   stockQuantity?: number;
+  weightGrams?: number;
   sku?: string;
   isActive?: boolean;
   categoryId?: string;

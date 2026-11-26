@@ -6,16 +6,20 @@ export interface CreateCouponDto {
     minOrderAmount?: number;
     maxDiscountAmount?: number;
     usageLimit?: number;
+    perUserLimit?: number;
     startDate: Date;
     endDate: Date;
 }
 
 export interface UpdateCouponDto {
+    code?: string;
     description?: string;
+    discountType?: 'percentage' | 'fixed';
     discountValue?: number;
     minOrderAmount?: number;
     maxDiscountAmount?: number;
     usageLimit?: number;
+    perUserLimit?: number;
     isActive?: boolean;
     startDate?: Date;
     endDate?: Date;

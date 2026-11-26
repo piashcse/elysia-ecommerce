@@ -1,33 +1,28 @@
+import { and, eq, ilike, or, sql } from 'drizzle-orm';
 import { db } from '../../../config/database';
 import { categories, products } from '../../../database/schema';
-import { and, desc, eq, ilike, or, sql } from 'drizzle-orm';
 import { CreateCategoryDto, UpdateCategoryDto } from '../dto/CategoryDto';
 import { ConflictError, NotFoundError } from '../../../core/errors';
 import { BaseService } from '../../../core/base.service';
+import { PAGINATION } from '../../../core/constants';
 
 export class CategoryService extends BaseService<typeof categories> {
   constructor() {
     super(categories);
   }
 
-  async createCategory(createCategoryDto: CreateCategoryDto): Promise<any> {
+  async createCategory(createCategoryDto: CreateCategoryDto & { imageUrl?: string; isActive?: boolean }): Promise<any> {
     const [existingCategory] = await db.select().from(categories).where(eq(categories.name, createCategoryDto.name)).limit(1);
-
-    if (existingCategory) {
-      throw new ConflictError('Category with this name already exists');
-    }
-
+    if (existingCategory) throw new ConflictError('Category with this name already exists');
     return this.create(createCategoryDto);
   }
 
-  async updateCategory(id: string, updateCategoryDto: UpdateCategoryDto): Promise<any> {
+  async updateCategory(id: string, updateCategoryDto: UpdateCategoryDto & { imageUrl?: string; isActive?: boolean }): Promise<any> {
     const category = await this.findByIdOrFail(id, 'Category');
 
     if (updateCategoryDto.name && updateCategoryDto.name !== category.name) {
       const [existingCategory] = await db.select().from(categories).where(eq(categories.name, updateCategoryDto.name)).limit(1);
-      if (existingCategory) {
-        throw new ConflictError('Category with this name already exists');
-      }
+      if (existingCategory) throw new ConflictError('Category with this name already exists');
     }
 
     return this.update(id, updateCategoryDto);
@@ -36,9 +31,9 @@ export class CategoryService extends BaseService<typeof categories> {
   async deleteCategory(id: string): Promise<void> {
     await this.findByIdOrFail(id, 'Category');
 
-    const [associatedProduct] = await db.select().from(products).where(eq(products.categoryId, id)).limit(1);
+    const [associatedProduct] = await db.select({ id: products.id }).from(products).where(eq(products.categoryId, id)).limit(1);
     if (associatedProduct) {
-      throw new Error('Cannot delete category with associated products');
+      throw new ConflictError('Cannot delete a category that still has products', 'CATEGORY_HAS_PRODUCTS');
     }
 
     return this.delete(id);
@@ -46,7 +41,7 @@ export class CategoryService extends BaseService<typeof categories> {
 
   async getAllCategories(
     page: number = 1,
-    limit: number = 10,
+    limit: number = PAGINATION.DEFAULT_LIMIT,
     filters: {
       search?: string;
       isActive?: boolean;
@@ -55,37 +50,46 @@ export class CategoryService extends BaseService<typeof categories> {
     const conditions = [];
 
     if (filters.search) {
-      conditions.push(
-        or(
-          ilike(categories.name, `%${filters.search}%`),
-          ilike(categories.description, `%${filters.search}%`)
-        )
-      );
+      const term = `%${filters.search}%`;
+      conditions.push(or(
+        ilike(categories.name, term),
+        ilike(categories.description, term)
+      ));
     }
+    if (filters.isActive !== undefined) conditions.push(eq(categories.isActive, filters.isActive));
 
     return this.findAll(page, limit, conditions);
   }
 
-  async getCategoryWithProducts(id: string, page: number = 1, limit: number = 10): Promise<any> {
+  async getCategoryWithProducts(
+    id: string,
+    page: number = 1,
+    limit: number = PAGINATION.DEFAULT_LIMIT,
+    filters: { isActive?: boolean } = {}
+  ): Promise<any> {
     const [category] = await db.select().from(categories).where(eq(categories.id, id)).limit(1);
-    if (!category) {
-      throw new NotFoundError('Category not found');
-    }
+    if (!category) throw new NotFoundError('Category not found');
 
-    const offset = (page - 1) * limit;
+    const safePage = Number.isFinite(page) ? Math.max(1, Math.trunc(page)) : 1;
+    const safeLimit = Number.isFinite(limit) ? Math.min(PAGINATION.MAX_LIMIT, Math.max(1, Math.trunc(limit))) : PAGINATION.DEFAULT_LIMIT;
+    const offset = (safePage - 1) * safeLimit;
+
+    const conditions = [eq(products.categoryId, id)];
+    if (filters.isActive !== undefined) conditions.push(eq(products.isActive, filters.isActive));
+    const whereClause = and(...conditions);
 
     const productsResult = await db
       .select()
       .from(products)
-      .where(eq(products.categoryId, id))
-      .orderBy(desc(products.createdAt))
-      .limit(limit)
+      .where(whereClause)
+      .orderBy(products.createdAt)
+      .limit(safeLimit)
       .offset(offset);
 
     const [countResult] = await db
       .select({ count: sql<number>`count(*)` })
       .from(products)
-      .where(eq(products.categoryId, id));
+      .where(whereClause);
 
     const total = countResult ? Number(countResult.count) : 0;
 
@@ -93,10 +97,10 @@ export class CategoryService extends BaseService<typeof categories> {
       category,
       products: productsResult,
       pagination: {
-        page,
-        limit,
+        page: safePage,
+        limit: safeLimit,
         total,
-        totalPages: Math.ceil(total / limit),
+        totalPages: Math.ceil(total / safeLimit),
       }
     };
   }

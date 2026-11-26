@@ -8,6 +8,7 @@ export * from './order';
 export * from './orderItem';
 export * from './payment';
 export * from './review';
+export * from './reviewHelpful';
 export * from './coupon';
 export * from './address';
 export * from './shipping';

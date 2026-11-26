@@ -2,6 +2,8 @@ import { Elysia, t } from 'elysia';
 import { NotificationService } from '../service/NotificationService';
 import { errorResponse, paginatedResponse, successResponse, successSchema, paginatedSchema, errorSchema } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
+import { PAGINATION } from '../../../core/constants';
+import { getPagination } from '../../../utils/validation';
 
 const notificationService = new NotificationService();
 
@@ -15,8 +17,7 @@ export const notificationController = new Elysia({ prefix: '/notifications', tag
   .get(
     '/',
     async ({ query, user }) => {
-      const page = query.page || 1;
-      const limit = query.limit || 10;
+      const { page, limit } = getPagination(query);
       const { notifications, total } = await notificationService.getUserNotifications(user!.sub, page, limit);
 
       return paginatedResponse(
@@ -32,11 +33,24 @@ export const notificationController = new Elysia({ prefix: '/notifications', tag
     },
     {
       query: t.Object({
-        page: t.Optional(t.Numeric()),
-        limit: t.Optional(t.Numeric()),
+        page: t.Optional(t.Integer({ minimum: 1 })),
+        limit: t.Optional(t.Integer({ minimum: 1, maximum: PAGINATION.MAX_LIMIT })),
       }),
       response: { 200: paginatedSchema() },
       detail: { summary: "Get all notifications for the authenticated user" },
+    }
+  )
+
+  // Unread notification count
+  .get(
+    '/unread-count',
+    async ({ user }) => {
+      const count = await notificationService.getUnreadCount(user!.sub);
+      return successResponse({ count }, 'Unread notification count retrieved successfully');
+    },
+    {
+      response: { 200: successSchema(t.Object({ count: t.Number() })) },
+      detail: { summary: 'Get unread notification count' },
     }
   )
 

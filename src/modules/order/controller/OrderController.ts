@@ -3,12 +3,25 @@ import { OrderService } from '../service/OrderService';
 import { errorResponse, paginatedResponse, successResponse, successSchema, paginatedSchema, errorSchema } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
 import { UserRole } from '../../../core/roles';
-import { ForbiddenError, NotFoundError } from '../../../core/errors';
+import { ForbiddenError, NotFoundError, ValidationError } from '../../../core/errors';
+import { AddressService } from '../../address/service/AddressService';
 import { PAGINATION } from '../../../core/constants';
 import { getPagination } from '../../../utils/validation';
 import { orderStatuses, OrderStatus } from '../validators/OrderValidator';
 
 const orderService = new OrderService();
+const addressService = new AddressService();
+
+const toOrderAddress = (address: any) => ({
+  firstName: address.fullName.split(' ')[0] || address.fullName,
+  lastName: address.fullName.split(' ').slice(1).join(' ') || '-',
+  address: [address.addressLine1, address.addressLine2].filter(Boolean).join(', '),
+  city: address.city,
+  state: address.state,
+  zipCode: address.postalCode,
+  country: address.country,
+  phone: address.phoneNumber,
+});
 
 const addressSchema = t.Object({
   firstName: t.String({ minLength: 1, maxLength: 100 }),
@@ -38,7 +51,30 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
   .post(
     '/',
     async ({ body, set, user }) => {
-      const order = await orderService.createOrder(user!.sub as string, body as any);
+      let shippingAddress = body.shippingAddress;
+
+      if (!shippingAddress && body.shippingAddressId) {
+        const saved = await addressService.getAddressById(body.shippingAddressId, user!.sub);
+        if (!saved) throw new NotFoundError('Shipping address not found');
+        shippingAddress = toOrderAddress(saved);
+      }
+
+      if (!shippingAddress) {
+        throw new ValidationError('shippingAddress or shippingAddressId is required');
+      }
+
+      let billingAddress = body.billingAddress;
+      if (!billingAddress && body.billingAddressId) {
+        const saved = await addressService.getAddressById(body.billingAddressId, user!.sub);
+        if (!saved) throw new NotFoundError('Billing address not found');
+        billingAddress = toOrderAddress(saved);
+      }
+
+      const order = await orderService.createOrder(user!.sub as string, {
+        ...body,
+        shippingAddress,
+        billingAddress: billingAddress || shippingAddress,
+      } as any);
       set.status = 201;
       return successResponse(order, 'Order created successfully', 201);
     },
@@ -51,8 +87,10 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
           }),
           { minItems: 1, maxItems: 50 }
         ),
-        shippingAddress: addressSchema,
+        shippingAddress: t.Optional(addressSchema),
+        shippingAddressId: t.Optional(t.String({ format: 'uuid' })),
         billingAddress: t.Optional(addressSchema),
+        billingAddressId: t.Optional(t.String({ format: 'uuid' })),
         notes: t.Optional(t.String({ maxLength: 1000 })),
         couponCode: t.Optional(t.String({ maxLength: 50 })),
         shippingMethodId: t.Optional(t.String({ format: 'uuid' })),

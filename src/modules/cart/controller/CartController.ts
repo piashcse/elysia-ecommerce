@@ -10,11 +10,10 @@ export const cartController = new Elysia({ prefix: '/cart', tags: ['Cart'] })
   .guard({
     isAuth: true
   })
-  // Get user's cart
   .get(
     '/',
     async ({ user }) => {
-      const cart = await cartService.getCartForUser(user!.sub as string);
+      const cart = await cartService.getCartForUser(user!.sub);
       return successResponse(cart || null, 'Cart retrieved successfully');
     },
     {
@@ -25,38 +24,49 @@ export const cartController = new Elysia({ prefix: '/cart', tags: ['Cart'] })
     }
   )
 
-  // Add item to cart
+  .get(
+    '/count',
+    async ({ user }) => {
+      const count = await cartService.getCartCount(user!.sub);
+      return successResponse(count, 'Cart count retrieved successfully');
+    },
+    {
+      response: { 200: successSchema() },
+      detail: { summary: "Get the current user's cart item count" }
+    }
+  )
+
   .post(
     '/items',
     async ({ body, user }) => {
-      const cart = await cartService.addToCart(user!.sub as string, body);
+      const cart = await cartService.addToCart(user!.sub, body);
       return successResponse(cart, 'Item added to cart successfully');
     },
     {
       body: t.Object({
-        productId: t.String(),
-        quantity: t.Number({ minimum: 1 })
+        productId: t.String({ format: 'uuid' }),
+        quantity: t.Integer({ minimum: 1, maximum: 100 })
       }),
       response: {
         200: successSchema(),
         400: errorSchema,
+        409: errorSchema,
         422: errorSchema
       },
       detail: { summary: 'Add item to cart' }
     }
   )
 
-  // Update cart item quantity
   .put(
     '/items/:id',
-    async ({ params, body }) => {
-      const cart = await cartService.updateCartItem(params.id, body);
+    async ({ params, body, user }) => {
+      const cart = await cartService.updateCartItem(user!.sub, params.id, body);
       return successResponse(cart, 'Cart item updated successfully');
     },
     {
-      params: t.Object({ id: t.String() }),
+      params: t.Object({ id: t.String({ format: 'uuid' }) }),
       body: t.Object({
-        quantity: t.Number({ minimum: 1 })
+        quantity: t.Integer({ minimum: 1, maximum: 100 })
       }),
       response: {
         200: successSchema(),
@@ -67,15 +77,14 @@ export const cartController = new Elysia({ prefix: '/cart', tags: ['Cart'] })
     }
   )
 
-  // Remove item from cart
   .delete(
     '/items/:id',
-    async ({ params }) => {
-      const cart = await cartService.removeCartItem(params.id);
+    async ({ params, user }) => {
+      const cart = await cartService.removeCartItem(user!.sub, params.id);
       return successResponse(cart, 'Item removed from cart successfully');
     },
     {
-      params: t.Object({ id: t.String() }),
+      params: t.Object({ id: t.String({ format: 'uuid' }) }),
       response: {
         200: successSchema(),
         404: errorSchema
@@ -84,11 +93,10 @@ export const cartController = new Elysia({ prefix: '/cart', tags: ['Cart'] })
     }
   )
 
-  // Clear entire cart
   .delete(
     '/',
     async ({ user }) => {
-      const cart = await cartService.getCartForUser(user!.sub as string);
+      const cart = await cartService.getCartForUser(user!.sub);
       if (cart) {
         await cartService.clearCart(cart.id);
       }

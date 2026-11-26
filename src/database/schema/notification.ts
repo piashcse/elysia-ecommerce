@@ -8,6 +8,7 @@ export const notificationTypeEnum = pgEnum('notification_type', [
     'order_cancelled',
     'payment_success',
     'payment_failed',
+    'payment_refunded',
     'low_stock',
     'price_drop',
     'promotional',
