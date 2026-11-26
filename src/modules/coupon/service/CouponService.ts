@@ -207,4 +207,26 @@ export class CouponService extends BaseService<typeof coupons> {
 
     await tx.insert(couponUsage).values({ couponId, userId, orderId });
   }
+
+  /**
+   * Releases a coupon when an order is cancelled or fully refunded so the
+   * customer can use it again. Safe to call even if no usage was recorded.
+   */
+  async releaseUsage(tx: any, orderId: string): Promise<void> {
+    const usages = await tx
+      .select()
+      .from(couponUsage)
+      .where(eq(couponUsage.orderId, orderId));
+
+    for (const usage of usages) {
+      await tx.delete(couponUsage).where(eq(couponUsage.id, usage.id));
+      await tx
+        .update(coupons)
+        .set({
+          usedCount: sql`greatest(${coupons.usedCount} - 1, 0)`,
+          updatedAt: new Date(),
+        })
+        .where(eq(coupons.id, usage.couponId));
+    }
+  }
 }

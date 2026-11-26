@@ -14,6 +14,7 @@ import { UserRole } from '../../../core/roles';
 import { PAGINATION } from '../../../core/constants';
 import envConfig from '../../../config/env';
 import { NotificationService } from '../../notification/service/NotificationService';
+import { CouponService } from '../../coupon/service/CouponService';
 
 const toCents = (value: number | string): number => Math.round(Number(value) * 100);
 const fromCents = (cents: number): string => (cents / 100).toFixed(2);
@@ -31,6 +32,7 @@ const assertOwner = (actor: Actor, orderUserId: string | null) => {
 
 export class PaymentService extends BaseService<typeof payments> {
   private notificationService = new NotificationService();
+  private couponService = new CouponService();
 
   constructor() {
     super(payments);
@@ -314,6 +316,8 @@ export class PaymentService extends BaseService<typeof payments> {
             .update(orders)
             .set({ status: 'refunded', updatedAt: new Date() })
             .where(eq(orders.id, order.id));
+
+          await this.couponService.releaseUsage(tx, order.id);
         }
       }
 

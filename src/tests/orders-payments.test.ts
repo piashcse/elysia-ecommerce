@@ -142,6 +142,36 @@ describe('Orders, inventory, coupons, and payments', () => {
     expect(secondUse.body.error.code).toBe('COUPON_USER_LIMIT');
   });
 
+  test('cancelling an order releases its coupon usage', async () => {
+    const { admin, customer, product } = await setup();
+    const code = `REUSE-${Date.now()}`;
+
+    await api('/coupons', {
+      method: 'POST',
+      token: admin.token,
+      body: {
+        code,
+        discountType: 'fixed',
+        discountValue: 1,
+        perUserLimit: 1,
+        startDate: '2026-01-01T00:00:00.000Z',
+        endDate: '2028-01-01T00:00:00.000Z',
+      },
+    });
+
+    const first = await placeOrder(customer.token, product.id, 1, { couponCode: code });
+    expect(first.status).toBe(201);
+
+    await api(`/orders/${first.body.data.id}/cancel`, {
+      method: 'PUT',
+      token: customer.token,
+    });
+
+    const second = await placeOrder(customer.token, product.id, 1, { couponCode: code });
+    expect(second.status).toBe(201);
+    expect(Number(second.body.data.discountAmount)).toBe(1);
+  });
+
   test('invalid coupons and invalid order transitions are rejected', async () => {
     const { admin, customer, product } = await setup();
 

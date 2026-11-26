@@ -348,6 +348,8 @@ export class OrderService extends BaseService<typeof ordersTable> {
           .where(eq(payments.id, payment.id));
       }
 
+      await this.couponService.releaseUsage(tx, orderId);
+
       const nextStatus = finalStatus === 'refunded' || payment?.status === 'completed'
         ? 'refunded'
         : 'cancelled';
