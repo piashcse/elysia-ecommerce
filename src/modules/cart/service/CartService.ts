@@ -1,25 +1,18 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../../../config/database';
-import { cartItems, carts, products, users } from '../../../database/schema';
+import { cartItems, carts, products } from '../../../database/schema';
 import { AddToCartDto, UpdateCartItemDto } from '../dto/CartDto';
-import { ConflictError, NotFoundError, ValidationError } from '../../../core/errors';
+import { ConflictError, NotFoundError } from '../../../core/errors';
 import { BaseService } from '../../../core/base.service';
 
-export class CartService extends BaseService<typeof carts> {
+export class CartService extends BaseService {
   constructor() {
     super(carts);
   }
 
-  async createCart(userId?: string): Promise<any> {
-    if (!userId) throw new ValidationError('Authentication is required for a cart');
-
-    const [user] = await db.select({ id: users.id }).from(users).where(eq(users.id, userId)).limit(1);
-    if (!user) throw new NotFoundError('User not found');
-
+  async createCart(userId: string): Promise<any> {
     const [existingCart] = await db.select().from(carts).where(eq(carts.userId, userId)).limit(1);
-    if (existingCart) return existingCart;
-
-    return this.create({ userId });
+    return existingCart ?? this.create({ userId });
   }
 
   async getCartWithItems(cartId: string): Promise<any> {
@@ -130,7 +123,6 @@ export class CartService extends BaseService<typeof carts> {
   }
 
   async clearCart(cartId: string): Promise<void> {
-    await this.findByIdOrFail(cartId, 'Cart');
     await db.delete(cartItems).where(eq(cartItems.cartId, cartId));
   }
 
@@ -141,16 +133,14 @@ export class CartService extends BaseService<typeof carts> {
   }
 
   async getCartCount(userId: string): Promise<{ items: number; quantity: number }> {
-    const [cart] = await db.select({ id: carts.id }).from(carts).where(eq(carts.userId, userId)).limit(1);
-    if (!cart) return { items: 0, quantity: 0 };
-
     const [result] = await db
       .select({
-        items: sql<number>`count(*)`,
+        items: sql<number>`count(${cartItems.id})`,
         quantity: sql<number>`coalesce(sum(${cartItems.quantity}), 0)`,
       })
-      .from(cartItems)
-      .where(eq(cartItems.cartId, cart.id));
+      .from(carts)
+      .leftJoin(cartItems, eq(carts.id, cartItems.cartId))
+      .where(eq(carts.userId, userId));
 
     return {
       items: result ? Number(result.items) : 0,

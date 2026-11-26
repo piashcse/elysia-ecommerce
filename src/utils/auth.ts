@@ -43,12 +43,4 @@ export const sha256Hash = (input: string): string => {
   return hasher.digest('hex');
 };
 
-/**
- * Validate email format.
- */
-export const isValidEmail = (email: string): boolean => {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email);
-};
-
 export const normalizeEmail = (email: string): string => email.trim().toLowerCase();

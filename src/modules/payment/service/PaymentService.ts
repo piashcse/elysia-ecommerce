@@ -15,9 +15,7 @@ import { PAGINATION } from '../../../core/constants';
 import envConfig from '../../../config/env';
 import { NotificationService } from '../../notification/service/NotificationService';
 import { CouponService } from '../../coupon/service/CouponService';
-
-const toCents = (value: number | string): number => Math.round(Number(value) * 100);
-const fromCents = (cents: number): string => (cents / 100).toFixed(2);
+import { fromCents, toCents } from '../../../core/money';
 
 interface Actor {
   sub: string;
@@ -30,7 +28,7 @@ const assertOwner = (actor: Actor, orderUserId: string | null) => {
   }
 };
 
-export class PaymentService extends BaseService<typeof payments> {
+export class PaymentService extends BaseService {
   private notificationService = new NotificationService();
   private couponService = new CouponService();
 
@@ -243,20 +241,21 @@ export class PaymentService extends BaseService<typeof payments> {
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-    const items = await db
-      .select({ payment: payments, order: orders })
-      .from(payments)
-      .leftJoin(orders, eq(payments.orderId, orders.id))
-      .where(whereClause)
-      .orderBy(desc(payments.createdAt))
-      .limit(safeLimit)
-      .offset(offset);
-
-    const [countResult] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(payments)
-      .leftJoin(orders, eq(payments.orderId, orders.id))
-      .where(whereClause);
+    const [items, [countResult]] = await Promise.all([
+      db
+        .select({ payment: payments, order: orders })
+        .from(payments)
+        .leftJoin(orders, eq(payments.orderId, orders.id))
+        .where(whereClause)
+        .orderBy(desc(payments.createdAt))
+        .limit(safeLimit)
+        .offset(offset),
+      db
+        .select({ count: sql<number>`count(*)` })
+        .from(payments)
+        .leftJoin(orders, eq(payments.orderId, orders.id))
+        .where(whereClause),
+    ]);
 
     return {
       items: items.map((row) => ({ ...row.payment, order: row.order })),

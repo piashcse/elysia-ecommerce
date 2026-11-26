@@ -2,6 +2,7 @@ import { Elysia, t } from 'elysia';
 import { PaymentService } from '../service/PaymentService';
 import { paginatedResponse, successResponse, successSchema, paginatedSchema, errorSchema } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
+import { idParams, uuid } from '../../../core/schemas';
 import { UserRole } from '../../../core/roles';
 import { PAGINATION } from '../../../core/constants';
 import { getPagination } from '../../../utils/validation';
@@ -38,7 +39,7 @@ export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payme
   })
   .post('/', {
     body: t.Object({
-      orderId: t.String({ format: 'uuid' }),
+      orderId: uuid,
       method: paymentMethodSchema,
       amount: t.Number({ minimum: 0.01, maximum: 999999.99 }),
       metadata: t.Optional(t.Record(t.String(), t.Any())),
@@ -59,7 +60,7 @@ export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payme
 
   .post('/process', {
     body: t.Object({
-      orderId: t.String({ format: 'uuid' }),
+      orderId: uuid,
       method: paymentMethodSchema,
       amount: t.Number({ minimum: 0.01, maximum: 999999.99 }),
       paymentDetails: paymentDetailsSchema,
@@ -86,8 +87,8 @@ export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payme
       method: t.Optional(paymentMethodSchema),
       dateFrom: t.Optional(t.String({ format: 'date-time' })),
       dateTo: t.Optional(t.String({ format: 'date-time' })),
-      orderId: t.Optional(t.String({ format: 'uuid' })),
-      userId: t.Optional(t.String({ format: 'uuid' })),
+      orderId: t.Optional(uuid),
+      userId: t.Optional(uuid),
     }),
     response: {
       200: paginatedSchema()
@@ -116,7 +117,7 @@ export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payme
   })
 
   .get('/:id', {
-    params: t.Object({ id: t.String({ format: 'uuid' }) }),
+    params: idParams,
     response: {
       200: successSchema(),
       403: errorSchema,
@@ -129,7 +130,7 @@ export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payme
   })
 
   .post('/:id/refund', {
-    params: t.Object({ id: t.String({ format: 'uuid' }) }),
+    params: idParams,
     body: t.Optional(t.Object({
       amount: t.Optional(t.Number({ minimum: 0.01, maximum: 999999.99 })),
     })),
@@ -147,7 +148,7 @@ export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payme
   })
 
   .post('/:id/complete', {
-    params: t.Object({ id: t.String({ format: 'uuid' }) }),
+    params: idParams,
     hasRole: UserRole.ADMIN,
     response: {
       200: successSchema(),

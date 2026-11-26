@@ -1,4 +1,4 @@
-import { desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { db } from '../../../config/database';
 import { notifications } from '../../../database/schema';
 import { CreateNotificationDto } from '../dto/NotificationDto';
@@ -83,11 +83,6 @@ export class NotificationService {
     });
   }
 
-  async findNotificationById(id: string): Promise<any | null> {
-    const [notification] = await db.select().from(notifications).where(eq(notifications.id, id)).limit(1);
-    return notification || null;
-  }
-
   async getUserNotifications(
     userId: string,
     page: number = 1,
@@ -97,18 +92,19 @@ export class NotificationService {
     const safeLimit = Number.isFinite(limit) ? Math.min(PAGINATION.MAX_LIMIT, Math.max(1, Math.trunc(limit))) : PAGINATION.DEFAULT_LIMIT;
     const offset = (safePage - 1) * safeLimit;
 
-    const notificationsResult = await db
-      .select()
-      .from(notifications)
-      .where(eq(notifications.userId, userId))
-      .orderBy(desc(notifications.createdAt))
-      .limit(safeLimit)
-      .offset(offset);
-
-    const [countResult] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(notifications)
-      .where(eq(notifications.userId, userId));
+    const [notificationsResult, [countResult]] = await Promise.all([
+      db
+        .select()
+        .from(notifications)
+        .where(eq(notifications.userId, userId))
+        .orderBy(desc(notifications.createdAt))
+        .limit(safeLimit)
+        .offset(offset),
+      db
+        .select({ count: sql<number>`count(*)` })
+        .from(notifications)
+        .where(eq(notifications.userId, userId)),
+    ]);
 
     return {
       notifications: notificationsResult,
@@ -125,17 +121,13 @@ export class NotificationService {
   }
 
   async markAsRead(id: string, userId: string): Promise<any> {
-    const notification = await this.findNotificationById(id);
-    if (!notification || notification.userId !== userId) {
-      throw new NotFoundError('Notification not found');
-    }
-
     const [updatedNotification] = await db
       .update(notifications)
       .set({ isRead: true })
-      .where(eq(notifications.id, id))
+      .where(and(eq(notifications.id, id), eq(notifications.userId, userId)))
       .returning();
 
+    if (!updatedNotification) throw new NotFoundError('Notification not found');
     return updatedNotification;
   }
 
@@ -144,10 +136,11 @@ export class NotificationService {
   }
 
   async deleteNotification(id: string, userId: string): Promise<void> {
-    const notification = await this.findNotificationById(id);
-    if (!notification || notification.userId !== userId) {
-      throw new NotFoundError('Notification not found');
-    }
-    await db.delete(notifications).where(eq(notifications.id, id));
+    const deleted = await db
+      .delete(notifications)
+      .where(and(eq(notifications.id, id), eq(notifications.userId, userId)))
+      .returning({ id: notifications.id });
+
+    if (!deleted.length) throw new NotFoundError('Notification not found');
   }
 }

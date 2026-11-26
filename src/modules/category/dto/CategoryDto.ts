@@ -5,18 +5,4 @@ export interface CreateCategoryDto {
   isActive?: boolean;
 }
 
-export interface UpdateCategoryDto {
-  name?: string;
-  description?: string;
-  imageUrl?: string;
-  isActive?: boolean;
-}
-
-export interface CategoryResponseDto {
-  id: string;
-  name: string;
-  description: string | null;
-  isActive: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}
+export type UpdateCategoryDto = Partial<CreateCategoryDto>;

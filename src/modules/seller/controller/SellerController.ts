@@ -2,6 +2,7 @@ import { Elysia, t } from 'elysia';
 import { SellerService } from '../service/SellerService';
 import { paginatedResponse, successResponse, successSchema, paginatedSchema, errorSchema } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
+import { idParams, uuid } from '../../../core/schemas';
 import { UserRole } from '../../../core/roles';
 import { PAGINATION } from '../../../core/constants';
 import { getPagination } from '../../../utils/validation';
@@ -41,7 +42,7 @@ export const sellerController = new Elysia({ prefix: '/seller', tags: ['Seller']
             weightGrams: t.Optional(t.Integer({ minimum: 0 })),
             sku: t.String({ minLength: 1, maxLength: 100 }),
             imageUrl: t.Optional(t.String({ format: 'uri', maxLength: 500 })),
-            categoryId: t.Optional(t.String({ format: 'uuid' })),
+            categoryId: t.Optional(uuid),
             isActive: t.Optional(t.Boolean()),
         }),
         response: {
@@ -58,7 +59,7 @@ export const sellerController = new Elysia({ prefix: '/seller', tags: ['Seller']
         return successResponse(product, 'Product created successfully', 201);
     })
     .put('/products/:id', {
-        params: t.Object({ id: t.String({ format: 'uuid' }) }),
+        params: idParams,
         body: t.Partial(t.Object({
             name: t.String({ minLength: 1, maxLength: 255 }),
             description: t.String({ maxLength: 5000 }),
@@ -67,7 +68,7 @@ export const sellerController = new Elysia({ prefix: '/seller', tags: ['Seller']
             weightGrams: t.Integer({ minimum: 0 }),
             sku: t.String({ minLength: 1, maxLength: 100 }),
             imageUrl: t.String({ format: 'uri', maxLength: 500 }),
-            categoryId: t.String({ format: 'uuid' }),
+            categoryId: uuid,
             isActive: t.Boolean(),
         })),
         response: {
@@ -82,7 +83,7 @@ export const sellerController = new Elysia({ prefix: '/seller', tags: ['Seller']
         return successResponse(product, 'Product updated successfully');
     })
     .delete('/products/:id', {
-        params: t.Object({ id: t.String({ format: 'uuid' }) }),
+        params: idParams,
         response: {
             200: successSchema(t.Null()),
             400: errorSchema,

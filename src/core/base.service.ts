@@ -4,7 +4,7 @@ import { NotFoundError, ValidationError } from './errors';
 import { isUuid } from '../utils/validation';
 import { PAGINATION } from './constants';
 
-export class BaseService<T extends any> {
+export class BaseService {
     constructor(protected schema: any) { }
 
     async findAll(
@@ -20,18 +20,19 @@ export class BaseService<T extends any> {
         const offset = (safePage - 1) * safeLimit;
         const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-        const items = await db
-            .select()
-            .from(this.schema)
-            .where(whereClause)
-            .limit(safeLimit)
-            .offset(offset)
-            .orderBy(orderByClause ?? desc((this.schema as any).createdAt));
-
-        const [countResult] = await db
-            .select({ count: sql<number>`count(*)` })
-            .from(this.schema)
-            .where(whereClause);
+        const [items, [countResult]] = await Promise.all([
+            db
+                .select()
+                .from(this.schema)
+                .where(whereClause)
+                .limit(safeLimit)
+                .offset(offset)
+                .orderBy(orderByClause ?? desc((this.schema as any).createdAt)),
+            db
+                .select({ count: sql<number>`count(*)` })
+                .from(this.schema)
+                .where(whereClause),
+        ]);
 
         const total = countResult ? Number(countResult.count) : 0;
 
@@ -63,21 +64,11 @@ export class BaseService<T extends any> {
     async update(id: string, data: any): Promise<any> {
         await this.findByIdOrFail(id);
 
-        const updateData = { ...data };
-        if ((this.schema as any).updatedAt) {
-            updateData.updatedAt = new Date();
-        }
-
         const [updatedItem] = (await db
             .update(this.schema)
-            .set(updateData)
+            .set(data)
             .where(eq((this.schema as any).id, id))
             .returning()) as any[];
         return updatedItem;
-    }
-
-    async delete(id: string): Promise<void> {
-        await this.findByIdOrFail(id);
-        await db.delete(this.schema).where(eq((this.schema as any).id, id));
     }
 }

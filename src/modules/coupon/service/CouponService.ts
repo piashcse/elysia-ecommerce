@@ -15,7 +15,7 @@ export interface CouponValidation {
   discountAmount: string;
 }
 
-export class CouponService extends BaseService<typeof coupons> {
+export class CouponService extends BaseService {
   constructor() {
     super(coupons);
   }
@@ -56,7 +56,7 @@ export class CouponService extends BaseService<typeof coupons> {
     }
   }
 
-  async createCoupon(createCouponDto: CreateCouponDto & { perUserLimit?: number }): Promise<any> {
+  async createCoupon(createCouponDto: CreateCouponDto): Promise<any> {
     this.validateRules(createCouponDto);
 
     const code = createCouponDto.code.trim().toUpperCase();
@@ -83,7 +83,7 @@ export class CouponService extends BaseService<typeof coupons> {
       minOrderAmount: updateCouponDto.minOrderAmount ?? (current.minOrderAmount === null ? undefined : Number(current.minOrderAmount)),
       maxDiscountAmount: updateCouponDto.maxDiscountAmount ?? (current.maxDiscountAmount === null ? undefined : Number(current.maxDiscountAmount)),
       usageLimit: updateCouponDto.usageLimit ?? (current.usageLimit ?? undefined),
-      perUserLimit: (updateCouponDto as any).perUserLimit ?? (current.perUserLimit ?? undefined),
+      perUserLimit: updateCouponDto.perUserLimit ?? (current.perUserLimit ?? undefined),
     };
 
     this.validateRules(merged);
@@ -99,7 +99,18 @@ export class CouponService extends BaseService<typeof coupons> {
       if (existing) throw new ConflictError('Coupon with this code already exists', 'COUPON_CODE_EXISTS');
     }
 
-    return this.update(id, updateData);
+    const [updated] = await db
+      .update(coupons)
+      .set({ ...updateData, updatedAt: new Date() })
+      .where(eq(coupons.id, id))
+      .returning();
+
+    return updated;
+  }
+
+  async deleteCoupon(id: string): Promise<void> {
+    const deleted = await db.delete(coupons).where(eq(coupons.id, id)).returning({ id: coupons.id });
+    if (!deleted.length) throw new NotFoundError('Coupon not found');
   }
 
   async getCouponById(id: string): Promise<any> {

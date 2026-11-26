@@ -1,13 +1,13 @@
 import { Elysia, t } from 'elysia';
 import { OrderService } from '../service/OrderService';
-import { errorResponse, paginatedResponse, successResponse, successSchema, paginatedSchema, errorSchema } from '../../../core/responses';
+import { paginatedResponse, successResponse, successSchema, paginatedSchema, errorSchema } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
+import { idParams, uuid } from '../../../core/schemas';
 import { UserRole } from '../../../core/roles';
 import { ForbiddenError, NotFoundError, ValidationError } from '../../../core/errors';
 import { AddressService } from '../../address/service/AddressService';
-import { PAGINATION } from '../../../core/constants';
+import { ORDER_STATUSES, PAGINATION } from '../../../core/constants';
 import { getPagination } from '../../../utils/validation';
-import { orderStatuses, OrderStatus } from '../validators/OrderValidator';
 
 const orderService = new OrderService();
 const addressService = new AddressService();
@@ -34,14 +34,7 @@ const addressSchema = t.Object({
   phone: t.Optional(t.String({ maxLength: 20 })),
 });
 
-const orderStatusSchema = t.Union([
-  t.Literal('pending'),
-  t.Literal('processing'),
-  t.Literal('shipped'),
-  t.Literal('delivered'),
-  t.Literal('cancelled'),
-  t.Literal('refunded'),
-]);
+const orderStatusSchema = t.Union(ORDER_STATUSES.map((status) => t.Literal(status)));
 
 export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] })
   .use(authPlugin)
@@ -52,18 +45,18 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
     body: t.Object({
       items: t.Array(
         t.Object({
-          productId: t.String({ format: 'uuid' }),
+          productId: uuid,
           quantity: t.Integer({ minimum: 1, maximum: 100 })
         }),
         { minItems: 1, maxItems: 50 }
       ),
       shippingAddress: t.Optional(addressSchema),
-      shippingAddressId: t.Optional(t.String({ format: 'uuid' })),
+      shippingAddressId: t.Optional(uuid),
       billingAddress: t.Optional(addressSchema),
-      billingAddressId: t.Optional(t.String({ format: 'uuid' })),
+      billingAddressId: t.Optional(uuid),
       notes: t.Optional(t.String({ maxLength: 1000 })),
       couponCode: t.Optional(t.String({ maxLength: 50 })),
-      shippingMethodId: t.Optional(t.String({ format: 'uuid' })),
+      shippingMethodId: t.Optional(uuid),
     }),
     response: {
       201: successSchema(),
@@ -119,7 +112,7 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
       status: t.Optional(orderStatusSchema),
       dateFrom: t.Optional(t.String({ format: 'date-time' })),
       dateTo: t.Optional(t.String({ format: 'date-time' })),
-      userId: t.Optional(t.String({ format: 'uuid' })),
+      userId: t.Optional(uuid),
     }),
     response: { 200: paginatedSchema() },
     detail: { summary: 'Get orders (Admin: all, Customer: own)' }
@@ -146,14 +139,14 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
 
   // Get order by ID
   .get('/:id', {
-    params: t.Object({ id: t.String({ format: 'uuid' }) }),
+    params: idParams,
     response: {
       200: successSchema(),
       403: errorSchema,
       404: errorSchema
     },
     detail: { summary: 'Get order details by ID' }
-  }, async ({ params, set, user }) => {
+  }, async ({ params, user }) => {
     const order = await orderService.getOrderById(params.id);
     if (!order) throw new NotFoundError('Order not found');
   
@@ -166,7 +159,7 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
 
   // Update order (admin only)
   .put('/:id', {
-    params: t.Object({ id: t.String({ format: 'uuid' }) }),
+    params: idParams,
     body: t.Object({
       status: t.Optional(orderStatusSchema),
       notes: t.Optional(t.String({ maxLength: 1000 })),
@@ -187,7 +180,7 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
 
   // Cancel order
   .put('/:id/cancel', {
-    params: t.Object({ id: t.String({ format: 'uuid' }) }),
+    params: idParams,
     response: {
       200: successSchema(),
       403: errorSchema,
@@ -195,7 +188,7 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
       409: errorSchema
     },
     detail: { summary: 'Cancel order' }
-  }, async ({ params, set, user }) => {
+  }, async ({ params, user }) => {
     const order = await orderService.getOrderById(params.id);
     if (!order) throw new NotFoundError('Order not found');
   

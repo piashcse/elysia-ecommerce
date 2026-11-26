@@ -2,6 +2,7 @@ import { Elysia, t } from 'elysia';
 import { CartService } from '../service/CartService';
 import { successResponse, successSchema, errorSchema } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
+import { idParams, uuid } from '../../../core/schemas';
 
 const cartService = new CartService();
 
@@ -30,7 +31,7 @@ export const cartController = new Elysia({ prefix: '/cart', tags: ['Cart'] })
 
   .post('/items', {
     body: t.Object({
-      productId: t.String({ format: 'uuid' }),
+      productId: uuid,
       quantity: t.Integer({ minimum: 1, maximum: 100 })
     }),
     response: {
@@ -46,7 +47,7 @@ export const cartController = new Elysia({ prefix: '/cart', tags: ['Cart'] })
   })
 
   .put('/items/:id', {
-    params: t.Object({ id: t.String({ format: 'uuid' }) }),
+    params: idParams,
     body: t.Object({
       quantity: t.Integer({ minimum: 1, maximum: 100 })
     }),
@@ -62,7 +63,7 @@ export const cartController = new Elysia({ prefix: '/cart', tags: ['Cart'] })
   })
 
   .delete('/items/:id', {
-    params: t.Object({ id: t.String({ format: 'uuid' }) }),
+    params: idParams,
     response: {
       200: successSchema(),
       404: errorSchema

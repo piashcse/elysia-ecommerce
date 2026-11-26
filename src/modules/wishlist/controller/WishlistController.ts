@@ -2,7 +2,7 @@ import { Elysia, t } from 'elysia';
 import { WishlistService } from '../service/WishlistService';
 import { successResponse, successSchema, errorSchema } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
-import { PAGINATION } from '../../../core/constants';
+import { idParams, paginationQuery, uuid } from '../../../core/schemas';
 import { getPagination } from '../../../utils/validation';
 
 const wishlistService = new WishlistService();
@@ -13,10 +13,7 @@ export const wishlistController = new Elysia({ prefix: '/wishlist', tags: ['Wish
     isAuth: true
   })
   .get('/', {
-    query: t.Object({
-      page: t.Optional(t.Integer({ minimum: 1 })),
-      limit: t.Optional(t.Integer({ minimum: 1, maximum: PAGINATION.MAX_LIMIT })),
-    }),
+    query: paginationQuery,
     response: {
       200: successSchema(t.Array(t.Any()))
     },
@@ -29,7 +26,7 @@ export const wishlistController = new Elysia({ prefix: '/wishlist', tags: ['Wish
 
   .post('/items', {
     body: t.Object({
-      productId: t.String({ format: 'uuid' })
+      productId: uuid
     }),
     response: {
       201: successSchema(),
@@ -46,7 +43,7 @@ export const wishlistController = new Elysia({ prefix: '/wishlist', tags: ['Wish
 
   .post('/toggle', {
     body: t.Object({
-      productId: t.String({ format: 'uuid' })
+      productId: uuid
     }),
     response: { 200: successSchema(), 409: errorSchema },
     detail: { summary: 'Toggle a product in the wishlist' }
@@ -56,7 +53,7 @@ export const wishlistController = new Elysia({ prefix: '/wishlist', tags: ['Wish
   })
 
   .get('/check/:productId', {
-    params: t.Object({ productId: t.String({ format: 'uuid' }) }),
+    params: t.Object({ productId: uuid }),
     response: { 200: successSchema() },
     detail: { summary: 'Check whether a product is in the wishlist' }
   }, async ({ params, user }) => {
@@ -65,7 +62,7 @@ export const wishlistController = new Elysia({ prefix: '/wishlist', tags: ['Wish
   })
 
   .delete('/items/:id', {
-    params: t.Object({ id: t.String({ format: 'uuid' }) }),
+    params: idParams,
     response: {
       200: successSchema(t.Null()),
       404: errorSchema

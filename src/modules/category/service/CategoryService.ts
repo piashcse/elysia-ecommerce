@@ -6,7 +6,7 @@ import { ConflictError, NotFoundError } from '../../../core/errors';
 import { BaseService } from '../../../core/base.service';
 import { PAGINATION } from '../../../core/constants';
 
-export class CategoryService extends BaseService<typeof categories> {
+export class CategoryService extends BaseService {
   constructor() {
     super(categories);
   }
@@ -25,7 +25,13 @@ export class CategoryService extends BaseService<typeof categories> {
       if (existingCategory) throw new ConflictError('Category with this name already exists');
     }
 
-    return this.update(id, updateCategoryDto);
+    const [updated] = await db
+      .update(categories)
+      .set({ ...updateCategoryDto, updatedAt: new Date() })
+      .where(eq(categories.id, id))
+      .returning();
+
+    return updated;
   }
 
   async deleteCategory(id: string): Promise<void> {
@@ -36,7 +42,7 @@ export class CategoryService extends BaseService<typeof categories> {
       throw new ConflictError('Cannot delete a category that still has products', 'CATEGORY_HAS_PRODUCTS');
     }
 
-    return this.delete(id);
+    await db.delete(categories).where(eq(categories.id, id));
   }
 
   async getAllCategories(
@@ -78,18 +84,19 @@ export class CategoryService extends BaseService<typeof categories> {
     if (filters.isActive !== undefined) conditions.push(eq(products.isActive, filters.isActive));
     const whereClause = and(...conditions);
 
-    const productsResult = await db
-      .select()
-      .from(products)
-      .where(whereClause)
-      .orderBy(products.createdAt)
-      .limit(safeLimit)
-      .offset(offset);
-
-    const [countResult] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(products)
-      .where(whereClause);
+    const [productsResult, [countResult]] = await Promise.all([
+      db
+        .select()
+        .from(products)
+        .where(whereClause)
+        .orderBy(products.createdAt)
+        .limit(safeLimit)
+        .offset(offset),
+      db
+        .select({ count: sql<number>`count(*)` })
+        .from(products)
+        .where(whereClause),
+    ]);
 
     const total = countResult ? Number(countResult.count) : 0;
 

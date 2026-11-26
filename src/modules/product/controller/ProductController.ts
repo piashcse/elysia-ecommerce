@@ -2,6 +2,7 @@ import { Elysia, t } from 'elysia';
 import { ProductService } from '../service/ProductService';
 import { paginatedResponse, successResponse, successSchema, paginatedSchema, errorSchema } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
+import { idParams, uuid } from '../../../core/schemas';
 import { UserRole } from '../../../core/roles';
 import { NotFoundError } from '../../../core/errors';
 import { PAGINATION } from '../../../core/constants';
@@ -41,8 +42,8 @@ export const productController = new Elysia({ prefix: '/products', tags: ['Produ
       weightGrams: t.Optional(t.Integer({ minimum: 0 })),
       sku: t.String({ minLength: 1, maxLength: 100 }),
       isActive: t.Optional(t.Boolean()),
-      categoryId: t.Optional(t.String({ format: 'uuid' })),
-      sellerId: t.String({ format: 'uuid' }),
+      categoryId: t.Optional(uuid),
+      sellerId: uuid,
     }),
     hasRole: UserRole.ADMIN,
     response: {
@@ -60,8 +61,8 @@ export const productController = new Elysia({ prefix: '/products', tags: ['Produ
   .get('/', {
     query: t.Object({
       search: t.Optional(t.String({ maxLength: 200 })),
-      category: t.Optional(t.String({ format: 'uuid' })),
-      sellerId: t.Optional(t.String({ format: 'uuid' })),
+      category: t.Optional(uuid),
+      sellerId: t.Optional(uuid),
       minPrice: t.Optional(t.Number({ minimum: 0 })),
       maxPrice: t.Optional(t.Number({ minimum: 0 })),
       inStock: t.Optional(t.Boolean()),
@@ -108,7 +109,7 @@ export const productController = new Elysia({ prefix: '/products', tags: ['Produ
   })
 
   .get('/:id', {
-    params: t.Object({ id: t.String({ format: 'uuid' }) }),
+    params: idParams,
     response: {
       200: successSchema(),
       404: errorSchema
@@ -122,7 +123,7 @@ export const productController = new Elysia({ prefix: '/products', tags: ['Produ
   })
 
   .get('/:id/images', {
-    params: t.Object({ id: t.String({ format: 'uuid' }) }),
+    params: idParams,
     response: { 200: successSchema() },
     detail: { summary: 'Get product images' }
   }, async ({ params }) => {
@@ -131,7 +132,7 @@ export const productController = new Elysia({ prefix: '/products', tags: ['Produ
   })
 
   .post('/:id/images', {
-    params: t.Object({ id: t.String({ format: 'uuid' }) }),
+    params: idParams,
     body: imageBody,
     isAuth: true,
     response: { 200: successSchema(), 403: errorSchema, 404: errorSchema },
@@ -142,7 +143,7 @@ export const productController = new Elysia({ prefix: '/products', tags: ['Produ
   })
 
   .put('/images/:imageId', {
-    params: t.Object({ imageId: t.String({ format: 'uuid' }) }),
+    params: t.Object({ imageId: uuid }),
     body: t.Partial(imageBody),
     isAuth: true,
     response: { 200: successSchema(), 403: errorSchema, 404: errorSchema },
@@ -153,7 +154,7 @@ export const productController = new Elysia({ prefix: '/products', tags: ['Produ
   })
 
   .delete('/images/:imageId', {
-    params: t.Object({ imageId: t.String({ format: 'uuid' }) }),
+    params: t.Object({ imageId: uuid }),
     isAuth: true,
     response: { 200: successSchema(t.Null()), 403: errorSchema, 404: errorSchema },
     detail: { summary: 'Delete a product image (Admin or owning seller)' }
@@ -163,7 +164,7 @@ export const productController = new Elysia({ prefix: '/products', tags: ['Produ
   })
 
   .get('/:id/variants', {
-    params: t.Object({ id: t.String({ format: 'uuid' }) }),
+    params: idParams,
     response: { 200: successSchema() },
     detail: { summary: 'Get product variants' }
   }, async ({ params }) => {
@@ -172,7 +173,7 @@ export const productController = new Elysia({ prefix: '/products', tags: ['Produ
   })
 
   .post('/:id/variants', {
-    params: t.Object({ id: t.String({ format: 'uuid' }) }),
+    params: idParams,
     body: variantBody,
     isAuth: true,
     response: { 200: successSchema(), 403: errorSchema, 404: errorSchema, 409: errorSchema },
@@ -183,7 +184,7 @@ export const productController = new Elysia({ prefix: '/products', tags: ['Produ
   })
 
   .put('/variants/:variantId', {
-    params: t.Object({ variantId: t.String({ format: 'uuid' }) }),
+    params: t.Object({ variantId: uuid }),
     body: t.Partial(variantBody),
     isAuth: true,
     response: { 200: successSchema(), 403: errorSchema, 404: errorSchema, 409: errorSchema },
@@ -194,7 +195,7 @@ export const productController = new Elysia({ prefix: '/products', tags: ['Produ
   })
 
   .delete('/variants/:variantId', {
-    params: t.Object({ variantId: t.String({ format: 'uuid' }) }),
+    params: t.Object({ variantId: uuid }),
     isAuth: true,
     response: { 200: successSchema(t.Null()), 403: errorSchema, 404: errorSchema },
     detail: { summary: 'Delete a product variant (Admin or owning seller)' }
@@ -204,7 +205,7 @@ export const productController = new Elysia({ prefix: '/products', tags: ['Produ
   })
 
   .put('/:id', {
-    params: t.Object({ id: t.String({ format: 'uuid' }) }),
+    params: idParams,
     body: t.Object({
       name: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
       description: t.Optional(t.String({ maxLength: 5000 })),
@@ -214,8 +215,8 @@ export const productController = new Elysia({ prefix: '/products', tags: ['Produ
       weightGrams: t.Optional(t.Integer({ minimum: 0 })),
       sku: t.Optional(t.String({ minLength: 1, maxLength: 100 })),
       isActive: t.Optional(t.Boolean()),
-      categoryId: t.Optional(t.String({ format: 'uuid' })),
-      sellerId: t.Optional(t.String({ format: 'uuid' })),
+      categoryId: t.Optional(uuid),
+      sellerId: t.Optional(uuid),
     }),
     hasRole: UserRole.ADMIN,
     response: {
@@ -231,7 +232,7 @@ export const productController = new Elysia({ prefix: '/products', tags: ['Produ
   })
 
   .delete('/:id', {
-    params: t.Object({ id: t.String({ format: 'uuid' }) }),
+    params: idParams,
     hasRole: UserRole.ADMIN,
     response: {
       200: successSchema(t.Null()),

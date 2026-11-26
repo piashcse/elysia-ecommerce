@@ -16,11 +16,21 @@ import {
   UnauthorizedError,
   ValidationError,
 } from '../../../core/errors';
-import { CreateUserType, LoginUserType } from '../../user/validators/UserValidator';
 import { UserRole } from '../../../core/roles';
-import { TOKEN } from '../../../core/constants';
 import envConfig from '../../../config/env';
 import { mailService } from '../../../services/mail.service';
+
+interface RegisterInput {
+  email: string;
+  password: string;
+  firstName?: string;
+  lastName?: string;
+}
+
+interface LoginInput {
+  email: string;
+  password: string;
+}
 
 const VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
 const RESET_TTL_MS = 60 * 60 * 1000;
@@ -66,7 +76,7 @@ export class AuthService {
       });
   }
 
-  async register(data: Omit<CreateUserType, 'role'>) {
+  async register(data: RegisterInput) {
     const email = normalizeEmail(data.email);
 
     const [existingUser] = await db.select().from(users).where(eq(users.email, email)).limit(1);
@@ -101,7 +111,7 @@ export class AuthService {
     return safeUser(newUser);
   }
 
-  async login(data: LoginUserType, meta: { userAgent?: string | null } = {}) {
+  async login(data: LoginInput) {
     const email = normalizeEmail(data.email);
     const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
 

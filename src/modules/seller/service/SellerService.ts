@@ -6,7 +6,7 @@ import { BaseService } from '../../../core/base.service';
 import { PAGINATION } from '../../../core/constants';
 import { ProductService } from '../../product/service/ProductService';
 
-export class SellerService extends BaseService<typeof products> {
+export class SellerService extends BaseService {
     private productService = new ProductService();
 
     constructor() {
@@ -57,35 +57,36 @@ export class SellerService extends BaseService<typeof products> {
         const safeLimit = Number.isFinite(limit) ? Math.min(PAGINATION.MAX_LIMIT, Math.max(1, Math.trunc(limit))) : PAGINATION.DEFAULT_LIMIT;
         const offset = (safePage - 1) * safeLimit;
 
-        const sellerOrders = await db
-            .select({
-                orderId: orders.id,
-                status: orders.status,
-                totalAmount: orders.totalAmount,
-                createdAt: orders.createdAt,
-                sellerSubtotal: sql<string>`coalesce(sum(${orderItems.price} * ${orderItems.quantity}), 0)`,
-                items: sql`json_agg(json_build_object(
-                    'id', ${orderItems.id},
-                    'productId', ${orderItems.productId},
-                    'productName', ${orderItems.productName},
-                    'productSku', ${orderItems.productSku},
-                    'quantity', ${orderItems.quantity},
-                    'price', ${orderItems.price}
-                ))`
-            })
-            .from(orders)
-            .innerJoin(orderItems, eq(orders.id, orderItems.orderId))
-            .where(eq(orderItems.sellerId, sellerId))
-            .groupBy(orders.id)
-            .orderBy(desc(orders.createdAt))
-            .limit(safeLimit)
-            .offset(offset);
-
-        const [countResult] = await db
-            .select({ count: sql<number>`count(distinct ${orders.id})` })
-            .from(orders)
-            .innerJoin(orderItems, eq(orders.id, orderItems.orderId))
-            .where(eq(orderItems.sellerId, sellerId));
+        const [sellerOrders, [countResult]] = await Promise.all([
+            db
+                .select({
+                    orderId: orders.id,
+                    status: orders.status,
+                    totalAmount: orders.totalAmount,
+                    createdAt: orders.createdAt,
+                    sellerSubtotal: sql<string>`coalesce(sum(${orderItems.price} * ${orderItems.quantity}), 0)`,
+                    items: sql`json_agg(json_build_object(
+                        'id', ${orderItems.id},
+                        'productId', ${orderItems.productId},
+                        'productName', ${orderItems.productName},
+                        'productSku', ${orderItems.productSku},
+                        'quantity', ${orderItems.quantity},
+                        'price', ${orderItems.price}
+                    ))`
+                })
+                .from(orders)
+                .innerJoin(orderItems, eq(orders.id, orderItems.orderId))
+                .where(eq(orderItems.sellerId, sellerId))
+                .groupBy(orders.id)
+                .orderBy(desc(orders.createdAt))
+                .limit(safeLimit)
+                .offset(offset),
+            db
+                .select({ count: sql<number>`count(distinct ${orders.id})` })
+                .from(orders)
+                .innerJoin(orderItems, eq(orders.id, orderItems.orderId))
+                .where(eq(orderItems.sellerId, sellerId)),
+        ]);
 
         return {
             items: sellerOrders,
@@ -94,23 +95,24 @@ export class SellerService extends BaseService<typeof products> {
     }
 
     async getSellerStats(sellerId: string) {
-        const [productStats] = await db
-            .select({
-                totalProducts: sql<number>`count(*)`,
-                activeProducts: sql<number>`count(*) filter (where ${products.isActive} = true)`,
-                lowStockProducts: sql<number>`count(*) filter (where ${products.stockQuantity} <= 10)`,
-            })
-            .from(products)
-            .where(eq(products.sellerId, sellerId));
-
-        const [salesStats] = await db
-            .select({
-                itemsSold: sql<number>`coalesce(sum(${orderItems.quantity}), 0)`,
-                revenue: sql<string>`coalesce(sum(${orderItems.price} * ${orderItems.quantity}), 0)`,
-            })
-            .from(orderItems)
-            .innerJoin(orders, eq(orderItems.orderId, orders.id))
-            .where(and(eq(orderItems.sellerId, sellerId), eq(orders.status, 'delivered')));
+        const [[productStats], [salesStats]] = await Promise.all([
+            db
+                .select({
+                    totalProducts: sql<number>`count(*)`,
+                    activeProducts: sql<number>`count(*) filter (where ${products.isActive} = true)`,
+                    lowStockProducts: sql<number>`count(*) filter (where ${products.stockQuantity} <= 10)`,
+                })
+                .from(products)
+                .where(eq(products.sellerId, sellerId)),
+            db
+                .select({
+                    itemsSold: sql<number>`coalesce(sum(${orderItems.quantity}), 0)`,
+                    revenue: sql<string>`coalesce(sum(${orderItems.price} * ${orderItems.quantity}), 0)`,
+                })
+                .from(orderItems)
+                .innerJoin(orders, eq(orderItems.orderId, orders.id))
+                .where(and(eq(orderItems.sellerId, sellerId), eq(orders.status, 'delivered'))),
+        ]);
 
         return {
             totalProducts: productStats ? Number(productStats.totalProducts) : 0,

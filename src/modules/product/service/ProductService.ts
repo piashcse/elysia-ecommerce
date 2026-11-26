@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, gte, ilike, inArray, lte, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, ilike, inArray, lte, or } from 'drizzle-orm';
 import { db } from '../../../config/database';
 import {
   categories,
@@ -9,7 +9,7 @@ import {
   variantAttributes,
 } from '../../../database/schema';
 import { CreateProductDto, UpdateProductDto } from '../dto/ProductDto';
-import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../../../core/errors';
+import { ForbiddenError, NotFoundError, ValidationError } from '../../../core/errors';
 import { BaseService } from '../../../core/base.service';
 import { UserRole } from '../../../core/roles';
 import { PAGINATION } from '../../../core/constants';
@@ -36,7 +36,7 @@ export interface ProductVariantInput {
   attributes?: Array<{ name: string; value: string }>;
 }
 
-export class ProductService extends BaseService<typeof products> {
+export class ProductService extends BaseService {
   constructor() {
     super(products);
   }
@@ -156,12 +156,17 @@ export class ProductService extends BaseService<typeof products> {
     const updateData: any = { ...updateProductDto };
     if (updateProductDto.price !== undefined) updateData.price = updateProductDto.price.toString();
 
-    const updated = await this.update(id, updateData);
-    return this.findProductByIdWithDetails(id, true) ?? updated;
+    await db
+      .update(products)
+      .set({ ...updateData, updatedAt: new Date() })
+      .where(eq(products.id, id));
+
+    return this.findProductByIdWithDetails(id, true);
   }
 
   async deleteProduct(id: string): Promise<void> {
-    return this.delete(id);
+    const deleted = await db.delete(products).where(eq(products.id, id)).returning({ id: products.id });
+    if (!deleted.length) throw new NotFoundError('Product not found');
   }
 
   async getAllProducts(
@@ -207,30 +212,6 @@ export class ProductService extends BaseService<typeof products> {
     const orderByClause = filters.sortOrder === 'asc' ? asc(sortColumn) : desc(sortColumn);
 
     return this.findAll(page, limit, conditions, orderByClause);
-  }
-
-  async getProductsByCategory(
-    categoryId: string,
-    page: number = 1,
-    limit: number = PAGINATION.DEFAULT_LIMIT
-  ): Promise<{ items: any[]; total: number }> {
-    return this.findAll(page, limit, [eq(products.categoryId, categoryId), eq(products.isActive, true)]);
-  }
-
-  async updateProductStock(productId: string, quantity: number): Promise<any> {
-    const [updated] = await db
-      .update(products)
-      .set({ stockQuantity: sql`${products.stockQuantity} - ${quantity}`, updatedAt: new Date() })
-      .where(and(eq(products.id, productId), gte(products.stockQuantity, quantity)))
-      .returning();
-
-    if (!updated) {
-      const [product] = await db.select({ id: products.id }).from(products).where(eq(products.id, productId)).limit(1);
-      if (!product) throw new NotFoundError('Product not found');
-      throw new ConflictError('Insufficient stock', 'INSUFFICIENT_STOCK');
-    }
-
-    return updated;
   }
 
   async getImages(productId: string): Promise<any[]> {

@@ -2,6 +2,7 @@ import { Elysia, t } from 'elysia';
 import { CouponService } from '../service/CouponService';
 import { paginatedResponse, successResponse, successSchema, paginatedSchema, errorSchema } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
+import { idParams } from '../../../core/schemas';
 import { UserRole } from '../../../core/roles';
 import { NotFoundError } from '../../../core/errors';
 import { PAGINATION } from '../../../core/constants';
@@ -108,7 +109,7 @@ export const couponController = new Elysia({ prefix: '/coupons', tags: ['Coupon'
   })
 
   .get('/:id', {
-    params: t.Object({ id: t.String({ format: 'uuid' }) }),
+    params: idParams,
     hasRole: UserRole.ADMIN,
     response: { 200: successSchema(), 404: errorSchema },
     detail: { summary: 'Get coupon by ID (Admin only)' }
@@ -118,7 +119,7 @@ export const couponController = new Elysia({ prefix: '/coupons', tags: ['Coupon'
   })
 
   .put('/:id', {
-    params: t.Object({ id: t.String({ format: 'uuid' }) }),
+    params: idParams,
     body: t.Object({
       code: t.Optional(t.String({ minLength: 1, maxLength: 50 })),
       description: t.Optional(t.String({ maxLength: 1000 })),
@@ -150,7 +151,7 @@ export const couponController = new Elysia({ prefix: '/coupons', tags: ['Coupon'
   })
 
   .delete('/:id', {
-    params: t.Object({ id: t.String({ format: 'uuid' }) }),
+    params: idParams,
     hasRole: UserRole.ADMIN,
     response: {
       200: successSchema(t.Null()),
@@ -158,6 +159,6 @@ export const couponController = new Elysia({ prefix: '/coupons', tags: ['Coupon'
     },
     detail: { summary: 'Delete coupon by ID (Admin only)' }
   }, async ({ params }) => {
-    await couponService.delete(params.id);
+    await couponService.deleteCoupon(params.id);
     return successResponse(null, 'Coupon deleted successfully');
   });

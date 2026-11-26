@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 import { db } from '../../../config/database';
 import {
   orderItems as orderItemsTable,
@@ -12,15 +12,12 @@ import {
 import { CreateOrderDto, UpdateOrderDto } from '../dto/OrderDto';
 import { ConflictError, NotFoundError, ValidationError } from '../../../core/errors';
 import { BaseService } from '../../../core/base.service';
-import { OrderStatus, orderStatuses } from '../validators/OrderValidator';
 import envConfig from '../../../config/env';
-import { PAGINATION } from '../../../core/constants';
+import { PAGINATION, ORDER_STATUSES, type OrderStatus } from '../../../core/constants';
 import { CouponService } from '../../coupon/service/CouponService';
 import { calculateShippingCostCents } from '../../shipping/shipping.calculator';
+import { fromCents, toCents } from '../../../core/money';
 import { NotificationService } from '../../notification/service/NotificationService';
-
-const toCents = (value: number | string): number => Math.round(Number(value) * 100);
-const fromCents = (cents: number): string => (cents / 100).toFixed(2);
 
 const TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   pending: ['processing', 'cancelled', 'refunded'],
@@ -43,7 +40,7 @@ const parseAddress = (value: unknown): OrderAddress | null => {
   return value as OrderAddress;
 };
 
-export class OrderService extends BaseService<typeof ordersTable> {
+export class OrderService extends BaseService {
   private couponService = new CouponService();
   private notificationService = new NotificationService();
 
@@ -255,7 +252,7 @@ export class OrderService extends BaseService<typeof ordersTable> {
     const conditions = [];
 
     if (filters.status) {
-      if (!orderStatuses.includes(filters.status as OrderStatus)) {
+      if (!ORDER_STATUSES.includes(filters.status as OrderStatus)) {
         throw new ValidationError('Invalid order status filter', 'INVALID_ORDER_STATUS');
       }
       conditions.push(eq(ordersTable.status, filters.status as OrderStatus));
@@ -282,7 +279,7 @@ export class OrderService extends BaseService<typeof ordersTable> {
     const order = await this.findByIdOrFail(orderId, 'Order');
 
     if (updateOrderDto.status && updateOrderDto.status !== order.status) {
-      if (!orderStatuses.includes(updateOrderDto.status)) {
+      if (!ORDER_STATUSES.includes(updateOrderDto.status)) {
         throw new ValidationError('Invalid order status', 'INVALID_ORDER_STATUS');
       }
 
@@ -308,7 +305,7 @@ export class OrderService extends BaseService<typeof ordersTable> {
     if (updateOrderDto.trackingNumber !== undefined) updateData.trackingNumber = updateOrderDto.trackingNumber;
 
     if (Object.keys(updateData).length > 0) {
-      await this.update(orderId, updateData);
+      await db.update(ordersTable).set(updateData).where(eq(ordersTable.id, orderId));
       if (updateOrderDto.status && order.userId) {
         await this.notificationService.notifyOrderStatus(order.userId, orderId, updateOrderDto.status);
       }

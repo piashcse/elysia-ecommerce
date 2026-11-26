@@ -4,7 +4,8 @@ import { products, shippingMethods } from '../../../database/schema';
 import { CreateShippingMethodDto, UpdateShippingMethodDto } from '../dto/ShippingDto';
 import { ConflictError, NotFoundError, ValidationError } from '../../../core/errors';
 import { PAGINATION } from '../../../core/constants';
-import { calculateShippingCostCents, fromCents, toCents } from '../shipping.calculator';
+import { calculateShippingCostCents } from '../shipping.calculator';
+import { fromCents, toCents } from '../../../core/money';
 
 export class ShippingService {
   private validate(data: {
@@ -92,9 +93,12 @@ export class ShippingService {
   }
 
   async deleteShippingMethod(id: string): Promise<void> {
-    const shippingMethod = await this.findShippingMethodById(id);
-    if (!shippingMethod) throw new NotFoundError('Shipping method not found');
-    await db.delete(shippingMethods).where(eq(shippingMethods.id, id));
+    const deleted = await db
+      .delete(shippingMethods)
+      .where(eq(shippingMethods.id, id))
+      .returning({ id: shippingMethods.id });
+
+    if (!deleted.length) throw new NotFoundError('Shipping method not found');
   }
 
   async getAllShippingMethods(
@@ -110,18 +114,19 @@ export class ShippingService {
     if (filters.isActive !== undefined) conditions.push(eq(shippingMethods.isActive, filters.isActive));
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-    const shippingMethodsResult = await db
-      .select()
-      .from(shippingMethods)
-      .where(whereClause)
-      .orderBy(desc(shippingMethods.createdAt))
-      .limit(safeLimit)
-      .offset(offset);
-
-    const [countResult] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(shippingMethods)
-      .where(whereClause);
+    const [shippingMethodsResult, [countResult]] = await Promise.all([
+      db
+        .select()
+        .from(shippingMethods)
+        .where(whereClause)
+        .orderBy(desc(shippingMethods.createdAt))
+        .limit(safeLimit)
+        .offset(offset),
+      db
+        .select({ count: sql<number>`count(*)` })
+        .from(shippingMethods)
+        .where(whereClause),
+    ]);
 
     return {
       shippingMethods: shippingMethodsResult,

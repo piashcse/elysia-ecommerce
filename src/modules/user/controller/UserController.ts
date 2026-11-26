@@ -1,7 +1,8 @@
 import { Elysia, t } from 'elysia';
 import { UserService } from '../service/UserService';
-import { errorResponse, paginatedResponse, successResponse, successSchema, paginatedSchema, errorSchema } from '../../../core/responses';
+import { paginatedResponse, successResponse, successSchema, paginatedSchema, errorSchema } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
+import { idParams } from '../../../core/schemas';
 import { UserRole } from '../../../core/roles';
 import { PASSWORD, PAGINATION } from '../../../core/constants';
 import { ForbiddenError } from '../../../core/errors';
@@ -125,7 +126,7 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
 
   // Get user by ID (admin only or self)
   .get('/:id', {
-    params: t.Object({ id: t.String({ format: 'uuid' }) }),
+    params: idParams,
     isOwner: 'id',
     response: {
       200: successSchema(),
@@ -140,7 +141,7 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
 
   // Update user by ID (admin can update role/status; self can update profile)
   .put('/:id', {
-    params: t.Object({ id: t.String({ format: 'uuid' }) }),
+    params: idParams,
     body: t.Object({
       email: t.Optional(t.String({ format: 'email', maxLength: 255 })),
       firstName: t.Optional(t.String({ maxLength: 100 })),
@@ -169,7 +170,7 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
 
   // Delete user by ID (admin or self, last admin protected)
   .delete('/:id', {
-    params: t.Object({ id: t.String({ format: 'uuid' }) }),
+    params: idParams,
     isOwner: 'id',
     response: {
       200: successSchema(t.Null()),

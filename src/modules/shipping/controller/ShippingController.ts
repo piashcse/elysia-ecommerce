@@ -2,6 +2,7 @@ import { Elysia, t } from 'elysia';
 import { ShippingService } from '../service/ShippingService';
 import { paginatedResponse, successResponse, successSchema, paginatedSchema, errorSchema } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
+import { idParams, uuid } from '../../../core/schemas';
 import { UserRole } from '../../../core/roles';
 import { NotFoundError } from '../../../core/errors';
 import { PAGINATION } from '../../../core/constants';
@@ -34,7 +35,7 @@ export const shippingController = new Elysia({ prefix: '/shipping-methods', tags
     body: t.Object({
       items: t.Array(
         t.Object({
-          productId: t.String({ format: 'uuid' }),
+          productId: uuid,
           quantity: t.Integer({ minimum: 1, maximum: 100 }),
         }),
         { minItems: 1, maxItems: 50 }
@@ -72,7 +73,7 @@ export const shippingController = new Elysia({ prefix: '/shipping-methods', tags
   })
 
   .get('/:id', {
-    params: t.Object({ id: t.String({ format: 'uuid' }) }),
+    params: idParams,
     response: { 200: successSchema(), 404: errorSchema },
     detail: { summary: 'Get shipping method by ID' }
   }, async ({ params }) => {
@@ -82,7 +83,7 @@ export const shippingController = new Elysia({ prefix: '/shipping-methods', tags
   })
 
   .put('/:id', {
-    params: t.Object({ id: t.String({ format: 'uuid' }) }),
+    params: idParams,
     body: t.Object({
       name: t.Optional(t.String({ minLength: 1, maxLength: 100 })),
       description: t.Optional(t.String({ maxLength: 1000 })),
@@ -101,7 +102,7 @@ export const shippingController = new Elysia({ prefix: '/shipping-methods', tags
   })
 
   .delete('/:id', {
-    params: t.Object({ id: t.String({ format: 'uuid' }) }),
+    params: idParams,
     hasRole: UserRole.ADMIN,
     response: { 200: successSchema(t.Null()), 404: errorSchema },
     detail: { summary: 'Delete shipping method by ID (Admin only)' }
