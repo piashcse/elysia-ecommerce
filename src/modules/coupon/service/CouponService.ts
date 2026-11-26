@@ -3,7 +3,7 @@ import { db } from '../../../config/database';
 import { couponUsage, coupons } from '../../../database/schema';
 import { CreateCouponDto, UpdateCouponDto } from '../dto/CouponDto';
 import { BaseService } from '../../../core/base.service';
-import { ConflictError, ValidationError } from '../../../core/errors';
+import { ConflictError, NotFoundError, ValidationError } from '../../../core/errors';
 import { PAGINATION } from '../../../core/constants';
 
 const toCents = (value: number | string): number => Math.round(Number(value) * 100);
@@ -175,16 +175,58 @@ export class CouponService extends BaseService<typeof coupons> {
    * Must be called inside the order transaction.
    */
   async recordUsage(tx: any, couponId: string, userId: string, orderId: string): Promise<void> {
-    const updated = await tx
-      .update(coupons)
-      .set({ usedCount: sql`${coupons.usedCount} + 1`, updatedAt: new Date() })
-      .where(and(eq(coupons.id, couponId), sql`(${coupons.usageLimit} IS NULL OR ${coupons.usedCount} < ${coupons.usageLimit})`))
-      .returning({ id: coupons.id });
+    // Lock the coupon row so concurrent checkouts cannot exceed the global or
+    // per-user limits.
+    const [coupon] = await tx
+      .select()
+      .from(coupons)
+      .where(eq(coupons.id, couponId))
+      .limit(1)
+      .for('update');
 
-    if (updated.length === 0) {
+    if (!coupon) throw new NotFoundError('Coupon not found');
+
+    if (coupon.usageLimit !== null && coupon.usedCount >= coupon.usageLimit) {
       throw new ConflictError('Coupon usage limit has been reached', 'COUPON_USAGE_LIMIT');
     }
 
+    if (coupon.perUserLimit !== null) {
+      const [usage] = await tx
+        .select({ count: sql<number>`count(*)` })
+        .from(couponUsage)
+        .where(and(eq(couponUsage.couponId, couponId), eq(couponUsage.userId, userId)));
+      if (usage && Number(usage.count) >= coupon.perUserLimit) {
+        throw new ConflictError('You have already used this coupon', 'COUPON_USER_LIMIT');
+      }
+    }
+
+    await tx
+      .update(coupons)
+      .set({ usedCount: sql`${coupons.usedCount} + 1`, updatedAt: new Date() })
+      .where(eq(coupons.id, couponId));
+
     await tx.insert(couponUsage).values({ couponId, userId, orderId });
+  }
+
+  /**
+   * Releases a coupon when an order is cancelled or fully refunded so the
+   * customer can use it again. Safe to call even if no usage was recorded.
+   */
+  async releaseUsage(tx: any, orderId: string): Promise<void> {
+    const usages = await tx
+      .select()
+      .from(couponUsage)
+      .where(eq(couponUsage.orderId, orderId));
+
+    for (const usage of usages) {
+      await tx.delete(couponUsage).where(eq(couponUsage.id, usage.id));
+      await tx
+        .update(coupons)
+        .set({
+          usedCount: sql`greatest(${coupons.usedCount} - 1, 0)`,
+          updatedAt: new Date(),
+        })
+        .where(eq(coupons.id, usage.couponId));
+    }
   }
 }

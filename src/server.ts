@@ -53,25 +53,27 @@ app
   .use(helmetMiddleware)
   .use(
     logger({
-      level: envConfig.LOG_LEVEL,
+      level: envConfig.NODE_ENV === 'test' ? 'silent' : envConfig.LOG_LEVEL,
       redact: {
         paths: ['request.headers.authorization', 'req.headers.authorization'],
         censor: '[REDACTED]',
       },
-      autoLogging: {
-        // Error contexts can contain request bodies (including passwords).
-        // The central error handler logs a redacted, structured summary instead.
-        ignore: (ctx) =>
-          ctx.isError === true ||
-          ctx.path === '/health' ||
-          ctx.path.includes('__server_sent_events__'),
-      },
-      customProps: (ctx) => ({
+      autoLogging: envConfig.NODE_ENV === 'test'
+        ? false
+        : {
+            // Error contexts can contain request bodies (including passwords).
+            // The central error handler logs a redacted, structured summary instead.
+            ignore: (ctx: any) =>
+              ctx.isError === true ||
+              ctx.path === '/health' ||
+              ctx.path.includes('__server_sent_events__'),
+          },
+      customProps: (ctx: any) => ({
         path: ctx.path,
         method: ctx.request.method,
         userAgent: ctx.request.headers.get('user-agent'),
       }),
-    })
+    } as any)
   )
   .use(rateLimiterMiddleware)
   .use(requestIdMiddleware)
@@ -87,22 +89,6 @@ app
       return sanitizeData(response);
     }
   });
-
-app
-  .use(authController)
-  .use(userController)
-  .use(sellerController)
-  .use(productController)
-  .use(categoryController)
-  .use(cartController)
-  .use(wishlistController)
-  .use(orderController)
-  .use(paymentController)
-  .use(reviewController)
-  .use(couponController)
-  .use(notificationController)
-  .use(shippingController)
-  .use(addressController);
 
 // Centralized error handler. Never return raw database errors, SQL, or request
 // bodies to clients.
@@ -135,7 +121,7 @@ app.onError(({ code, error, set, request }) => {
       // Not a JSON validation message; fall back to a generic message.
     }
 
-    console.warn('Request validation failed', {
+    if (envConfig.NODE_ENV !== 'test') console.warn('Request validation failed', {
       requestId,
       method: request.method,
       path: new URL(request.url).pathname,
@@ -148,7 +134,7 @@ app.onError(({ code, error, set, request }) => {
 
   if (error instanceof AppError) {
     set.status = error.statusCode;
-    console.warn('Application error', {
+    if (envConfig.NODE_ENV !== 'test') console.warn('Application error', {
       requestId,
       method: request.method,
       path: new URL(request.url).pathname,
@@ -162,7 +148,7 @@ app.onError(({ code, error, set, request }) => {
   const mapped = mapDatabaseError(error);
   if (mapped) {
     set.status = mapped.statusCode;
-    console.warn('Database request rejected', {
+    if (envConfig.NODE_ENV !== 'test') console.warn('Database request rejected', {
       requestId,
       method: request.method,
       path: new URL(request.url).pathname,
@@ -172,7 +158,7 @@ app.onError(({ code, error, set, request }) => {
     return errorResponse(mapped.message, mapped.errorCode ?? 'DATABASE_ERROR', mapped.statusCode, { requestId });
   }
 
-  console.error('Unhandled application error', {
+  if (envConfig.NODE_ENV !== 'test') console.error('Unhandled application error', {
     requestId,
     method: request.method,
     path: new URL(request.url).pathname,
@@ -185,6 +171,22 @@ app.onError(({ code, error, set, request }) => {
   set.status = 500;
   return errorResponse('Internal server error', 'INTERNAL_SERVER_ERROR', 500, { requestId });
 });
+
+app
+  .use(authController)
+  .use(userController)
+  .use(sellerController)
+  .use(productController)
+  .use(categoryController)
+  .use(cartController)
+  .use(wishlistController)
+  .use(orderController)
+  .use(paymentController)
+  .use(reviewController)
+  .use(couponController)
+  .use(notificationController)
+  .use(shippingController)
+  .use(addressController);
 
 // OpenAPI documentation. The bearer scheme is also attached per protected
 // route by the auth macros.

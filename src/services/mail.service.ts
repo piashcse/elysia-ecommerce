@@ -30,7 +30,9 @@ class MailService {
     }
 
     if (envConfig.NODE_ENV !== 'production') {
-      console.info(`[mail:dev] to=${message.to} subject="${message.subject}"\n${message.text}`);
+      if (envConfig.NODE_ENV !== 'test') {
+        console.info(`[mail:dev] to=${message.to} subject="${message.subject}"\n${message.text}`);
+      }
       return;
     }
 
