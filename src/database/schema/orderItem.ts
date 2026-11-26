@@ -1,4 +1,5 @@
-import { index, integer, numeric, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
+import { check, index, integer, numeric, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { orders } from './order';
 import { products } from './product';
 
@@ -16,4 +17,6 @@ export const orderItems = pgTable('order_items', {
 }, (table) => ({
   orderIdx: index('order_items_order_idx').on(table.orderId),
   productIdx: index('order_items_product_idx').on(table.productId),
+  quantityPositive: check('order_items_quantity_positive', sql`${table.quantity} > 0`),
+  priceNonNegative: check('order_items_price_non_negative', sql`${table.price} >= 0`),
 }));

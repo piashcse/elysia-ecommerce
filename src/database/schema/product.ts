@@ -1,4 +1,5 @@
-import { boolean, index, integer, numeric, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
+import { boolean, check, index, integer, numeric, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { categories } from './category';
 import { users } from './user';
 
@@ -17,9 +18,12 @@ export const products = pgTable('products', {
   // is cleared instead of cascading into order history.
   sellerId: uuid('seller_id').references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
 }, (table) => ({
   categoryIdx: index('products_category_idx').on(table.categoryId),
   sellerIdx: index('products_seller_idx').on(table.sellerId),
   activeIdx: index('products_active_idx').on(table.isActive),
+  priceNonNegative: check('products_price_non_negative', sql`${table.price} >= 0`),
+  stockNonNegative: check('products_stock_non_negative', sql`${table.stockQuantity} >= 0`),
+  weightNonNegative: check('products_weight_non_negative', sql`${table.weightGrams} >= 0`),
 }));

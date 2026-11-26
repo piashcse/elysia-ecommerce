@@ -1,5 +1,6 @@
-import {boolean, pgEnum, pgTable, timestamp, uuid, varchar, index} from 'drizzle-orm/pg-core';
-import {users} from './user';
+import { boolean, index, pgEnum, pgTable, timestamp, uniqueIndex, uuid, varchar } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import { users } from './user';
 
 export const addressTypeEnum = pgEnum('address_type', ['shipping', 'billing', 'both']);
 
@@ -17,8 +18,11 @@ export const addresses = pgTable('addresses', {
     country: varchar('country', { length: 100 }).notNull(),
     isDefault: boolean('is_default').default(false).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
 }, (table) => ({
     userIdx: index('addresses_user_idx').on(table.userId),
     userDefaultIdx: index('addresses_user_default_idx').on(table.userId, table.isDefault),
+    oneDefaultPerType: uniqueIndex('addresses_user_type_default_unique')
+        .on(table.userId, table.type)
+        .where(sql`${table.isDefault} = true`),
 }));

@@ -1,4 +1,5 @@
-import { boolean, integer, pgEnum, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
+import { boolean, check, integer, pgEnum, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { UserRole } from '../../core/roles';
 
 export const userRoleEnum = pgEnum('user_role', [UserRole.ADMIN, UserRole.SELLER, UserRole.CUSTOMER]);
@@ -19,5 +20,7 @@ export const users = pgTable('users', {
   tokenVersion: integer('token_version').default(0).notNull(),
   lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-});
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
+}, (table) => ({
+  tokenVersionNonNegative: check('users_token_version_non_negative', sql`${table.tokenVersion} >= 0`),
+}));
