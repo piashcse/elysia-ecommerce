@@ -8,7 +8,7 @@
     "dev": "bun --watch run src/index.ts",
     "test": "bun run scripts/test-db.ts && NODE_ENV=test DB_NAME=${TEST_DB_NAME:-elysia_ecom_test} bun test src/tests",
     "typecheck": "tsc --noEmit",
-    "check": "bun run typecheck && bun test src/tests",
+    "check": "bun run typecheck && bun run test",
     "build": "bun build src/index.ts --outfile dist/app.js --target bun",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
