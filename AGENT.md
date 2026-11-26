@@ -335,7 +335,7 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
 ```
 
 #### 5. Additional Test Coverage
-**Current**: 61 tests covering main modules
+**Current**: 31 isolated regression tests covering auth, authorization, orders, payments, coupons, catalog, reviews, and notifications
 **Recommended additions**:
 - Seller module integration tests (requires role-based setup)
 - Shipping module integration tests (requires admin setup)
@@ -347,7 +347,7 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
 ## ✅ Project Status
 
 ### Health Check
-- ✅ **All 61 tests passing**
+- ✅ **All 31 regression tests passing** (dedicated test database)
 - ✅ **Build successful** (1.79 MB bundled)
 - ✅ **Database migrations applied**
 - ✅ **18 tables with proper indexes**
@@ -425,7 +425,7 @@ bun test --coverage
 ```
 
 ### Test Database Setup
-Tests use the same database as development. Ensure you have a test database or use transactions:
+Tests run against a dedicated database created and migrated by `scripts/test-db.ts` (`elysia_ecom_test` by default). The script truncates the database before each run.
 ```typescript
 // In test setup
 beforeEach(async () => {
@@ -515,11 +515,25 @@ beforeEach(async () => {
 
 ---
 
-**Last Updated**: March 26, 2026
+**Last Updated**: November 27, 2026
 **Project Version**: 1.0.0
 **Maintainer**: Mehedi Hassan Piash (@piashcse)
 
 ## 📝 Changelog
+
+### November 27, 2026 - Security & commerce remediation
+- ✅ Fixed Elysia auth macros (isAuth/hasRole/isOwner now enforce access control)
+- ✅ Removed role from public registration; added admin-only user creation
+- ✅ Added JWT expiry/issuer/audience, refresh tokens, logout-all, and token versioning
+- ✅ Added email verification, password reset, Argon2id hashing, and login rate limits
+- ✅ Added real Helmet/CSP, rate limiting, request IDs, CORS configuration, and safe error handling
+- ✅ Hardened order/payment state transitions, inventory updates, refunds, and ownership checks
+- ✅ Implemented coupon application/usage, shipping quotes, weight-based costs, and tax
+- ✅ Added product images/variants, seller stats, review moderation, notifications, and address defaults
+- ✅ Added database constraints, checks, unique indexes, and upgrade-safe migrations 0004/0005
+- ✅ Replaced fragile integration tests with 31 isolated regression tests and a test database runner
+- ✅ Added CI workflow and Dockerfile
+
 
 ### March 27, 2026 - Latest Updates
 - ✅ **Package Updates**: All dependencies updated to latest stable versions
@@ -533,7 +547,7 @@ beforeEach(async () => {
   - dotenv: 17.2.3 → 17.3.1
   - class-validator: 0.14.2 → 0.14.4
 - ✅ **Build optimized**: 1.76 MB (reduced from 1.79 MB)
-- ✅ **All 61 tests passing** with updated packages
+- ✅ **All 31 regression tests passing** (dedicated test database) with updated packages
 
 ### March 27, 2026 - Major Improvements & Optimizations
 - ✅ **Database Performance**: Added 30+ indexes across all tables for frequently queried fields
@@ -600,5 +614,5 @@ beforeEach(async () => {
 - ✅ Enhanced health check with database connectivity
 - ✅ Created application constants file
 - ✅ Fixed health check test
-- ✅ All 61 tests passing
+- ✅ All 31 regression tests passing
 - ✅ Build successful
