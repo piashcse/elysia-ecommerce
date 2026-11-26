@@ -8,6 +8,7 @@ export const products = pgTable('products', {
   description: text('description'),
   price: numeric('price', { precision: 10, scale: 2 }).notNull(),
   stockQuantity: integer('stock_quantity').notNull().default(0),
+  weightGrams: integer('weight_grams').default(0).notNull(),
   sku: varchar('sku', { length: 100 }).notNull().unique(),
   imageUrl: varchar('image_url', { length: 500 }),
   isActive: boolean('is_active').default(true).notNull(),

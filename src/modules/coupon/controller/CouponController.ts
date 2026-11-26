@@ -3,12 +3,14 @@ import { CouponService } from '../service/CouponService';
 import { paginatedResponse, successResponse, successSchema, paginatedSchema, errorSchema } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
 import { UserRole } from '../../../core/roles';
+import { NotFoundError } from '../../../core/errors';
+import { PAGINATION } from '../../../core/constants';
+import { getPagination } from '../../../utils/validation';
 
 const couponService = new CouponService();
 
 export const couponController = new Elysia({ prefix: '/coupons', tags: ['Coupon'] })
   .use(authPlugin)
-  // Create a new coupon (admin only)
   .post(
     '/',
     async ({ body, set }) => {
@@ -22,34 +24,37 @@ export const couponController = new Elysia({ prefix: '/coupons', tags: ['Coupon'
     },
     {
       body: t.Object({
-        code: t.String({ minLength: 1 }),
-        description: t.Optional(t.String()),
+        code: t.String({ minLength: 1, maxLength: 50 }),
+        description: t.Optional(t.String({ maxLength: 1000 })),
         discountType: t.Union([t.Literal('percentage'), t.Literal('fixed')]),
-        discountValue: t.Number({ minimum: 0 }),
+        discountValue: t.Number({ minimum: 0.01 }),
         minOrderAmount: t.Optional(t.Number({ minimum: 0 })),
         maxDiscountAmount: t.Optional(t.Number({ minimum: 0 })),
-        startDate: t.String(),
-        endDate: t.String(),
-        usageLimit: t.Optional(t.Number({ minimum: 1 })),
+        startDate: t.String({ format: 'date-time' }),
+        endDate: t.String({ format: 'date-time' }),
+        usageLimit: t.Optional(t.Integer({ minimum: 1 })),
+        perUserLimit: t.Optional(t.Integer({ minimum: 1 })),
         isActive: t.Optional(t.Boolean())
       }),
+      hasRole: UserRole.ADMIN,
       response: {
         201: successSchema(),
         400: errorSchema,
+        409: errorSchema,
         422: errorSchema
       },
-      hasRole: UserRole.ADMIN,
       detail: { summary: 'Create a new coupon (Admin only)' }
     }
   )
 
-  // Get all coupons (admin only)
   .get(
     '/',
     async ({ query }) => {
-      const page = query.page || 1;
-      const limit = query.limit || 10;
-      const { items, total } = await couponService.findAll(page, limit);
+      const { page, limit } = getPagination(query);
+      const { items, total } = await couponService.getCoupons(page, limit, {
+        code: query.code,
+        isActive: query.isActive,
+      });
 
       return paginatedResponse(items, {
         page,
@@ -60,8 +65,10 @@ export const couponController = new Elysia({ prefix: '/coupons', tags: ['Coupon'
     },
     {
       query: t.Object({
-        page: t.Optional(t.Numeric()),
-        limit: t.Optional(t.Numeric()),
+        page: t.Optional(t.Integer({ minimum: 1 })),
+        limit: t.Optional(t.Integer({ minimum: 1, maximum: PAGINATION.MAX_LIMIT })),
+        code: t.Optional(t.String({ maxLength: 50 })),
+        isActive: t.Optional(t.Boolean()),
       }),
       hasRole: UserRole.ADMIN,
       response: {
@@ -71,27 +78,65 @@ export const couponController = new Elysia({ prefix: '/coupons', tags: ['Coupon'
     }
   )
 
-  // Get coupon by code
+  // Validate/apply a coupon before checkout
+  .post(
+    '/validate',
+    async ({ body, user }) => {
+      const validation = await couponService.validateCoupon(body.code, body.orderAmount, user!.sub);
+      return successResponse(
+        {
+          valid: true,
+          code: validation.coupon.code,
+          discountType: validation.coupon.discountType,
+          discountValue: validation.coupon.discountValue,
+          discountAmount: validation.discountAmount,
+        },
+        'Coupon applied successfully'
+      );
+    },
+    {
+      body: t.Object({
+        code: t.String({ minLength: 1, maxLength: 50 }),
+        orderAmount: t.Number({ minimum: 0.01 }),
+      }),
+      isAuth: true,
+      response: { 200: successSchema(), 422: errorSchema },
+      detail: { summary: 'Validate a coupon against an order amount' }
+    }
+  )
+
   .get(
     '/code/:code',
     async ({ params }) => {
       const coupon = await couponService.getCouponByCode(params.code);
-      if (!coupon) {
-        return successResponse(null, 'Coupon not found', 404);
-      }
+      if (!coupon) throw new NotFoundError('Coupon not found');
       return successResponse(coupon, 'Coupon retrieved successfully');
     },
     {
-      params: t.Object({ code: t.String() }),
+      params: t.Object({ code: t.String({ maxLength: 50 }) }),
+      isAuth: true,
       response: {
         200: successSchema(),
-        404: successSchema(t.Null())
+        404: errorSchema
       },
       detail: { summary: 'Get coupon by code' }
     }
   )
 
-  // Update coupon by ID (admin only)
+  .get(
+    '/:id',
+    async ({ params }) => {
+      const coupon = await couponService.getCouponById(params.id);
+      return successResponse(coupon, 'Coupon retrieved successfully');
+    },
+    {
+      params: t.Object({ id: t.String({ format: 'uuid' }) }),
+      hasRole: UserRole.ADMIN,
+      response: { 200: successSchema(), 404: errorSchema },
+      detail: { summary: 'Get coupon by ID (Admin only)' }
+    }
+  )
+
   .put(
     '/:id',
     async ({ params, body }) => {
@@ -103,30 +148,31 @@ export const couponController = new Elysia({ prefix: '/coupons', tags: ['Coupon'
       return successResponse(updatedCoupon, 'Coupon updated successfully');
     },
     {
-      params: t.Object({ id: t.String() }),
+      params: t.Object({ id: t.String({ format: 'uuid' }) }),
       body: t.Object({
-        code: t.Optional(t.String()),
-        description: t.Optional(t.String()),
+        code: t.Optional(t.String({ minLength: 1, maxLength: 50 })),
+        description: t.Optional(t.String({ maxLength: 1000 })),
         discountType: t.Optional(t.Union([t.Literal('percentage'), t.Literal('fixed')])),
-        discountValue: t.Optional(t.Number()),
-        minOrderAmount: t.Optional(t.Number()),
-        maxDiscountAmount: t.Optional(t.Number()),
-        startDate: t.Optional(t.String()),
-        endDate: t.Optional(t.String()),
-        usageLimit: t.Optional(t.Number()),
+        discountValue: t.Optional(t.Number({ minimum: 0.01 })),
+        minOrderAmount: t.Optional(t.Number({ minimum: 0 })),
+        maxDiscountAmount: t.Optional(t.Number({ minimum: 0 })),
+        startDate: t.Optional(t.String({ format: 'date-time' })),
+        endDate: t.Optional(t.String({ format: 'date-time' })),
+        usageLimit: t.Optional(t.Integer({ minimum: 1 })),
+        perUserLimit: t.Optional(t.Integer({ minimum: 1 })),
         isActive: t.Optional(t.Boolean())
       }),
+      hasRole: UserRole.ADMIN,
       response: {
         200: successSchema(),
         400: errorSchema,
-        404: errorSchema
+        404: errorSchema,
+        409: errorSchema
       },
-      hasRole: UserRole.ADMIN,
       detail: { summary: 'Update coupon by ID (Admin only)' }
     }
   )
 
-  // Delete coupon by ID (admin only)
   .delete(
     '/:id',
     async ({ params }) => {
@@ -134,12 +180,12 @@ export const couponController = new Elysia({ prefix: '/coupons', tags: ['Coupon'
       return successResponse(null, 'Coupon deleted successfully');
     },
     {
-      params: t.Object({ id: t.String() }),
+      params: t.Object({ id: t.String({ format: 'uuid' }) }),
+      hasRole: UserRole.ADMIN,
       response: {
         200: successSchema(t.Null()),
         404: errorSchema
       },
-      hasRole: UserRole.ADMIN,
       detail: { summary: 'Delete coupon by ID (Admin only)' }
     }
   );

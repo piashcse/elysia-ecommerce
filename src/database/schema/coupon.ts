@@ -13,6 +13,7 @@ export const coupons = pgTable('coupons', {
     minOrderAmount: numeric('min_order_amount', { precision: 10, scale: 2 }),
     maxDiscountAmount: numeric('max_discount_amount', { precision: 10, scale: 2 }),
     usageLimit: integer('usage_limit'), // null = unlimited
+    perUserLimit: integer('per_user_limit').default(1), // null = unlimited per user
     usedCount: integer('used_count').default(0).notNull(),
     isActive: boolean('is_active').default(true).notNull(),
     startDate: timestamp('start_date', { withTimezone: true }).notNull(),

@@ -15,6 +15,9 @@ import { BaseService } from '../../../core/base.service';
 import { OrderStatus, orderStatuses } from '../validators/OrderValidator';
 import envConfig from '../../../config/env';
 import { PAGINATION } from '../../../core/constants';
+import { CouponService } from '../../coupon/service/CouponService';
+import { calculateShippingCostCents } from '../../shipping/shipping.calculator';
+import { NotificationService } from '../../notification/service/NotificationService';
 
 const toCents = (value: number | string): number => Math.round(Number(value) * 100);
 const fromCents = (cents: number): string => (cents / 100).toFixed(2);
@@ -41,6 +44,9 @@ const parseAddress = (value: unknown): OrderAddress | null => {
 };
 
 export class OrderService extends BaseService<typeof ordersTable> {
+  private couponService = new CouponService();
+  private notificationService = new NotificationService();
+
   constructor() {
     super(ordersTable);
   }
@@ -98,6 +104,10 @@ export class OrderService extends BaseService<typeof ordersTable> {
 
     let shippingCostCents = 0;
     let shippingMethodId: string | null = null;
+    const totalWeightGrams = lineItems.reduce(
+      (sum, item) => sum + (item.product.weightGrams ?? 0) * item.quantity,
+      0
+    );
 
     if (createOrderDto.shippingMethodId) {
       const [method] = await db
@@ -107,15 +117,28 @@ export class OrderService extends BaseService<typeof ordersTable> {
         .limit(1);
 
       if (!method) throw new NotFoundError('Shipping method not found');
-      shippingCostCents = toCents(method.baseCost);
+
+      shippingCostCents = calculateShippingCostCents(method, totalWeightGrams);
       shippingMethodId = method.id;
     }
 
     const subtotalCents = lineItems.reduce((sum, item) => sum + item.lineTotalCents, 0);
-    const taxCents = Math.round(subtotalCents * envConfig.TAX_RATE);
-    // Coupon calculation is applied by the coupon-aware checkout path.
-    const discountCents = 0;
-    const totalCents = Math.max(0, subtotalCents + shippingCostCents + taxCents - discountCents);
+    let discountCents = 0;
+    let coupon: any = null;
+
+    if (createOrderDto.couponCode) {
+      const validation = await this.couponService.validateCoupon(
+        createOrderDto.couponCode,
+        subtotalCents / 100,
+        userId
+      );
+      discountCents = validation.discountCents;
+      coupon = validation.coupon;
+    }
+
+    const taxableCents = Math.max(0, subtotalCents - discountCents);
+    const taxCents = Math.round(taxableCents * envConfig.TAX_RATE);
+    const totalCents = Math.max(0, taxableCents + shippingCostCents + taxCents);
 
     const newOrderId = await db.transaction(async (tx) => {
       const [newOrder] = await tx
@@ -128,6 +151,7 @@ export class OrderService extends BaseService<typeof ordersTable> {
           shippingCost: fromCents(shippingCostCents),
           taxAmount: fromCents(taxCents),
           discountAmount: fromCents(discountCents),
+          couponCode: coupon?.code ?? null,
           shippingMethodId,
           status: 'pending',
           shippingAddress: createOrderDto.shippingAddress,
@@ -168,9 +192,14 @@ export class OrderService extends BaseService<typeof ordersTable> {
         }
       }
 
+      if (coupon) {
+        await this.couponService.recordUsage(tx, coupon.id, userId, newOrder.id);
+      }
+
       return newOrder.id;
     });
 
+    await this.notificationService.notifyOrderCreated(userId, newOrderId);
     return this.getOrderById(newOrderId);
   }
 
@@ -279,13 +308,16 @@ export class OrderService extends BaseService<typeof ordersTable> {
 
     if (Object.keys(updateData).length > 0) {
       await this.update(orderId, updateData);
+      if (updateOrderDto.status && order.userId) {
+        await this.notificationService.notifyOrderStatus(order.userId, orderId, updateOrderDto.status);
+      }
     }
 
     return this.getOrderById(orderId);
   }
 
   async cancelOrder(orderId: string, finalStatus: 'cancelled' | 'refunded' = 'cancelled'): Promise<any> {
-    return db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       const [order] = await tx.select().from(ordersTable).where(eq(ordersTable.id, orderId)).limit(1).for('update');
       if (!order) throw new NotFoundError('Order not found');
 
@@ -327,6 +359,12 @@ export class OrderService extends BaseService<typeof ordersTable> {
 
       return updated;
     });
+
+    if (result?.userId) {
+      await this.notificationService.notifyOrderStatus(result.userId, orderId, result.status);
+    }
+
+    return result;
   }
 
   async getOrderStats(userId?: string) {

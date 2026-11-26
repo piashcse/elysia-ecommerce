@@ -7,7 +7,12 @@ import { PAGINATION } from './constants';
 export class BaseService<T extends any> {
     constructor(protected schema: any) { }
 
-    async findAll(page: number = 1, limit: number = 10, conditions: any[] = []): Promise<{ items: any[]; total: number }> {
+    async findAll(
+        page: number = 1,
+        limit: number = 10,
+        conditions: any[] = [],
+        orderByClause?: any
+    ): Promise<{ items: any[]; total: number }> {
         const safePage = Number.isFinite(page) ? Math.max(1, Math.trunc(page)) : PAGINATION.DEFAULT_PAGE;
         const safeLimit = Number.isFinite(limit)
             ? Math.min(PAGINATION.MAX_LIMIT, Math.max(1, Math.trunc(limit)))
@@ -21,7 +26,7 @@ export class BaseService<T extends any> {
             .where(whereClause)
             .limit(safeLimit)
             .offset(offset)
-            .orderBy(desc((this.schema as any).createdAt));
+            .orderBy(orderByClause ?? desc((this.schema as any).createdAt));
 
         const [countResult] = await db
             .select({ count: sql<number>`count(*)` })

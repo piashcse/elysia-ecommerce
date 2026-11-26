@@ -144,7 +144,8 @@ export const paginatedSchema = (itemSchema: any = t.Any()) => t.Object({
       page: t.Number(),
       limit: t.Number(),
       total: t.Number(),
-      totalPages: t.Number()
+      totalPages: t.Number(),
+      averageRating: t.Optional(t.Number())
     })
   })
 });

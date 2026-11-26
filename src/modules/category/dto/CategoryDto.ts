@@ -1,12 +1,14 @@
 export interface CreateCategoryDto {
   name: string;
   description?: string;
+  imageUrl?: string;
   isActive?: boolean;
 }
 
 export interface UpdateCategoryDto {
   name?: string;
   description?: string;
+  imageUrl?: string;
   isActive?: boolean;
 }
 
