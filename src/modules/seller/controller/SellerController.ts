@@ -13,31 +13,26 @@ export const sellerController = new Elysia({ prefix: '/seller', tags: ['Seller']
     .guard({
         hasRole: [UserRole.SELLER, UserRole.ADMIN]
     })
-    .get('/products', async ({ user, query }) => {
-        const userId = user!.sub as string;
-        const { page, limit } = getPagination(query);
-        const { items, total } = await sellerService.getSellerProducts(userId, page, limit);
-
-        return paginatedResponse(items, {
-            page,
-            limit,
-            total,
-            totalPages: Math.ceil(total / limit)
-        }, 'Products retrieved successfully');
-    }, {
+    .get('/products', {
         query: t.Object({
             page: t.Optional(t.Integer({ minimum: 1 })),
             limit: t.Optional(t.Integer({ minimum: 1, maximum: PAGINATION.MAX_LIMIT })),
         }),
         response: { 200: paginatedSchema() },
         detail: { summary: 'Get products for the current seller' }
-    })
-    .post('/products', async ({ user, body, set }) => {
+    }, async ({ user, query }) => {
         const userId = user!.sub as string;
-        const product = await sellerService.createSellerProduct(userId, body);
-        set.status = 201;
-        return successResponse(product, 'Product created successfully', 201);
-    }, {
+        const { page, limit } = getPagination(query);
+        const { items, total } = await sellerService.getSellerProducts(userId, page, limit);
+    
+        return paginatedResponse(items, {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit)
+        }, 'Products retrieved successfully');
+    })
+    .post('/products', {
         body: t.Object({
             name: t.String({ minLength: 1, maxLength: 255 }),
             description: t.Optional(t.String({ maxLength: 5000 })),
@@ -56,12 +51,13 @@ export const sellerController = new Elysia({ prefix: '/seller', tags: ['Seller']
             422: errorSchema
         },
         detail: { summary: 'Create a new product by seller' }
-    })
-    .put('/products/:id', async ({ user, params, body }) => {
+    }, async ({ user, body, set }) => {
         const userId = user!.sub as string;
-        const product = await sellerService.updateSellerProduct(userId, params.id, body);
-        return successResponse(product, 'Product updated successfully');
-    }, {
+        const product = await sellerService.createSellerProduct(userId, body);
+        set.status = 201;
+        return successResponse(product, 'Product created successfully', 201);
+    })
+    .put('/products/:id', {
         params: t.Object({ id: t.String({ format: 'uuid' }) }),
         body: t.Partial(t.Object({
             name: t.String({ minLength: 1, maxLength: 255 }),
@@ -80,12 +76,12 @@ export const sellerController = new Elysia({ prefix: '/seller', tags: ['Seller']
             404: errorSchema
         },
         detail: { summary: 'Update product by seller' }
-    })
-    .delete('/products/:id', async ({ user, params }) => {
+    }, async ({ user, params, body }) => {
         const userId = user!.sub as string;
-        await sellerService.deleteSellerProduct(userId, params.id);
-        return successResponse(null, 'Product deleted successfully');
-    }, {
+        const product = await sellerService.updateSellerProduct(userId, params.id, body);
+        return successResponse(product, 'Product updated successfully');
+    })
+    .delete('/products/:id', {
         params: t.Object({ id: t.String({ format: 'uuid' }) }),
         response: {
             200: successSchema(t.Null()),
@@ -93,8 +89,21 @@ export const sellerController = new Elysia({ prefix: '/seller', tags: ['Seller']
             404: errorSchema
         },
         detail: { summary: 'Delete product by seller' }
+    }, async ({ user, params }) => {
+        const userId = user!.sub as string;
+        await sellerService.deleteSellerProduct(userId, params.id);
+        return successResponse(null, 'Product deleted successfully');
     })
-    .get('/orders', async ({ user, query }) => {
+    .get('/orders', {
+        query: t.Object({
+            page: t.Optional(t.Integer({ minimum: 1 })),
+            limit: t.Optional(t.Integer({ minimum: 1, maximum: PAGINATION.MAX_LIMIT })),
+        }),
+        response: {
+            200: paginatedSchema()
+        },
+        detail: { summary: 'Get orders containing the current seller products' }
+    }, async ({ user, query }) => {
         const userId = user!.sub as string;
         const { page, limit } = getPagination(query);
         const { items, total } = await sellerService.getSellerOrders(userId, page, limit);
@@ -104,20 +113,11 @@ export const sellerController = new Elysia({ prefix: '/seller', tags: ['Seller']
             total,
             totalPages: Math.ceil(total / limit)
         }, 'Seller orders retrieved successfully');
-    }, {
-        query: t.Object({
-            page: t.Optional(t.Integer({ minimum: 1 })),
-            limit: t.Optional(t.Integer({ minimum: 1, maximum: PAGINATION.MAX_LIMIT })),
-        }),
-        response: {
-            200: paginatedSchema()
-        },
-        detail: { summary: 'Get orders containing the current seller products' }
     })
-    .get('/stats', async ({ user }) => {
-        const stats = await sellerService.getSellerStats(user!.sub as string);
-        return successResponse(stats, 'Seller statistics retrieved successfully');
-    }, {
+    .get('/stats', {
         response: { 200: successSchema() },
         detail: { summary: 'Get seller product and sales statistics' }
+    }, async ({ user }) => {
+        const stats = await sellerService.getSellerStats(user!.sub as string);
+        return successResponse(stats, 'Seller statistics retrieved successfully');
     });

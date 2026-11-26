@@ -84,7 +84,8 @@ export const api = async <T = any>(
   } = {}
 ): Promise<ApiResult<T>> => {
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    // Elysia 2 treats an empty body with a JSON content-type as a parse error.
+    ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }),
     ...options.headers,
   };
 

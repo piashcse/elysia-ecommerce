@@ -1,4 +1,4 @@
-import { jwt } from '@elysiajs/jwt';
+import { jwt } from '@elysia/jwt';
 import envConfig from '../config/env';
 
 /**

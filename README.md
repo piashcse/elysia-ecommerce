@@ -1,5 +1,5 @@
 # Elysia E-commerce
-![Elysia](https://img.shields.io/badge/Elysia-1.4.28-6E56CF?style=flat)
+![Elysia](https://img.shields.io/badge/Elysia-2.0.0--rc.6-6E56CF?style=flat)
 ![Bun](https://img.shields.io/badge/Bun-1.3.11-black?logo=bun&style=flat)
 ![Drizzle](https://img.shields.io/badge/Drizzle-0.45.1-0C4A6E?style=flat)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-8.20.0-336791?style=flat)
@@ -49,18 +49,16 @@ This project adheres to modern software architecture principles to ensure it is 
 ## 🛠 Tech Stack
 
 -   **Runtime**: [Bun](https://bun.sh/) 1.3.11 - Fast JavaScript runtime with built-in bundler, transpiler, and package manager
--   **Framework**: [Elysia.js](https://elysiajs.com/) 1.4.28 - Fast, friendly, and type-safe web framework for Bun
+-   **Framework**: [Elysia.js](https://elysiajs.com/) 2.0.0-rc.6 - Fast, friendly, and type-safe web framework for Bun
 -   **Database**: [PostgreSQL](https://www.postgresql.org/) 8.20.0 - Powerful, open-source object-relational database system
 -   **ORM**: [Drizzle ORM](https://orm.drizzle.team/) 0.45.1 - TypeScript ORM with a focus on type safety and runtime efficiency
--   **Authentication**: [JWT](https://jwt.io/) 1.4.1 (JSON Web Tokens) - Secure token-based authentication system
+-   **Authentication**: [@elysia/jwt](https://github.com/elysiajs/elysia-jwt) 2.0.0-rc.0 (JSON Web Tokens) - Secure token-based authentication
 -   **API Documentation**: [Swagger UI](https://swagger.io/tools/swagger-ui/) - Interactive API documentation interface
--   **Validation**: [Zod](https://zod.dev/) 4.3.6 - TypeScript-first schema validation with static type inference
--   **Security**: [Helmet](https://helmetjs.github.io/), [CORS](https://github.com/elysiajs/@elysiajs/cors), [Rate Limiting](https://www.npmjs.com/package/rate-limiter-flexible) 9.1.1 - Comprehensive security middleware
+-   **Validation**: Elysia TypeBox 1.x for route schemas; Zod for environment validation
+-   **Security**: [Helmet](https://helmetjs.github.io/), [CORS](https://github.com/elysiajs/elysia-cors), [Rate Limiting](https://www.npmjs.com/package/rate-limiter-flexible) 9.1.1 - Comprehensive security middleware
 -   **Password Hashing**: [bcryptjs](https://www.npmjs.com/package/bcryptjs) 3.0.3 - Robust password hashing library
 -   **Environment Variables**: [dotenv](https://www.npmjs.com/package/dotenv) 17.3.1 - Zero-dependency module to load environment variables
--   **Logging**: [@bogeychan/elysia-logger](https://github.com/BogeyChan/elysia-logger) - Elysia.js logger plugin for structured logging
--   **Data Transformation**: [class-transformer](https://www.npmjs.com/package/class-transformer) - Transform plain objects to class instances
--   **Data Validation**: [class-validator](https://www.npmjs.com/package/class-validator) 0.14.4 - Decorator-based validation library
+-   **Logging**: [Pino](https://getpino.io/) via a local Elysia lifecycle middleware
 
 ## 🗂️ Project Structure
 

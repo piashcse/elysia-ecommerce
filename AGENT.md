@@ -4,10 +4,10 @@
 
 **Elysia E-commerce** is a modern, high-performance eCommerce backend API built with:
 - **Runtime**: Bun 1.3.11
-- **Framework**: Elysia.js 1.4.28
+- **Framework**: Elysia.js 2.0.0-rc.6
 - **Database**: PostgreSQL 8.20.0
 - **ORM**: Drizzle ORM 0.45.1
-- **Validation**: Zod 4.3.6
+- **Validation**: Elysia TypeBox 1.x for route schemas; Zod 4.3.6 for environment validation
 - **Language**: TypeScript 5.9.3
 
 ## 🏗️ Project Structure
@@ -85,7 +85,7 @@ module/
 ## 🔐 Authentication & Authorization
 
 ### JWT Authentication
-- Token-based auth using `@elysiajs/jwt`
+- Token-based auth using `@elysia/jwt`
 - Payload contains: `sub` (user ID), `email`, `role`
 - Tokens passed via `Authorization: Bearer <token>` header
 
@@ -520,6 +520,16 @@ beforeEach(async () => {
 **Maintainer**: Mehedi Hassan Piash (@piashcse)
 
 ## 📝 Changelog
+
+### November 27, 2026 - Elysia 2.0.0-rc.6 migration
+- ✅ Upgraded Elysia to 2.0.0-rc.6 with `@elysia/cors`, `@elysia/jwt`, and `@elysia/openapi`
+- ✅ Migrated route hooks/handlers to the v2 argument order
+- ✅ Replaced removed `error.code` dispatch with Elysia error classes
+- ✅ Migrated response sanitization from `response` to `responseValue`
+- ✅ Updated scopes to the v2 string form and replaced the legacy logger plugin
+- ✅ Added TypeBox 1, exact-mirror, and openapi-types peer dependencies
+- ✅ All 32 regression tests pass on Elysia 2.0.0-rc.6
+
 
 ### November 27, 2026 - Security & commerce remediation
 - ✅ Fixed Elysia auth macros (isAuth/hasRole/isOwner now enforce access control)
