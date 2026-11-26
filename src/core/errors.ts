@@ -56,6 +56,12 @@ export class ConflictError extends AppError {
   }
 }
 
+export class PaymentRequiredError extends AppError {
+  constructor(message: string = 'Payment required', errorCode = 'PAYMENT_FAILED') {
+    super(message, 402, true, '', errorCode);
+  }
+}
+
 export class TooManyRequestsError extends AppError {
   constructor(message: string = 'Too many requests', errorCode = 'RATE_LIMIT_EXCEEDED') {
     super(message, 429, true, '', errorCode);

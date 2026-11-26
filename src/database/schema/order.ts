@@ -1,12 +1,31 @@
-import {numeric, pgEnum, pgTable, text, timestamp, uuid, varchar, index} from 'drizzle-orm/pg-core';
-import {users} from './user';
-import {shippingMethods} from './shipping';
+import { index, jsonb, numeric, pgEnum, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
+import { users } from './user';
+import { shippingMethods } from './shipping';
 
-export const orderStatusEnum = pgEnum('order_status', ['pending', 'processing', 'shipped', 'delivered', 'cancelled']);
+export const orderStatusEnum = pgEnum('order_status', [
+  'pending',
+  'processing',
+  'shipped',
+  'delivered',
+  'cancelled',
+  'refunded',
+]);
+
+export interface OrderAddress {
+  firstName: string;
+  lastName: string;
+  address: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  country: string;
+  phone?: string;
+}
 
 export const orders = pgTable('orders', {
   id: uuid('id').defaultRandom().primaryKey(),
-  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+  customerEmail: varchar('customer_email', { length: 255 }),
   totalAmount: numeric('total_amount', { precision: 10, scale: 2 }).notNull(),
   subtotal: numeric('subtotal', { precision: 10, scale: 2 }).notNull(),
   shippingCost: numeric('shipping_cost', { precision: 10, scale: 2 }).default('0').notNull(),
@@ -14,8 +33,8 @@ export const orders = pgTable('orders', {
   discountAmount: numeric('discount_amount', { precision: 10, scale: 2 }).default('0').notNull(),
   couponCode: varchar('coupon_code', { length: 50 }),
   status: orderStatusEnum('status').default('pending').notNull(),
-  shippingAddress: varchar('shipping_address', { length: 500 }).notNull(),
-  billingAddress: varchar('billing_address', { length: 500 }).notNull(),
+  shippingAddress: jsonb('shipping_address').$type<OrderAddress>().notNull(),
+  billingAddress: jsonb('billing_address').$type<OrderAddress>().notNull(),
   shippingMethodId: uuid('shipping_method_id').references(() => shippingMethods.id, { onDelete: 'set null' }),
   trackingNumber: varchar('tracking_number', { length: 100 }),
   notes: text('notes'),
