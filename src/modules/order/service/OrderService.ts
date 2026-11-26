@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, lte, notInArray, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 import { db } from '../../../config/database';
 import {
   orderItems as orderItemsTable,
@@ -165,6 +165,7 @@ export class OrderService extends BaseService<typeof ordersTable> {
         lineItems.map((item) => ({
           orderId: newOrder.id,
           productId: item.product.id,
+          sellerId: item.product.sellerId,
           productName: item.product.name,
           productSku: item.product.sku,
           productImageUrl: item.product.imageUrl,
@@ -368,7 +369,7 @@ export class OrderService extends BaseService<typeof ordersTable> {
   }
 
   async getOrderStats(userId?: string) {
-    const conditions = [notInArray(ordersTable.status, ['cancelled', 'refunded'])];
+    const conditions = [inArray(ordersTable.status, ['processing', 'shipped', 'delivered'])];
     if (userId) conditions.push(eq(ordersTable.userId, userId));
     const whereClause = and(...conditions);
 

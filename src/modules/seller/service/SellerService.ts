@@ -63,7 +63,7 @@ export class SellerService extends BaseService<typeof products> {
                 status: orders.status,
                 totalAmount: orders.totalAmount,
                 createdAt: orders.createdAt,
-                sellerSubtotal: sql<string>`coalesce(sum(${orderItems.price} * ${orderItems.quantity}) filter (where ${products.sellerId} = ${sellerId}), 0)`,
+                sellerSubtotal: sql<string>`coalesce(sum(${orderItems.price} * ${orderItems.quantity}), 0)`,
                 items: sql`json_agg(json_build_object(
                     'id', ${orderItems.id},
                     'productId', ${orderItems.productId},
@@ -71,12 +71,11 @@ export class SellerService extends BaseService<typeof products> {
                     'productSku', ${orderItems.productSku},
                     'quantity', ${orderItems.quantity},
                     'price', ${orderItems.price}
-                )) filter (where ${products.sellerId} = ${sellerId})`
+                ))`
             })
             .from(orders)
             .innerJoin(orderItems, eq(orders.id, orderItems.orderId))
-            .innerJoin(products, eq(orderItems.productId, products.id))
-            .where(eq(products.sellerId, sellerId))
+            .where(eq(orderItems.sellerId, sellerId))
             .groupBy(orders.id)
             .orderBy(desc(orders.createdAt))
             .limit(safeLimit)
@@ -86,8 +85,7 @@ export class SellerService extends BaseService<typeof products> {
             .select({ count: sql<number>`count(distinct ${orders.id})` })
             .from(orders)
             .innerJoin(orderItems, eq(orders.id, orderItems.orderId))
-            .innerJoin(products, eq(orderItems.productId, products.id))
-            .where(eq(products.sellerId, sellerId));
+            .where(eq(orderItems.sellerId, sellerId));
 
         return {
             items: sellerOrders,
@@ -112,8 +110,7 @@ export class SellerService extends BaseService<typeof products> {
             })
             .from(orderItems)
             .innerJoin(orders, eq(orderItems.orderId, orders.id))
-            .innerJoin(products, eq(orderItems.productId, products.id))
-            .where(and(eq(products.sellerId, sellerId), eq(orders.status, 'delivered')));
+            .where(and(eq(orderItems.sellerId, sellerId), eq(orders.status, 'delivered')));
 
         return {
             totalProducts: productStats ? Number(productStats.totalProducts) : 0,

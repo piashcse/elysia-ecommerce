@@ -7,8 +7,11 @@ import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '.
 import { UserRole } from '../../../core/roles';
 import { BaseService } from '../../../core/base.service';
 import { PAGINATION } from '../../../core/constants';
+import { AuthService } from '../../auth/service/AuthService';
 
 export class UserService extends BaseService<typeof users> {
+  private authService = new AuthService();
+
   constructor() {
     super(users);
   }
@@ -73,7 +76,14 @@ export class UserService extends BaseService<typeof users> {
       updateData.tokenVersion = sql`${users.tokenVersion} + 1`;
     }
 
-    return this.update(id, updateData);
+    const updated = await this.update(id, updateData);
+
+    if (updateData.email && updateData.email !== user.email) {
+      await this.authService.issueEmailVerification(id, updateData.email);
+      return this.findByIdOrFail(id, 'User');
+    }
+
+    return updated;
   }
 
   async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {

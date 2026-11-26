@@ -1,0 +1,11 @@
+node_modules
+.git
+.env
+.env.*
+!.env.example
+dist
+logs
+temp
+coverage
+.DS_Store
+.idea

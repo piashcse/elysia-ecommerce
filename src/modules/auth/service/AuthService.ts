@@ -186,6 +186,21 @@ export class AuthService {
       .where(eq(users.id, user.id));
   }
 
+  async issueEmailVerification(userId: string, email: string): Promise<void> {
+    const token = generateRandomString(32);
+    await db
+      .update(users)
+      .set({
+        emailVerified: false,
+        emailVerificationToken: sha256Hash(token),
+        emailVerificationExpires: new Date(Date.now() + VERIFICATION_TTL_MS),
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
+
+    await this.sendVerificationEmail({ id: userId, email }, token);
+  }
+
   async resendVerification(userId: string): Promise<void> {
     const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
     if (!user) throw new NotFoundError('User not found');
