@@ -1,4 +1,5 @@
-import { index, jsonb, numeric, pgEnum, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
+import { check, index, jsonb, numeric, pgEnum, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { users } from './user';
 import { shippingMethods } from './shipping';
 
@@ -39,9 +40,13 @@ export const orders = pgTable('orders', {
   trackingNumber: varchar('tracking_number', { length: 100 }),
   notes: text('notes'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
 }, (table) => ({
   userIdx: index('orders_user_idx').on(table.userId),
   statusIdx: index('orders_status_idx').on(table.status),
   createdAtIdx: index('orders_created_at_idx').on(table.createdAt),
+  amountsNonNegative: check(
+    'orders_amounts_non_negative',
+    sql`${table.totalAmount} >= 0 AND ${table.subtotal} >= 0 AND ${table.shippingCost} >= 0 AND ${table.taxAmount} >= 0 AND ${table.discountAmount} >= 0`
+  ),
 }));

@@ -89,8 +89,14 @@ src/
 The API is organized by modules. For a complete and interactive list of all endpoints, please visit the **Swagger UI** at `http://localhost:3000/swagger`.
 
 ### Auth
-- `POST /auth/register`: Register a new user
-- `POST /auth/login`: Login user and get JWT token
+- `POST /auth/register`: Register a customer account
+- `POST /auth/login`: Login and receive access + refresh tokens
+- `POST /auth/refresh`: Rotate an access/refresh token pair
+- `POST /auth/logout`: Invalidate all sessions for the current user
+- `POST /auth/verify-email`: Verify an email address
+- `POST /auth/resend-verification`: Resend the verification email
+- `POST /auth/forgot-password`: Request a password reset email
+- `POST /auth/reset-password`: Reset a password with a reset token
 
 ### User
 - `GET /users/profile`: Get current user profile
@@ -106,14 +112,23 @@ The API is organized by modules. For a complete and interactive list of all endp
 - `POST /seller/products`: Create product as seller
 - `PUT /seller/products/:id`: Update seller's product
 - `DELETE /seller/products/:id`: Delete seller's product
-- `GET /seller/orders`: Get seller's orders
+- `GET /seller/orders`: Get orders containing the seller's items (paginated)
+- `GET /seller/stats`: Get seller product and sales statistics
 
 ### Product
 - `POST /products/`: Create a new product (Admin only)
-- `GET /products/`: Get all products with filters
-- `GET /products/:id`: Get product by ID
+- `GET /products/`: Get products with search, filters, sorting, and pagination
+- `GET /products/:id`: Get product details with seller, images, and variants
 - `PUT /products/:id`: Update product by ID (Admin only)
 - `DELETE /products/:id`: Delete product by ID (Admin only)
+- `GET /products/:id/images`: List product images
+- `POST /products/:id/images`: Add a product image (Admin or owning seller)
+- `PUT /products/images/:imageId`: Update a product image
+- `DELETE /products/images/:imageId`: Delete a product image
+- `GET /products/:id/variants`: List variants and attributes
+- `POST /products/:id/variants`: Create a variant (Admin or owning seller)
+- `PUT /products/variants/:variantId`: Update a variant
+- `DELETE /products/variants/:variantId`: Delete a variant
 
 ### Category
 - `POST /categories/`: Create a new category (Admin only)
@@ -130,17 +145,20 @@ The API is organized by modules. For a complete and interactive list of all endp
 - `DELETE /cart/`: Clear entire cart
 
 ### Wishlist
-- `GET /wishlist/`: Get current user's wishlist
+- `GET /wishlist/`: Get current user's wishlist (paginated)
 - `POST /wishlist/items`: Add product to wishlist
+- `POST /wishlist/toggle`: Toggle a product in the wishlist
+- `GET /wishlist/check/:productId`: Check wishlist membership
 - `DELETE /wishlist/items/:id`: Remove item from wishlist
 - `GET /wishlist/count`: Get total wishlist count
 
 ### Order
-- `POST /orders/`: Place a new order
+- `POST /orders/`: Place a new order (supports saved address IDs, coupons, and shipping methods)
 - `GET /orders/`: Get orders (Admin: all, Customer: own)
+- `GET /orders/stats`: Get order/revenue statistics (Admin only)
 - `GET /orders/:id`: Get order details by ID
-- `PUT /orders/:id`: Update order status (Admin only)
-- `PUT /orders/:id/cancel`: Cancel order
+- `PUT /orders/:id`: Update order status/tracking (Admin only)
+- `PUT /orders/:id/cancel`: Cancel order (restores stock and refunds completed payments)
 
 ### Payment
 - `POST /payments/`: Create initial payment record
@@ -150,23 +168,27 @@ The API is organized by modules. For a complete and interactive list of all endp
 - `POST /payments/:id/refund`: Refund a completed payment (Admin only)
 
 ### Review
-- `GET /reviews/product/:productId`: Get all reviews for a product
+- `GET /reviews/product/:productId`: Get approved reviews for a product
 - `POST /reviews/`: Create a product review
 - `GET /reviews/my-reviews`: Get current user reviews
+- `GET /reviews/pending`: Get reviews awaiting moderation (Admin only)
+- `PATCH /reviews/:id/approve`: Approve/reject a review (Admin only)
 - `PUT /reviews/:id`: Update your review
 - `DELETE /reviews/:id`: Delete your review
-- `POST /reviews/:id/helpful`: Mark review as helpful
+- `POST /reviews/:id/helpful`: Mark review helpful (once per user)
 
 ### Coupon
 - `POST /coupons/`: Create a new coupon (Admin only)
-- `GET /coupons/`: Get all coupons
-- `GET /coupons/:id`: Get coupon by ID
-- `GET /coupons/code/:code`: Get coupon by code
+- `GET /coupons/`: List/filter coupons (Admin only)
+- `GET /coupons/:id`: Get coupon by ID (Admin only)
+- `GET /coupons/code/:code`: Get coupon by code (authenticated)
+- `POST /coupons/validate`: Validate and calculate a coupon discount
 - `PUT /coupons/:id`: Update coupon by ID (Admin only)
 - `DELETE /coupons/:id`: Delete coupon by ID (Admin only)
 
 ### Notification
 - `GET /notifications/`: Get all notifications for the authenticated user
+- `GET /notifications/unread-count`: Get the unread notification count
 - `PATCH /notifications/:id/read`: Mark a notification as read
 - `PATCH /notifications/read/all`: Mark all notifications as read
 - `DELETE /notifications/:id`: Delete a notification
@@ -174,6 +196,7 @@ The API is organized by modules. For a complete and interactive list of all endp
 ### Shipping
 - `POST /shipping-methods/`: Create a new shipping method (Admin only)
 - `GET /shipping-methods/`: Get all shipping methods
+- `POST /shipping-methods/quote`: Calculate shipping options for a cart
 - `GET /shipping-methods/:id`: Get shipping method by ID
 - `PUT /shipping-methods/:id`: Update shipping method by ID (Admin only)
 - `DELETE /shipping-methods/:id`: Delete shipping method by ID (Admin only)
@@ -296,6 +319,18 @@ For endpoints that return a list of items, the response will be paginated.
 }
 ```
 
+
+## 🧪 Testing
+
+Tests run against a dedicated database (`elysia_ecom_test` by default) that is created, migrated, and truncated by the test runner.
+
+```bash
+bun run test
+bun run typecheck
+bun run check
+```
+
+Override the test database name with `TEST_DB_NAME=my_test_db bun run test`.
 
 ## 🚢 Deployment Readiness
 

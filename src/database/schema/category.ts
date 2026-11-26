@@ -7,7 +7,7 @@ export const categories = pgTable('categories', {
   imageUrl: varchar('image_url', { length: 500 }),
   isActive: boolean('is_active').default(true).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
 }, (table) => ({
   nameIdx: index('categories_name_idx').on(table.name),
   activeIdx: index('categories_active_idx').on(table.isActive),

@@ -11,7 +11,7 @@ export const productVariants = pgTable('product_variants', {
     imageUrl: varchar('image_url', { length: 500 }),
     isActive: boolean('is_active').default(true).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
 }, (table) => ({
     productIdx: index('product_variants_product_idx').on(table.productId),
     skuIdx: index('product_variants_sku_idx').on(table.sku),

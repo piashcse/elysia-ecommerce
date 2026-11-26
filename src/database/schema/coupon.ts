@@ -1,6 +1,7 @@
-import {boolean, integer, numeric, pgEnum, pgTable, text, timestamp, uuid, varchar, index} from 'drizzle-orm/pg-core';
-import {users} from './user';
-import {orders} from './order';
+import { boolean, check, index, integer, numeric, pgEnum, pgTable, text, timestamp, unique, uuid, varchar } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import { users } from './user';
+import { orders } from './order';
 
 export const discountTypeEnum = pgEnum('discount_type', ['percentage', 'fixed']);
 
@@ -19,10 +20,14 @@ export const coupons = pgTable('coupons', {
     startDate: timestamp('start_date', { withTimezone: true }).notNull(),
     endDate: timestamp('end_date', { withTimezone: true }).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
 }, (table) => ({
     codeIdx: index('coupons_code_idx').on(table.code),
     activeIdx: index('coupons_active_idx').on(table.isActive, table.startDate, table.endDate),
+    discountPositive: check('coupons_discount_positive', sql`${table.discountValue} > 0`),
+    percentageMax: check('coupons_percentage_max', sql`${table.discountType} <> 'percentage' OR ${table.discountValue} <= 100`),
+    usedCountNonNegative: check('coupons_used_count_non_negative', sql`${table.usedCount} >= 0`),
+    dateRange: check('coupons_date_range', sql`${table.startDate} < ${table.endDate}`),
 }));
 
 export const couponUsage = pgTable('coupon_usage', {
@@ -35,4 +40,5 @@ export const couponUsage = pgTable('coupon_usage', {
     couponIdx: index('coupon_usage_coupon_idx').on(table.couponId),
     userIdx: index('coupon_usage_user_idx').on(table.userId),
     orderIdx: index('coupon_usage_order_idx').on(table.orderId),
+    couponOrderUnique: unique('coupon_usage_coupon_order_unique').on(table.couponId, table.orderId),
 }));

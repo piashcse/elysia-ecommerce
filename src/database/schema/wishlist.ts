@@ -1,6 +1,6 @@
-import {pgTable, timestamp, uuid, index} from 'drizzle-orm/pg-core';
-import {users} from './user';
-import {products} from './product';
+import { index, pgTable, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
+import { users } from './user';
+import { products } from './product';
 
 export const wishlists = pgTable('wishlists', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -10,5 +10,5 @@ export const wishlists = pgTable('wishlists', {
 }, (table) => ({
   userIdx: index('wishlists_user_idx').on(table.userId),
   productIdx: index('wishlists_product_idx').on(table.productId),
-  userProductIdx: index('wishlists_user_product_idx').on(table.userId, table.productId),
+  userProductUnique: unique('wishlists_user_product_unique').on(table.userId, table.productId),
 }));

@@ -1,4 +1,5 @@
-import { index, jsonb, numeric, pgEnum, pgTable, timestamp, unique, uuid, varchar } from 'drizzle-orm/pg-core';
+import { check, index, jsonb, numeric, pgEnum, pgTable, timestamp, unique, uuid, varchar } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { orders } from './order';
 
 export const paymentStatusEnum = pgEnum('payment_status', ['pending', 'completed', 'failed', 'refunded']);
@@ -15,10 +16,12 @@ export const payments = pgTable('payments', {
   paymentGateway: varchar('payment_gateway', { length: 100 }),
   metadata: jsonb('metadata').$type<Record<string, unknown>>(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
 }, (table) => ({
   orderIdx: index('payments_order_idx').on(table.orderId),
   orderUnique: unique('payments_order_unique').on(table.orderId),
   statusIdx: index('payments_status_idx').on(table.status),
   methodIdx: index('payments_method_idx').on(table.method),
+  amountPositive: check('payments_amount_positive', sql`${table.amount} > 0`),
+  refundedValid: check('payments_refunded_valid', sql`${table.refundedAmount} >= 0 AND ${table.refundedAmount} <= ${table.amount}`),
 }));
