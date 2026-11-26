@@ -1,6 +1,6 @@
 import {z} from 'zod';
 // Order validation schemas
-export const orderStatuses = ['pending', 'processing', 'shipped', 'delivered', 'cancelled'] as const;
+export const orderStatuses = ['pending', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded'] as const;
 export type OrderStatus = (typeof orderStatuses)[number];
 
 // Address schema
@@ -25,11 +25,14 @@ export const createOrderSchema = z.object({
   shippingAddress: addressSchema,
   billingAddress: addressSchema.optional(),
   notes: z.string().max(500).optional(),
+  couponCode: z.string().max(50).optional(),
+  shippingMethodId: z.string().uuid().optional(),
 });
 
 export const updateOrderSchema = z.object({
   status: z.enum(orderStatuses).optional(),
   notes: z.string().max(500).optional(),
+  trackingNumber: z.string().max(100).optional(),
 });
 
 export const orderIdSchema = z.object({

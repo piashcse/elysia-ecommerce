@@ -1,7 +1,6 @@
-import {boolean, integer, numeric, pgTable, text, timestamp, uuid, varchar} from 'drizzle-orm/pg-core';
-import {categories} from './category';
-import {users} from './user';
-import { index } from 'drizzle-orm/pg-core';
+import { boolean, index, integer, numeric, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
+import { categories } from './category';
+import { users } from './user';
 
 export const products = pgTable('products', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -12,8 +11,10 @@ export const products = pgTable('products', {
   sku: varchar('sku', { length: 100 }).notNull().unique(),
   imageUrl: varchar('image_url', { length: 500 }),
   isActive: boolean('is_active').default(true).notNull(),
-  categoryId: uuid('category_id').references(() => categories.id),
-  sellerId: uuid('seller_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  categoryId: uuid('category_id').references(() => categories.id, { onDelete: 'set null' }),
+  // Products are retained if a seller account is removed; the seller association
+  // is cleared instead of cascading into order history.
+  sellerId: uuid('seller_id').references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({

@@ -3,12 +3,13 @@ import { OrderService } from '../service/OrderService';
 import { errorResponse, paginatedResponse, successResponse, successSchema, paginatedSchema, errorSchema } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
 import { UserRole } from '../../../core/roles';
-import { NotFoundError } from '../../../core/errors';
+import { ForbiddenError, NotFoundError } from '../../../core/errors';
 import { PAGINATION } from '../../../core/constants';
+import { getPagination } from '../../../utils/validation';
+import { orderStatuses, OrderStatus } from '../validators/OrderValidator';
 
 const orderService = new OrderService();
 
-// Address validation schema
 const addressSchema = t.Object({
   firstName: t.String({ minLength: 1, maxLength: 100 }),
   lastName: t.String({ minLength: 1, maxLength: 100 }),
@@ -17,18 +18,27 @@ const addressSchema = t.Object({
   state: t.String({ minLength: 1, maxLength: 100 }),
   zipCode: t.String({ minLength: 1, maxLength: 20 }),
   country: t.String({ minLength: 1, maxLength: 100 }),
+  phone: t.Optional(t.String({ maxLength: 20 })),
 });
+
+const orderStatusSchema = t.Union([
+  t.Literal('pending'),
+  t.Literal('processing'),
+  t.Literal('shipped'),
+  t.Literal('delivered'),
+  t.Literal('cancelled'),
+  t.Literal('refunded'),
+]);
 
 export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] })
   .use(authPlugin)
   .guard({
     isAuth: true
   })
-  // Create a new order
   .post(
     '/',
     async ({ body, set, user }) => {
-      const order = await orderService.createOrder(user!.sub as string, body);
+      const order = await orderService.createOrder(user!.sub as string, body as any);
       set.status = 201;
       return successResponse(order, 'Order created successfully', 201);
     },
@@ -36,8 +46,8 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
       body: t.Object({
         items: t.Array(
           t.Object({
-            productId: t.String(),
-            quantity: t.Number({ minimum: 1, maximum: 999 })
+            productId: t.String({ format: 'uuid' }),
+            quantity: t.Integer({ minimum: 1, maximum: 100 })
           }),
           { minItems: 1, maxItems: 50 }
         ),
@@ -45,14 +55,29 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
         billingAddress: t.Optional(addressSchema),
         notes: t.Optional(t.String({ maxLength: 1000 })),
         couponCode: t.Optional(t.String({ maxLength: 50 })),
-        shippingMethodId: t.Optional(t.String()),
+        shippingMethodId: t.Optional(t.String({ format: 'uuid' })),
       }),
       response: {
         201: successSchema(),
         400: errorSchema,
+        409: errorSchema,
         422: errorSchema
       },
       detail: { summary: 'Place a new order' }
+    }
+  )
+
+  // Admin order statistics
+  .get(
+    '/stats',
+    async () => {
+      const stats = await orderService.getOrderStats();
+      return successResponse(stats, 'Order statistics retrieved successfully');
+    },
+    {
+      hasRole: UserRole.ADMIN,
+      response: { 200: successSchema() },
+      detail: { summary: 'Get order statistics (Admin only)' }
     }
   )
 
@@ -61,8 +86,7 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
     '/',
     async ({ query, user }) => {
       const isAdmin = user?.role === UserRole.ADMIN;
-      const page = query.page || PAGINATION.DEFAULT_PAGE;
-      const limit = Math.min(query.limit || PAGINATION.DEFAULT_LIMIT, PAGINATION.MAX_LIMIT);
+      const { page, limit } = getPagination(query);
 
       const filters = {
         status: query.status,
@@ -82,12 +106,12 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
     },
     {
       query: t.Object({
-        page: t.Optional(t.Numeric({ minimum: 1 })),
-        limit: t.Optional(t.Numeric({ minimum: 1, maximum: PAGINATION.MAX_LIMIT })),
-        status: t.Optional(t.String()),
-        dateFrom: t.Optional(t.String()),
-        dateTo: t.Optional(t.String()),
-        userId: t.Optional(t.String()),
+        page: t.Optional(t.Integer({ minimum: 1 })),
+        limit: t.Optional(t.Integer({ minimum: 1, maximum: PAGINATION.MAX_LIMIT })),
+        status: t.Optional(orderStatusSchema),
+        dateFrom: t.Optional(t.String({ format: 'date-time' })),
+        dateTo: t.Optional(t.String({ format: 'date-time' })),
+        userId: t.Optional(t.String({ format: 'uuid' })),
       }),
       response: { 200: paginatedSchema() },
       detail: { summary: 'Get orders (Admin: all, Customer: own)' }
@@ -101,16 +125,14 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
       const order = await orderService.getOrderById(params.id);
       if (!order) throw new NotFoundError('Order not found');
 
-      // Check if user is admin or owner of order
       if (user?.role !== UserRole.ADMIN && order.userId !== user?.sub) {
-        set.status = 403;
-        return errorResponse('Access denied. You can only view your own orders.', 'FORBIDDEN', 403);
+        throw new ForbiddenError('You can only view your own orders');
       }
 
       return successResponse(order, 'Order retrieved successfully');
     },
     {
-      params: t.Object({ id: t.String() }),
+      params: t.Object({ id: t.String({ format: 'uuid' }) }),
       response: {
         200: successSchema(),
         403: errorSchema,
@@ -128,17 +150,19 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
       return successResponse(order, 'Order updated successfully');
     },
     {
-      params: t.Object({ id: t.String() }),
+      params: t.Object({ id: t.String({ format: 'uuid' }) }),
       body: t.Object({
-        status: t.Optional(t.String()),
-        notes: t.Optional(t.String())
+        status: t.Optional(orderStatusSchema),
+        notes: t.Optional(t.String({ maxLength: 1000 })),
+        trackingNumber: t.Optional(t.String({ maxLength: 100 })),
       }),
+      hasRole: UserRole.ADMIN,
       response: {
         200: successSchema(),
         400: errorSchema,
-        404: errorSchema
+        404: errorSchema,
+        409: errorSchema
       },
-      hasRole: UserRole.ADMIN,
       detail: { summary: 'Update order status (Admin only)' }
     }
   )
@@ -150,21 +174,21 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
       const order = await orderService.getOrderById(params.id);
       if (!order) throw new NotFoundError('Order not found');
 
-      // Check if user is admin or owner of order
       if (user?.role !== UserRole.ADMIN && order.userId !== user?.sub) {
-        set.status = 403;
-        return errorResponse('Access denied. You can only cancel your own orders.', 'FORBIDDEN', 403);
+        throw new ForbiddenError('You can only cancel your own orders');
       }
 
-      const cancelledOrder = await orderService.cancelOrder(params.id);
+      await orderService.cancelOrder(params.id);
+      const cancelledOrder = await orderService.getOrderById(params.id);
       return successResponse(cancelledOrder, 'Order cancelled successfully');
     },
     {
-      params: t.Object({ id: t.String() }),
+      params: t.Object({ id: t.String({ format: 'uuid' }) }),
       response: {
         200: successSchema(),
         403: errorSchema,
-        404: errorSchema
+        404: errorSchema,
+        409: errorSchema
       },
       detail: { summary: 'Cancel order' }
     }

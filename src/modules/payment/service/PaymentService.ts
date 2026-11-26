@@ -1,42 +1,92 @@
-import { db } from '../../../config/database';
-import { orders, payments } from '../../../database/schema';
 import { and, desc, eq, gte, lte, sql } from 'drizzle-orm';
-import { CreatePaymentDto, ProcessPaymentDto, UpdatePaymentDto } from '../dto/PaymentDto';
-import { ConflictError, NotFoundError, ValidationError } from '../../../core/errors';
+import { db } from '../../../config/database';
+import { orderItems, orders, payments, products } from '../../../database/schema';
+import { CreatePaymentDto, ProcessPaymentDto } from '../dto/PaymentDto';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  PaymentRequiredError,
+  ValidationError,
+} from '../../../core/errors';
 import { BaseService } from '../../../core/base.service';
+import { UserRole } from '../../../core/roles';
+import { PAGINATION } from '../../../core/constants';
+import envConfig from '../../../config/env';
+
+const toCents = (value: number | string): number => Math.round(Number(value) * 100);
+const fromCents = (cents: number): string => (cents / 100).toFixed(2);
+
+interface Actor {
+  sub: string;
+  role: UserRole;
+}
+
+const assertOwner = (actor: Actor, orderUserId: string | null) => {
+  if (actor.role !== UserRole.ADMIN && orderUserId !== actor.sub) {
+    throw new ForbiddenError('You can only access payments for your own orders');
+  }
+};
 
 export class PaymentService extends BaseService<typeof payments> {
   constructor() {
     super(payments);
   }
 
-  async createPayment(createPaymentDto: CreatePaymentDto): Promise<any> {
+  async createPayment(actor: Actor, createPaymentDto: CreatePaymentDto): Promise<any> {
     const [order] = await db.select().from(orders).where(eq(orders.id, createPaymentDto.orderId)).limit(1);
     if (!order) throw new NotFoundError('Order not found');
+    assertOwner(actor, order.userId);
 
-    const [existingPayment] = await db.select().from(payments).where(eq(payments.orderId, createPaymentDto.orderId)).limit(1);
-    if (existingPayment) throw new ConflictError('Payment already exists for this order');
+    if (order.status !== 'pending') {
+      throw new ConflictError(`Cannot create a payment for an order in "${order.status}" status`, 'ORDER_NOT_PAYABLE');
+    }
 
-    if (Number(createPaymentDto.amount) !== Number(order.totalAmount)) {
-      throw new ValidationError('Payment amount does not match order total');
+    const [existingPayment] = await db.select().from(payments).where(eq(payments.orderId, order.id)).limit(1);
+    if (existingPayment) throw new ConflictError('Payment already exists for this order', 'PAYMENT_ALREADY_EXISTS');
+
+    if (toCents(createPaymentDto.amount) !== toCents(order.totalAmount)) {
+      throw new ValidationError('Payment amount does not match order total', 'PAYMENT_AMOUNT_MISMATCH');
     }
 
     return this.create({
-      ...createPaymentDto,
+      orderId: order.id,
+      amount: fromCents(toCents(order.totalAmount)),
       status: 'pending',
+      method: createPaymentDto.method,
+      metadata: createPaymentDto.metadata,
     });
   }
 
-  async processPayment(processPaymentDto: ProcessPaymentDto): Promise<any> {
+  async processPayment(actor: Actor, processPaymentDto: ProcessPaymentDto): Promise<any> {
     const [order] = await db.select().from(orders).where(eq(orders.id, processPaymentDto.orderId)).limit(1);
     if (!order) throw new NotFoundError('Order not found');
+    assertOwner(actor, order.userId);
 
-    let [payment] = await db.select().from(payments).where(eq(payments.orderId, processPaymentDto.orderId)).limit(1);
+    if (order.status !== 'pending' && order.status !== 'processing') {
+      throw new ConflictError(`Order is not payable in "${order.status}" status`, 'ORDER_NOT_PAYABLE');
+    }
+
+    if (toCents(processPaymentDto.amount) !== toCents(order.totalAmount)) {
+      throw new ValidationError('Payment amount does not match order total', 'PAYMENT_AMOUNT_MISMATCH');
+    }
+
+    this.validatePaymentDetails(processPaymentDto.method, processPaymentDto.paymentDetails);
+
+    let [payment] = await db.select().from(payments).where(eq(payments.orderId, order.id)).limit(1);
+
+    if (payment?.status === 'completed') {
+      throw new ConflictError('This order has already been paid', 'ORDER_ALREADY_PAID');
+    }
+
+    if (payment?.status === 'refunded') {
+      throw new ConflictError('This payment has already been refunded', 'PAYMENT_REFUNDED');
+    }
 
     if (!payment) {
       payment = await this.create({
-        orderId: processPaymentDto.orderId,
-        amount: processPaymentDto.amount.toString(),
+        orderId: order.id,
+        amount: fromCents(toCents(order.totalAmount)),
         status: 'pending',
         method: processPaymentDto.method,
       });
@@ -44,24 +94,48 @@ export class PaymentService extends BaseService<typeof payments> {
       payment = await this.update(payment.id, { method: processPaymentDto.method });
     }
 
-    if (!payment) {
-      throw new NotFoundError('Payment not found');
+    if (!payment) throw new NotFoundError('Payment not found');
+
+    const isOffline = processPaymentDto.method === 'cash_on_delivery' || processPaymentDto.method === 'bank_transfer';
+
+    if (isOffline) {
+      const [updated] = await db
+        .update(payments)
+        .set({
+          status: 'pending',
+          metadata: payment.metadata ?? undefined,
+          updatedAt: new Date(),
+        })
+        .where(eq(payments.id, payment.id))
+        .returning();
+
+      await db
+        .update(orders)
+        .set({ status: 'processing', updatedAt: new Date() })
+        .where(eq(orders.id, order.id));
+
+      return updated;
     }
 
-    this.validatePaymentDetails(processPaymentDto.method, processPaymentDto.paymentDetails);
-
     try {
-      const paymentResult = await this.simulatePayment(processPaymentDto);
+      const paymentResult = await this.simulatePayment();
 
-      const updatedPayment = await this.update(payment.id, {
-        status: paymentResult.status as any,
-        transactionId: paymentResult.transactionId,
-      });
+      const [updatedPayment] = await db
+        .update(payments)
+        .set({
+          status: paymentResult.status,
+          transactionId: paymentResult.transactionId,
+          paymentGateway: 'simulated',
+          updatedAt: new Date(),
+        })
+        .where(eq(payments.id, payment.id))
+        .returning();
 
       if (paymentResult.status === 'completed') {
-        await db.update(orders)
-          .set({ status: 'processing' })
-          .where(eq(orders.id, processPaymentDto.orderId));
+        await db
+          .update(orders)
+          .set({ status: 'processing', updatedAt: new Date() })
+          .where(eq(orders.id, order.id));
       }
 
       return updatedPayment;
@@ -73,33 +147,30 @@ export class PaymentService extends BaseService<typeof payments> {
 
   private validatePaymentDetails(method: string, details: any): void {
     if (method === 'credit_card' || method === 'debit_card') {
-      if (!details.cardNumber || !details.cardExpiry || !details.cardCvv) {
+      if (!details?.cardNumber || !details?.cardExpiry || !details?.cardCvv) {
         throw new ValidationError('Credit/debit card details are incomplete');
       }
     } else if (method === 'paypal') {
-      if (!details.paypalEmail) {
+      if (!details?.paypalEmail) {
         throw new ValidationError('PayPal email is required');
       }
     }
   }
 
-  private async simulatePayment(processPaymentDto: ProcessPaymentDto): Promise<{ status: string; transactionId: string }> {
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        const success = Math.random() > 0.1;
-        if (success) {
-          resolve({
-            status: 'completed',
-            transactionId: `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-          });
-        } else {
-          reject(new Error('Payment processing failed'));
-        }
-      }, 500);
-    });
+  private async simulatePayment(): Promise<{ status: 'completed' | 'failed'; transactionId?: string }> {
+    // Deterministic by default. Set PAYMENT_SIMULATE_FAILURE_RATE to exercise
+    // failure paths in tests/staging.
+    if (Math.random() < envConfig.PAYMENT_SIMULATE_FAILURE_RATE) {
+      throw new PaymentRequiredError('Payment processing failed', 'PAYMENT_FAILED');
+    }
+
+    return {
+      status: 'completed',
+      transactionId: `txn_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`,
+    };
   }
 
-  async getPaymentById(paymentId: string): Promise<any | null> {
+  async getPaymentById(actor: Actor, paymentId: string): Promise<any> {
     const [result] = await db
       .select({
         payment: payments,
@@ -110,13 +181,19 @@ export class PaymentService extends BaseService<typeof payments> {
       .where(eq(payments.id, paymentId))
       .limit(1);
 
-    if (!result) return null;
+    if (!result) throw new NotFoundError('Payment not found');
+    if (!result.order) {
+      if (actor.role !== UserRole.ADMIN) throw new ForbiddenError('You cannot access this payment');
+    } else {
+      assertOwner(actor, result.order.userId);
+    }
+
     return { ...result.payment, order: result.order };
   }
 
   async getPayments(
     page: number = 1,
-    limit: number = 10,
+    limit: number = PAGINATION.DEFAULT_LIMIT,
     filters: {
       status?: string;
       method?: string;
@@ -126,31 +203,37 @@ export class PaymentService extends BaseService<typeof payments> {
       userId?: string;
     } = {}
   ): Promise<{ items: any[]; total: number }> {
-    const offset = (page - 1) * limit;
+    const { page: safePage, limit: safeLimit } = {
+      page: Number.isFinite(page) ? Math.max(1, Math.trunc(page)) : 1,
+      limit: Number.isFinite(limit) ? Math.min(PAGINATION.MAX_LIMIT, Math.max(1, Math.trunc(limit))) : PAGINATION.DEFAULT_LIMIT,
+    };
+    const offset = (safePage - 1) * safeLimit;
 
     const conditions = [];
     if (filters.status) conditions.push(eq(payments.status, filters.status as any));
     if (filters.method) conditions.push(eq(payments.method, filters.method as any));
-    if (filters.dateFrom) conditions.push(gte(payments.createdAt, new Date(filters.dateFrom)));
-    if (filters.dateTo) conditions.push(lte(payments.createdAt, new Date(filters.dateTo)));
-    if (filters.orderId) conditions.push(eq(payments.orderId, filters.orderId));
-
-    // If we need to filter by userId, we HAVE to join with orders
-    let query = db
-      .select({ payment: payments, order: orders })
-      .from(payments)
-      .leftJoin(orders, eq(payments.orderId, orders.id));
-
-    if (filters.userId) {
-      conditions.push(eq(orders.userId, filters.userId));
+    if (filters.dateFrom) {
+      const date = new Date(filters.dateFrom);
+      if (Number.isNaN(date.getTime())) throw new ValidationError('Invalid dateFrom value');
+      conditions.push(gte(payments.createdAt, date));
     }
+    if (filters.dateTo) {
+      const date = new Date(filters.dateTo);
+      if (Number.isNaN(date.getTime())) throw new ValidationError('Invalid dateTo value');
+      conditions.push(lte(payments.createdAt, date));
+    }
+    if (filters.orderId) conditions.push(eq(payments.orderId, filters.orderId));
+    if (filters.userId) conditions.push(eq(orders.userId, filters.userId));
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-    const items = await query
+    const items = await db
+      .select({ payment: payments, order: orders })
+      .from(payments)
+      .leftJoin(orders, eq(payments.orderId, orders.id))
       .where(whereClause)
       .orderBy(desc(payments.createdAt))
-      .limit(limit)
+      .limit(safeLimit)
       .offset(offset);
 
     const [countResult] = await db
@@ -159,20 +242,99 @@ export class PaymentService extends BaseService<typeof payments> {
       .leftJoin(orders, eq(payments.orderId, orders.id))
       .where(whereClause);
 
-    const total = countResult ? Number(countResult.count) : 0;
-
     return {
-      items: items.map(r => ({ ...r.payment, order: r.order })),
-      total
+      items: items.map((row) => ({ ...row.payment, order: row.order })),
+      total: countResult ? Number(countResult.count) : 0,
     };
   }
 
-  async refundPayment(paymentId: string): Promise<any> {
+  async refundPayment(paymentId: string, amount?: number): Promise<any> {
+    return db.transaction(async (tx) => {
+      const [payment] = await tx.select().from(payments).where(eq(payments.id, paymentId)).limit(1).for('update');
+      if (!payment) throw new NotFoundError('Payment not found');
+
+      if (payment.status !== 'completed' && payment.status !== 'refunded') {
+        throw new ConflictError('Cannot refund a payment that has not completed', 'PAYMENT_NOT_REFUNDABLE');
+      }
+
+      const totalCents = toCents(payment.amount);
+      const alreadyRefunded = toCents(payment.refundedAmount);
+      const remaining = totalCents - alreadyRefunded;
+      if (remaining <= 0) {
+        throw new ConflictError('Payment has already been fully refunded', 'PAYMENT_ALREADY_REFUNDED');
+      }
+
+      const refundCents = amount === undefined ? remaining : toCents(amount);
+      if (refundCents <= 0 || refundCents > remaining) {
+        throw new ValidationError('Refund amount exceeds the remaining refundable amount', 'INVALID_REFUND_AMOUNT');
+      }
+
+      const newRefundedTotal = alreadyRefunded + refundCents;
+      const isFullRefund = newRefundedTotal >= totalCents;
+
+      const [updatedPayment] = await tx
+        .update(payments)
+        .set({
+          status: isFullRefund ? 'refunded' : 'completed',
+          refundedAmount: fromCents(newRefundedTotal),
+          updatedAt: new Date(),
+        })
+        .where(eq(payments.id, payment.id))
+        .returning();
+
+      if (isFullRefund && payment.orderId) {
+        const [order] = await tx.select().from(orders).where(eq(orders.id, payment.orderId)).limit(1).for('update');
+
+        if (order && order.status !== 'refunded' && order.status !== 'cancelled') {
+          const items = await tx.select().from(orderItems).where(eq(orderItems.orderId, order.id));
+
+          for (const item of items) {
+            if (!item.productId) continue;
+            await tx
+              .update(products)
+              .set({ stockQuantity: sql`${products.stockQuantity} + ${item.quantity}` })
+              .where(eq(products.id, item.productId));
+          }
+
+          await tx
+            .update(orders)
+            .set({ status: 'refunded', updatedAt: new Date() })
+            .where(eq(orders.id, order.id));
+        }
+      }
+
+      return updatedPayment;
+    });
+  }
+
+  async completeOfflinePayment(paymentId: string): Promise<any> {
     const payment = await this.findByIdOrFail(paymentId, 'Payment');
-    if (payment.status !== 'completed') {
-      throw new ConflictError('Cannot refund a payment that is not completed');
+    if (payment.status === 'completed') return payment;
+    if (payment.status !== 'pending') {
+      throw new ConflictError('Only pending payments can be completed', 'PAYMENT_NOT_PENDING');
+    }
+    if (payment.method !== 'bank_transfer' && payment.method !== 'cash_on_delivery') {
+      throw new ConflictError('Only offline payment methods can be completed manually', 'INVALID_PAYMENT_METHOD');
     }
 
-    return this.update(paymentId, { status: 'refunded' });
+    const [updated] = await db
+      .update(payments)
+      .set({
+        status: 'completed',
+        paymentGateway: 'manual',
+        transactionId: `manual_${Date.now()}`,
+        updatedAt: new Date(),
+      })
+      .where(eq(payments.id, paymentId))
+      .returning();
+
+    if (payment.orderId) {
+      await db
+        .update(orders)
+        .set({ status: 'processing', updatedAt: new Date() })
+        .where(eq(orders.id, payment.orderId));
+    }
+
+    return updated;
   }
 }

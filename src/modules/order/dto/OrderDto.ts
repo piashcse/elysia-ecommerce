@@ -1,4 +1,5 @@
 import { OrderStatus } from '../validators/OrderValidator';
+import type { OrderAddress } from '../../../database/schema/order';
 
 // Order DTOs (Data Transfer Objects)
 export interface CreateOrderDto {
@@ -6,30 +7,17 @@ export interface CreateOrderDto {
     productId: string;
     quantity: number;
   }>;
-  shippingAddress: {
-    firstName: string;
-    lastName: string;
-    address: string;
-    city: string;
-    state: string;
-    zipCode: string;
-    country: string;
-  };
-  billingAddress?: {
-    firstName: string;
-    lastName: string;
-    address: string;
-    city: string;
-    state: string;
-    zipCode: string;
-    country: string;
-  };
+  shippingAddress: OrderAddress;
+  billingAddress?: OrderAddress;
   notes?: string;
+  couponCode?: string;
+  shippingMethodId?: string;
 }
 
 export interface UpdateOrderDto {
   status?: OrderStatus;
   notes?: string;
+  trackingNumber?: string;
 }
 
 export interface OrderResponseDto {
@@ -39,22 +27,20 @@ export interface OrderResponseDto {
     email: string;
     firstName: string | null;
     lastName: string | null;
-  };
+  } | null;
   items: Array<{
     id: string;
-    product: {
-      id: string;
-      name: string;
-      price: number;
-      image: string | null;
-    };
+    productId: string | null;
+    productName: string;
+    productSku: string;
+    productImageUrl: string | null;
     quantity: number;
     price: number;
   }>;
   totalAmount: number;
   status: OrderStatus;
-  shippingAddress: Record<string, any>;
-  billingAddress: Record<string, any> | null;
+  shippingAddress: OrderAddress;
+  billingAddress: OrderAddress;
   notes: string | null;
   createdAt: Date;
   updatedAt: Date;

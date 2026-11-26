@@ -1,11 +1,15 @@
-import {integer, numeric, pgTable, timestamp, uuid, index} from 'drizzle-orm/pg-core';
-import {orders} from './order';
-import {products} from './product';
+import { index, integer, numeric, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
+import { orders } from './order';
+import { products } from './product';
 
 export const orderItems = pgTable('order_items', {
   id: uuid('id').defaultRandom().primaryKey(),
   orderId: uuid('order_id').notNull().references(() => orders.id, { onDelete: 'cascade' }),
-  productId: uuid('product_id').notNull().references(() => products.id, { onDelete: 'cascade' }),
+  // Keep historical order lines even if the product is later removed.
+  productId: uuid('product_id').references(() => products.id, { onDelete: 'set null' }),
+  productName: varchar('product_name', { length: 255 }).notNull(),
+  productSku: varchar('product_sku', { length: 100 }).notNull(),
+  productImageUrl: varchar('product_image_url', { length: 500 }),
   quantity: integer('quantity').notNull(),
   price: numeric('price', { precision: 10, scale: 2 }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),

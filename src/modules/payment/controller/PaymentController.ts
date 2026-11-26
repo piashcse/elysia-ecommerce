@@ -1,21 +1,18 @@
 import { Elysia, t } from 'elysia';
 import { PaymentService } from '../service/PaymentService';
-import { errorResponse, paginatedResponse, successResponse, successSchema, paginatedSchema, errorSchema } from '../../../core/responses';
+import { paginatedResponse, successResponse, successSchema, paginatedSchema, errorSchema } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
 import { UserRole } from '../../../core/roles';
 import { PAGINATION } from '../../../core/constants';
+import { getPagination } from '../../../utils/validation';
 
 const paymentService = new PaymentService();
 
-// Payment details validation schemas
-const cardDetailsSchema = t.Object({
+const paymentDetailsSchema = t.Object({
   cardNumber: t.Optional(t.String({ pattern: '^[0-9]{13,19}$' })),
   cardExpiry: t.Optional(t.String({ pattern: '^(0[1-9]|1[0-2])\/[0-9]{2}$' })),
   cardCvv: t.Optional(t.String({ pattern: '^[0-9]{3,4}$' })),
   cardHolderName: t.Optional(t.String({ minLength: 1, maxLength: 100 })),
-});
-
-const paypalDetailsSchema = t.Object({
   paypalEmail: t.Optional(t.String({ format: 'email', maxLength: 255 })),
 });
 
@@ -27,22 +24,28 @@ const paymentMethodSchema = t.Union([
   t.Literal('cash_on_delivery')
 ]);
 
+const paymentStatusSchema = t.Union([
+  t.Literal('pending'),
+  t.Literal('completed'),
+  t.Literal('failed'),
+  t.Literal('refunded'),
+]);
+
 export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payment'] })
   .use(authPlugin)
   .guard({
     isAuth: true
   })
-  // Create a new payment
   .post(
     '/',
-    async ({ body, set }) => {
-      const payment = await paymentService.createPayment(body as any);
+    async ({ body, set, user }) => {
+      const payment = await paymentService.createPayment(user!, body as any);
       set.status = 201;
       return successResponse(payment, 'Payment created successfully', 201);
     },
     {
       body: t.Object({
-        orderId: t.String(),
+        orderId: t.String({ format: 'uuid' }),
         method: paymentMethodSchema,
         amount: t.Number({ minimum: 0.01, maximum: 999999.99 }),
         metadata: t.Optional(t.Record(t.String(), t.Any())),
@@ -50,42 +53,44 @@ export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payme
       response: {
         201: successSchema(),
         400: errorSchema,
+        403: errorSchema,
+        409: errorSchema,
         422: errorSchema
       },
       detail: { summary: 'Create initial payment record' }
     }
   )
 
-  // Process a payment
   .post(
     '/process',
-    async ({ body }) => {
-      const payment = await paymentService.processPayment(body as any);
+    async ({ body, user }) => {
+      const payment = await paymentService.processPayment(user!, body as any);
       return successResponse(payment, 'Payment processed successfully');
     },
     {
       body: t.Object({
-        orderId: t.String(),
+        orderId: t.String({ format: 'uuid' }),
         method: paymentMethodSchema,
         amount: t.Number({ minimum: 0.01, maximum: 999999.99 }),
-        paymentDetails: t.Union([cardDetailsSchema, paypalDetailsSchema]),
+        paymentDetails: paymentDetailsSchema,
       }),
       response: {
         200: successSchema(),
         400: errorSchema,
+        402: errorSchema,
+        403: errorSchema,
+        409: errorSchema,
         422: errorSchema
       },
       detail: { summary: 'Process payment with gateway simulation' }
     }
   )
 
-  // Get payments
   .get(
     '/',
     async ({ query, user }) => {
       const isAdmin = user?.role === UserRole.ADMIN;
-      const page = query.page || PAGINATION.DEFAULT_PAGE;
-      const limit = Math.min(query.limit || PAGINATION.DEFAULT_LIMIT, PAGINATION.MAX_LIMIT);
+      const { page, limit } = getPagination(query);
 
       const filters = {
         status: query.status,
@@ -100,25 +105,20 @@ export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payme
 
       return paginatedResponse(
         items,
-        {
-          page,
-          limit,
-          total,
-          totalPages: Math.ceil(total / limit),
-        },
+        { page, limit, total, totalPages: Math.ceil(total / limit) },
         'Payments retrieved successfully'
       );
     },
     {
       query: t.Object({
-        page: t.Optional(t.Numeric({ minimum: 1 })),
-        limit: t.Optional(t.Numeric({ minimum: 1, maximum: PAGINATION.MAX_LIMIT })),
-        status: t.Optional(t.String()),
+        page: t.Optional(t.Integer({ minimum: 1 })),
+        limit: t.Optional(t.Integer({ minimum: 1, maximum: PAGINATION.MAX_LIMIT })),
+        status: t.Optional(paymentStatusSchema),
         method: t.Optional(paymentMethodSchema),
-        dateFrom: t.Optional(t.String()),
-        dateTo: t.Optional(t.String()),
-        orderId: t.Optional(t.String()),
-        userId: t.Optional(t.String()),
+        dateFrom: t.Optional(t.String({ format: 'date-time' })),
+        dateTo: t.Optional(t.String({ format: 'date-time' })),
+        orderId: t.Optional(t.String({ format: 'uuid' })),
+        userId: t.Optional(t.String({ format: 'uuid' })),
       }),
       response: {
         200: paginatedSchema()
@@ -127,21 +127,14 @@ export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payme
     }
   )
 
-  // Get payment by ID
   .get(
     '/:id',
     async ({ params, user }) => {
-      const payment = await paymentService.getPaymentById(params.id);
-      if (!payment) throw new Error('Payment not found');
-
-      if (user?.role !== UserRole.ADMIN && payment.order.userId !== user?.sub) {
-        throw new Error('Access denied');
-      }
-
+      const payment = await paymentService.getPaymentById(user!, params.id);
       return successResponse(payment, 'Payment retrieved successfully');
     },
     {
-      params: t.Object({ id: t.String() }),
+      params: t.Object({ id: t.String({ format: 'uuid' }) }),
       response: {
         200: successSchema(),
         403: errorSchema,
@@ -151,21 +144,42 @@ export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payme
     }
   )
 
-  // Refund (admin only)
   .post(
     '/:id/refund',
-    async ({ params }) => {
-      const payment = await paymentService.refundPayment(params.id);
+    async ({ params, body }) => {
+      const payment = await paymentService.refundPayment(params.id, body?.amount);
       return successResponse(payment, 'Payment refunded successfully');
     },
     {
-      params: t.Object({ id: t.String() }),
+      params: t.Object({ id: t.String({ format: 'uuid' }) }),
+      body: t.Optional(t.Object({
+        amount: t.Optional(t.Number({ minimum: 0.01, maximum: 999999.99 })),
+      })),
+      hasRole: UserRole.ADMIN,
       response: {
         200: successSchema(),
         400: errorSchema,
-        404: errorSchema
+        404: errorSchema,
+        409: errorSchema
       },
-      hasRole: UserRole.ADMIN,
       detail: { summary: 'Refund a completed payment (Admin only)' }
+    }
+  )
+
+  .post(
+    '/:id/complete',
+    async ({ params }) => {
+      const payment = await paymentService.completeOfflinePayment(params.id);
+      return successResponse(payment, 'Payment marked as completed');
+    },
+    {
+      params: t.Object({ id: t.String({ format: 'uuid' }) }),
+      hasRole: UserRole.ADMIN,
+      response: {
+        200: successSchema(),
+        404: errorSchema,
+        409: errorSchema
+      },
+      detail: { summary: 'Mark an offline payment as completed (Admin only)' }
     }
   );
