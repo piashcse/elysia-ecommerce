@@ -1702,7 +1702,29 @@ creates the database, applies migrations, and truncates tables between runs.</p>
 </span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>
 </span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="c1"># 3. Preview</span>
 </span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>bun<span class="w"> </span>run<span class="w"> </span>docs:serve
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="c1"># 4. Build exactly like CI</span>
+</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>bun<span class="w"> </span>run<span class="w"> </span>docs:build
 </span></code></pre></div>
+<p>Publishing helpers:</p>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>bun run docs:fix-pages</code></td>
+<td>Point GitHub Pages at <code>gh-pages</code> and queue a build</td>
+</tr>
+<tr>
+<td><code>bun run docs:build</code></td>
+<td>Build with <code>mkdocs build --strict</code></td>
+</tr>
+</tbody>
+</table>
 <p><code>docs/openapi.json</code> is committed so the GitHub Pages workflow can build the
 site without a database or running server. Regenerate the snapshot whenever a
 route or request/response schema changes.</p>
@@ -1720,22 +1742,24 @@ on pushes to <code>main</code> that touch docs-related files, and can be trigger
 <p>One-time repository setup:</p>
 <ol>
 <li>Push the repository to GitHub.</li>
-<li>Open <strong>Settings → Pages</strong>.</li>
-<li>Set <strong>Source</strong> to <strong>Deploy from a branch</strong>.</li>
-<li>Select the <code>gh-pages</code> branch and <code>/ (root)</code>.</li>
-<li>Save. The first workflow run creates/updates the branch.</li>
+<li>Run <code>bun run docs:fix-pages</code> (requires <code>gh auth login</code>), <strong>or</strong> open
+   <strong>Settings → Pages</strong> and set <strong>Source</strong> to <strong>Deploy from a branch →
+   <code>gh-pages</code> → <code>/ (root)</code></strong>.</li>
+<li>The docs workflow creates/updates <code>gh-pages</code> and queues a Pages build.</li>
 </ol>
 <div class="admonition warning">
 <p class="admonition-title">If the site shows only the README</p>
 <p>This means GitHub Pages is still serving the <code>main</code> branch root, not the
-built MkDocs site. Change <strong>Settings → Pages → Source</strong> to
+built MkDocs site. Run <code>bun run docs:fix-pages</code>, or change
+<strong>Settings → Pages → Source</strong> to
 <strong>Deploy from a branch → <code>gh-pages</code> → <code>/ (root)</code></strong>.</p>
 <p><code>main / (root)</code> uses Jekyll and renders <code>README.md</code>; it does <strong>not</strong> serve
 the MkDocs output. The <code>docs.yml</code> workflow deploys the MkDocs site to the
 <code>gh-pages</code> branch with <code>mkdocs gh-deploy</code>.</p>
 </div>
-<p>The workflow also prints a warning annotation if the repository's Pages source
-is not <code>gh-pages</code>.</p>
+<p>Because pushes made with the workflow's <code>GITHUB_TOKEN</code> do not trigger a Pages
+build, the workflow explicitly requests a build after deploying. It also fails
+with the exact <code>gh api</code> command if the Pages source is not <code>gh-pages</code>.</p>
 
 
 
