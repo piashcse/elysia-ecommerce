@@ -33,6 +33,10 @@ import { paymentMethodController } from './modules/payment/controller/PaymentMet
 import { paymentWebhookController } from './modules/payment/controller/PaymentWebhookController';
 import { emailController } from './modules/notification/controller/EmailController';
 import { notificationPreferenceController } from './modules/notification/controller/NotificationPreferenceController';
+import { brandController } from './modules/brand/controller/BrandController';
+import { productQaController } from './modules/product/controller/ProductQaController';
+import { uploadController } from './modules/media/controller/UploadController';
+import { sitemapController } from './modules/seo/controller/SitemapController';
 
 const app = new Elysia();
 
@@ -181,7 +185,11 @@ app
   .use(paymentMethodController)
   .use(paymentWebhookController)
   .use(emailController)
-  .use(notificationPreferenceController);
+  .use(notificationPreferenceController)
+  .use(brandController)
+  .use(productQaController)
+  .use(uploadController)
+  .use(sitemapController);
 
 // OpenAPI documentation. The bearer scheme is also attached per protected
 // route by the auth macros.

@@ -1,6 +1,9 @@
 export interface CreateProductDto {
   name: string;
+  slug?: string;
   description?: string;
+  metaTitle?: string;
+  metaDescription?: string;
   price: number;
   imageUrl?: string;
   stockQuantity: number;
@@ -8,6 +11,7 @@ export interface CreateProductDto {
   sku: string;
   isActive?: boolean;
   categoryId?: string;
+  brandId?: string;
   sellerId: string;
 }
 

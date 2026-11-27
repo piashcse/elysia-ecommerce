@@ -1,14 +1,19 @@
-import { boolean, index, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
+import { boolean, index, pgTable, text, timestamp, uuid, varchar, type AnyPgColumn } from 'drizzle-orm/pg-core';
 
 export const categories = pgTable('categories', {
   id: uuid('id').defaultRandom().primaryKey(),
   name: varchar('name', { length: 100 }).notNull().unique(),
+  slug: varchar('slug', { length: 120 }).unique(),
   description: text('description'),
   imageUrl: varchar('image_url', { length: 500 }),
+  parentId: uuid('parent_id').references((): AnyPgColumn => categories.id, { onDelete: 'set null' }),
+  metaTitle: varchar('meta_title', { length: 200 }),
+  metaDescription: varchar('meta_description', { length: 500 }),
   isActive: boolean('is_active').default(true).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
 }, (table) => ({
   nameIdx: index('categories_name_idx').on(table.name),
   activeIdx: index('categories_active_idx').on(table.isActive),
+  parentIdx: index('categories_parent_idx').on(table.parentId),
 }));

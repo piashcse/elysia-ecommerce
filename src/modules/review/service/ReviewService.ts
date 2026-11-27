@@ -1,6 +1,6 @@
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '../../../config/database';
-import { orderItems, orders, products, reviewHelpful, reviews, users } from '../../../database/schema';
+import { orderItems, orders, products, reviewHelpful, reviewImages, reviews, users } from '../../../database/schema';
 import { CreateReviewDto, UpdateReviewDto } from '../dto/ReviewDto';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../../core/errors';
 import { BaseService } from '../../../core/base.service';
@@ -41,12 +41,20 @@ export class ReviewService extends BaseService {
       ))
       .limit(1);
 
-    return this.create({
+    const review = await this.create({
       ...createReviewDto,
       userId,
       isVerifiedPurchase: purchaseCheck.length > 0,
       isApproved: envConfig.REVIEW_AUTO_APPROVE,
     });
+
+    if (createReviewDto.images?.length && review) {
+      await db.insert(reviewImages).values(
+        createReviewDto.images.slice(0, 5).map((imageUrl) => ({ reviewId: review.id, imageUrl }))
+      );
+    }
+
+    return review;
   }
 
   async getProductReviews(
@@ -93,11 +101,18 @@ export class ReviewService extends BaseService {
         .where(and(...conditions)),
     ]);
 
+    const imageRows = items.length
+      ? await db.select().from(reviewImages).where(inArray(reviewImages.reviewId, items.map((item) => item.id)))
+      : [];
+
     const total = aggregate ? Number(aggregate.total) : 0;
     const averageRating = aggregate?.avg ? Number(aggregate.avg) : 0;
 
     return {
-      items,
+      items: items.map((item) => ({
+        ...item,
+        images: imageRows.filter((image) => image.reviewId === item.id).map((image) => image.imageUrl),
+      })),
       total,
       averageRating: Math.round(averageRating * 10) / 10,
     };

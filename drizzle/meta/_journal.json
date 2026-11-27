@@ -50,6 +50,13 @@
       "when": 1795758871174,
       "tag": "0008_payments_messaging",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1795759139241,
+      "tag": "0009_catalog_growth",
+      "breakpoints": true
     }
   ]
 }

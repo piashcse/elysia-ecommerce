@@ -5,20 +5,24 @@ import { CreateCategoryDto, UpdateCategoryDto } from '../dto/CategoryDto';
 import { ConflictError, NotFoundError } from '../../../core/errors';
 import { BaseService } from '../../../core/base.service';
 import { PAGINATION } from '../../../core/constants';
+import { slugify } from '../../brand/service/BrandService';
 
 export class CategoryService extends BaseService {
   constructor() {
     super(categories);
   }
 
-  async createCategory(createCategoryDto: CreateCategoryDto & { imageUrl?: string; isActive?: boolean }): Promise<any> {
+  async createCategory(createCategoryDto: CreateCategoryDto): Promise<any> {
     const [existingCategory] = await db.select().from(categories).where(eq(categories.name, createCategoryDto.name)).limit(1);
     if (existingCategory) throw new ConflictError('Category with this name already exists');
-    return this.create(createCategoryDto);
+    if (createCategoryDto.parentId) await this.findByIdOrFail(createCategoryDto.parentId, 'Parent category');
+    return this.create({ ...createCategoryDto, slug: createCategoryDto.slug ?? slugify(createCategoryDto.name) });
   }
 
-  async updateCategory(id: string, updateCategoryDto: UpdateCategoryDto & { imageUrl?: string; isActive?: boolean }): Promise<any> {
+  async updateCategory(id: string, updateCategoryDto: UpdateCategoryDto): Promise<any> {
     const category = await this.findByIdOrFail(id, 'Category');
+    if (updateCategoryDto.parentId === id) throw new ConflictError('A category cannot be its own parent');
+    if (updateCategoryDto.parentId) await this.findByIdOrFail(updateCategoryDto.parentId, 'Parent category');
 
     if (updateCategoryDto.name && updateCategoryDto.name !== category.name) {
       const [existingCategory] = await db.select().from(categories).where(eq(categories.name, updateCategoryDto.name)).limit(1);
@@ -27,11 +31,36 @@ export class CategoryService extends BaseService {
 
     const [updated] = await db
       .update(categories)
-      .set({ ...updateCategoryDto, updatedAt: new Date() })
+      .set({
+        ...updateCategoryDto,
+        ...(updateCategoryDto.name && !updateCategoryDto.slug ? { slug: slugify(updateCategoryDto.name) } : {}),
+        updatedAt: new Date(),
+      })
       .where(eq(categories.id, id))
       .returning();
 
     return updated;
+  }
+
+  async getBySlug(slug: string) {
+    const [category] = await db.select().from(categories).where(eq(categories.slug, slug)).limit(1);
+    if (!category) throw new NotFoundError('Category not found');
+    return category;
+  }
+
+  async getTree() {
+    const rows = await db.select().from(categories).orderBy(categories.name);
+    const byParent = new Map<string | null, any[]>();
+    for (const row of rows) {
+      const key = row.parentId ?? null;
+      byParent.set(key, [...(byParent.get(key) ?? []), { ...row, children: [] }]);
+    }
+    const attach = (parentId: string | null): any[] =>
+      (byParent.get(parentId) ?? []).map((category) => ({
+        ...category,
+        children: attach(category.id),
+      }));
+    return attach(null);
   }
 
   async deleteCategory(id: string): Promise<void> {

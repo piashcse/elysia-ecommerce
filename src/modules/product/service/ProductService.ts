@@ -1,6 +1,7 @@
-import { and, asc, desc, eq, gt, gte, ilike, inArray, lte, or } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, ilike, inArray, lte, or, sql } from 'drizzle-orm';
 import { db } from '../../../config/database';
 import {
+  brands,
   categories,
   productImages,
   products,
@@ -13,6 +14,7 @@ import { ForbiddenError, NotFoundError, ValidationError } from '../../../core/er
 import { BaseService } from '../../../core/base.service';
 import { UserRole } from '../../../core/roles';
 import { PAGINATION } from '../../../core/constants';
+import { slugify } from '../../brand/service/BrandService';
 
 interface Actor {
   sub: string;
@@ -47,6 +49,12 @@ export class ProductService extends BaseService {
     if (!category) throw new NotFoundError('Category not found');
   }
 
+  private async assertBrand(brandId?: string | null) {
+    if (!brandId) return;
+    const [brand] = await db.select({ id: brands.id }).from(brands).where(eq(brands.id, brandId)).limit(1);
+    if (!brand) throw new NotFoundError('Brand not found');
+  }
+
   private async assertSeller(sellerId: string) {
     const [seller] = await db
       .select({ id: users.id, role: users.role, isActive: users.isActive })
@@ -68,12 +76,74 @@ export class ProductService extends BaseService {
     return product;
   }
 
+  async getBySlug(slug: string, includeInactive = false) {
+    const [product] = await db.select({ id: products.id }).from(products).where(eq(products.slug, slug)).limit(1);
+    if (!product) return null;
+    return this.findProductByIdWithDetails(product.id, includeInactive);
+  }
+
+  async getRelated(id: string, limit = 8) {
+    const [product] = await db.select({ id: products.id, categoryId: products.categoryId, brandId: products.brandId })
+      .from(products).where(eq(products.id, id)).limit(1);
+    if (!product) throw new NotFoundError('Product not found');
+
+    const conditions = [eq(products.isActive, true), sql`${products.id} <> ${id}`];
+    if (product.categoryId || product.brandId) {
+      conditions.push(or(
+        product.categoryId ? eq(products.categoryId, product.categoryId) : undefined,
+        product.brandId ? eq(products.brandId, product.brandId) : undefined
+      )!);
+    }
+
+    return db.select({
+      id: products.id,
+      name: products.name,
+      slug: products.slug,
+      price: products.price,
+      imageUrl: products.imageUrl,
+      stockQuantity: products.stockQuantity,
+    }).from(products).where(and(...conditions)).limit(Math.min(20, Math.max(1, limit)));
+  }
+
+  async getFacets() {
+    const [categoryFacets, brandFacets, priceRange, availability] = await Promise.all([
+      db.select({
+        categoryId: products.categoryId,
+        count: sql<number>`count(*)`,
+      }).from(products).where(eq(products.isActive, true)).groupBy(products.categoryId),
+      db.select({
+        brandId: products.brandId,
+        count: sql<number>`count(*)`,
+      }).from(products).where(eq(products.isActive, true)).groupBy(products.brandId),
+      db.select({
+        min: sql<string>`min(${products.price})`,
+        max: sql<string>`max(${products.price})`,
+      }).from(products).where(eq(products.isActive, true)),
+      db.select({
+        inStock: sql<number>`count(*) filter (where ${products.stockQuantity} > 0)`,
+        outOfStock: sql<number>`count(*) filter (where ${products.stockQuantity} = 0)`,
+      }).from(products).where(eq(products.isActive, true)),
+    ]);
+
+    return {
+      categories: categoryFacets.map((item) => ({ categoryId: item.categoryId, count: Number(item.count) })),
+      brands: brandFacets.map((item) => ({ brandId: item.brandId, count: Number(item.count) })),
+      price: { min: priceRange[0]?.min ?? '0', max: priceRange[0]?.max ?? '0' },
+      availability: {
+        inStock: Number(availability[0]?.inStock ?? 0),
+        outOfStock: Number(availability[0]?.outOfStock ?? 0),
+      },
+    };
+  }
+
   async createProduct(createProductDto: CreateProductDto): Promise<any> {
     await this.assertCategory(createProductDto.categoryId);
+    await this.assertBrand(createProductDto.brandId);
     await this.assertSeller(createProductDto.sellerId);
 
     return this.create({
       ...createProductDto,
+      slug: createProductDto.slug ?? slugify(createProductDto.name),
       price: createProductDto.price.toString(),
       weightGrams: createProductDto.weightGrams ?? 0,
       isActive: createProductDto.isActive ?? true,
@@ -85,13 +155,17 @@ export class ProductService extends BaseService {
       .select({
         id: products.id,
         name: products.name,
+        slug: products.slug,
         description: products.description,
+        metaTitle: products.metaTitle,
+        metaDescription: products.metaDescription,
         price: products.price,
         imageUrl: products.imageUrl,
         stockQuantity: products.stockQuantity,
         weightGrams: products.weightGrams,
         isActive: products.isActive,
         categoryId: products.categoryId,
+        brandId: products.brandId,
         sellerId: products.sellerId,
         sku: products.sku,
         createdAt: products.createdAt,
@@ -99,9 +173,16 @@ export class ProductService extends BaseService {
         category: {
           id: categories.id,
           name: categories.name,
+          slug: categories.slug,
           description: categories.description,
           imageUrl: categories.imageUrl,
           isActive: categories.isActive,
+        },
+        brand: {
+          id: brands.id,
+          name: brands.name,
+          slug: brands.slug,
+          logoUrl: brands.logoUrl,
         },
         seller: {
           id: users.id,
@@ -111,6 +192,7 @@ export class ProductService extends BaseService {
       })
       .from(products)
       .leftJoin(categories, eq(products.categoryId, categories.id))
+      .leftJoin(brands, eq(products.brandId, brands.id))
       .leftJoin(users, eq(products.sellerId, users.id))
       .where(eq(products.id, id))
       .limit(1);
@@ -151,10 +233,12 @@ export class ProductService extends BaseService {
     await this.findByIdOrFail(id, 'Product');
 
     if (updateProductDto.categoryId) await this.assertCategory(updateProductDto.categoryId);
+    if (updateProductDto.brandId) await this.assertBrand(updateProductDto.brandId);
     if (updateProductDto.sellerId) await this.assertSeller(updateProductDto.sellerId);
 
     const updateData: any = { ...updateProductDto };
     if (updateProductDto.price !== undefined) updateData.price = updateProductDto.price.toString();
+    if (updateProductDto.name && !updateProductDto.slug) updateData.slug = slugify(updateProductDto.name);
 
     await db
       .update(products)
@@ -175,6 +259,7 @@ export class ProductService extends BaseService {
     filters: {
       search?: string;
       category?: string;
+      brandId?: string;
       sellerId?: string;
       minPrice?: number;
       maxPrice?: number;
@@ -196,6 +281,7 @@ export class ProductService extends BaseService {
     }
     if (filters.category) conditions.push(eq(products.categoryId, filters.category));
     if (filters.sellerId) conditions.push(eq(products.sellerId, filters.sellerId));
+    if (filters.brandId) conditions.push(eq(products.brandId, filters.brandId));
     if (filters.minPrice !== undefined) conditions.push(gte(products.price, filters.minPrice.toString()));
     if (filters.maxPrice !== undefined) conditions.push(lte(products.price, filters.maxPrice.toString()));
     if (filters.inStock) conditions.push(gt(products.stockQuantity, 0));
