@@ -325,15 +325,24 @@ export class ProductService extends BaseService {
       const terms = await searchService.expand(filters.search);
       const clauses = terms.flatMap((term) => {
         const like = `%${term}%`;
-        return [
+        const conditions = [
           sql`to_tsvector('english', coalesce(${products.name}, '') || ' ' || coalesce(${products.description}, '') || ' ' || coalesce(${products.sku}, '')) @@ plainto_tsquery('english', ${term})`,
           ilike(products.name, like),
           ilike(products.sku, like),
           ilike(products.description, like),
-          // Trigram similarity gives basic typo tolerance for product names/SKUs.
-          sql`word_similarity(${term}, ${products.name}) > 0.4`,
-          sql`word_similarity(${term}, ${products.sku}) > 0.5`,
         ];
+
+        // Trigram matching is only useful for single alphabetic words. Applying
+        // it to numeric/multi-word queries creates false positives (for example,
+        // unrelated products with similar numeric SKU suffixes).
+        if (/^[a-z]{4,}$/i.test(term)) {
+          conditions.push(
+            sql`word_similarity(${term}, ${products.name}) > 0.4`,
+            sql`word_similarity(${term}, ${products.sku}) > 0.5`
+          );
+        }
+
+        return conditions;
       });
       conditions.push(or(...clauses)!);
     }
