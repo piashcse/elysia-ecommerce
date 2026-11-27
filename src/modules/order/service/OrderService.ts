@@ -1,6 +1,8 @@
 import { and, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 import { db } from '../../../config/database';
 import {
+  giftCardTransactions,
+  giftCards,
   orderItems as orderItemsTable,
   orders as ordersTable,
   payments,
@@ -524,6 +526,21 @@ export class OrderService extends BaseService {
       }
 
       await this.couponService.releaseUsage(tx, orderId);
+
+      if (order.giftCardCode && Number(order.giftCardAmount) > 0) {
+        const [card] = await tx.select().from(giftCards).where(eq(giftCards.code, order.giftCardCode)).limit(1).for('update');
+        if (card) {
+          await tx.update(giftCards)
+            .set({ balance: sql`${giftCards.balance} + ${order.giftCardAmount}` })
+            .where(eq(giftCards.id, card.id));
+          await tx.insert(giftCardTransactions).values({
+            giftCardId: card.id,
+            userId: order.userId,
+            orderId,
+            amount: order.giftCardAmount,
+          });
+        }
+      }
 
       const nextStatus = finalStatus === 'refunded' || payment?.status === 'completed' ? 'refunded' : 'cancelled';
       const [updated] = await tx
