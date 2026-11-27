@@ -4,8 +4,11 @@ import { notifications } from '../../../database/schema';
 import { CreateNotificationDto } from '../dto/NotificationDto';
 import { NotFoundError } from '../../../core/errors';
 import { PAGINATION } from '../../../core/constants';
+import { NotificationPreferenceService } from './NotificationPreferenceService';
 
 export class NotificationService {
+  private preferences = new NotificationPreferenceService();
+
   async createNotification(createNotificationDto: CreateNotificationDto): Promise<any> {
     const [newNotification] = await db.insert(notifications).values(createNotificationDto).returning();
     return newNotification;
@@ -16,6 +19,7 @@ export class NotificationService {
    */
   private async safeCreate(input: CreateNotificationDto): Promise<void> {
     try {
+      if (!(await this.preferences.isInAppEnabled(input.userId, input.type))) return;
       await this.createNotification(input);
     } catch (error) {
       console.error('Failed to create notification:', (error as Error).message);

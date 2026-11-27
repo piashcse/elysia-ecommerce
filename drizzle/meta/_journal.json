@@ -43,6 +43,13 @@
       "when": 1795758621962,
       "tag": "0007_postpurchase",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1795758871174,
+      "tag": "0008_payments_messaging",
+      "breakpoints": true
     }
   ]
 }

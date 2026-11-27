@@ -62,6 +62,7 @@ export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payme
       method: paymentMethodSchema,
       amount: t.Number({ minimum: 0.01, maximum: 999999.99 }),
       paymentDetails: paymentDetailsSchema,
+      paymentMethodId: t.Optional(uuid),
       guestToken: t.Optional(t.String({ maxLength: 128 })),
     }),
     response: {

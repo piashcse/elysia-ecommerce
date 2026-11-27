@@ -30,6 +30,7 @@ const envSchema = z.object({
 
   TAX_RATE: z.coerce.number().min(0).max(1).default(0),
   PAYMENT_SIMULATE_FAILURE_RATE: z.coerce.number().min(0).max(1).default(0),
+  PAYMENT_WEBHOOK_SECRET: z.string().default('dev-webhook-secret'),
   REVIEW_AUTO_APPROVE: z.enum(['true', 'false']).default('true').transform((value) => value === 'true'),
 });
 
@@ -52,6 +53,7 @@ const parsed = envSchema.safeParse({
   MAIL_WEBHOOK_URL: process.env.MAIL_WEBHOOK_URL,
   TAX_RATE: process.env.TAX_RATE,
   PAYMENT_SIMULATE_FAILURE_RATE: process.env.PAYMENT_SIMULATE_FAILURE_RATE,
+  PAYMENT_WEBHOOK_SECRET: process.env.PAYMENT_WEBHOOK_SECRET,
   REVIEW_AUTO_APPROVE: process.env.REVIEW_AUTO_APPROVE,
 });
 
