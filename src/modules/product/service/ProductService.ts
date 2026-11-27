@@ -14,7 +14,11 @@ import { ForbiddenError, NotFoundError, ValidationError } from '../../../core/er
 import { BaseService } from '../../../core/base.service';
 import { UserRole } from '../../../core/roles';
 import { PAGINATION } from '../../../core/constants';
+import { convertCents, fromCents, toCents } from '../../../core/money';
 import { slugify } from '../../brand/service/BrandService';
+import { searchService } from '../../search/service/SearchService';
+import { translationService } from '../../translation/service/TranslationService';
+import { currencyService } from '../../currency/service/CurrencyService';
 
 interface Actor {
   sub: string;
@@ -68,7 +72,7 @@ export class ProductService extends BaseService {
     }
   }
 
-  private async getManageableProduct(actor: Actor, productId: string) {
+  async getManageableProduct(actor: Actor, productId: string) {
     const product = await this.findByIdOrFail(productId, 'Product');
     if (actor.role !== UserRole.ADMIN && product.sellerId !== actor.sub) {
       throw new ForbiddenError('You can only manage your own products');
@@ -76,13 +80,13 @@ export class ProductService extends BaseService {
     return product;
   }
 
-  async getBySlug(slug: string, includeInactive = false) {
+  async getBySlug(slug: string, includeInactive = false, locale?: string, currency?: string) {
     const [product] = await db.select({ id: products.id }).from(products).where(eq(products.slug, slug)).limit(1);
     if (!product) return null;
-    return this.findProductByIdWithDetails(product.id, includeInactive);
+    return this.findProductByIdWithDetails(product.id, includeInactive, locale, currency);
   }
 
-  async getRelated(id: string, limit = 8) {
+  async getRelated(id: string, limit = 8, locale?: string, currency?: string) {
     const [product] = await db.select({ id: products.id, categoryId: products.categoryId, brandId: products.brandId })
       .from(products).where(eq(products.id, id)).limit(1);
     if (!product) throw new NotFoundError('Product not found');
@@ -95,7 +99,7 @@ export class ProductService extends BaseService {
       )!);
     }
 
-    return db.select({
+    const related = await db.select({
       id: products.id,
       name: products.name,
       slug: products.slug,
@@ -103,6 +107,9 @@ export class ProductService extends BaseService {
       imageUrl: products.imageUrl,
       stockQuantity: products.stockQuantity,
     }).from(products).where(and(...conditions)).limit(Math.min(20, Math.max(1, limit)));
+
+    const localized = await translationService.applyProducts(related, locale);
+    return this.applyCurrencyList(localized, currency);
   }
 
   async getFacets() {
@@ -150,7 +157,7 @@ export class ProductService extends BaseService {
     });
   }
 
-  async findProductByIdWithDetails(id: string, includeInactive = false): Promise<any> {
+  async findProductByIdWithDetails(id: string, includeInactive = false, locale?: string, currency?: string): Promise<any> {
     const [product] = await db
       .select({
         id: products.id,
@@ -217,8 +224,13 @@ export class ProductService extends BaseService {
       ? await db.select().from(variantAttributes).where(inArray(variantAttributes.variantId, variantIds))
       : [];
 
-    return {
-      ...product,
+    const localized = await translationService.applyProduct(product, locale);
+    if (localized.category) {
+      localized.category = await translationService.applyCategory(localized.category, locale);
+    }
+
+    const result = {
+      ...localized,
       images,
       variants: variants.map((variant) => ({
         ...variant,
@@ -227,6 +239,42 @@ export class ProductService extends BaseService {
           .map((attribute) => ({ name: attribute.attributeName, value: attribute.attributeValue })),
       })),
     };
+
+    return this.applyCurrency(result, currency);
+  }
+
+  private async applyCurrency(product: any, currency?: string) {
+    if (!currency || !product) return product;
+    const record = await currencyService.get(currency);
+    const rate = Number(record.rate);
+    if (rate === 1) return { ...product, currency: record.code, baseCurrency: 'USD' };
+
+    return {
+      ...product,
+      price: fromCents(convertCents(toCents(product.price), rate)),
+      currency: record.code,
+      baseCurrency: 'USD',
+      ...(product.variants
+        ? {
+            variants: product.variants.map((variant: any) => ({
+              ...variant,
+              price: fromCents(convertCents(toCents(variant.price), rate)),
+            })),
+          }
+        : {}),
+    };
+  }
+
+  private async applyCurrencyList(items: any[], currency?: string) {
+    if (!currency || !items.length) return items;
+    const record = await currencyService.get(currency);
+    const rate = Number(record.rate);
+    return items.map((item) => ({
+      ...item,
+      price: fromCents(convertCents(toCents(item.price), rate)),
+      currency: record.code,
+      baseCurrency: 'USD',
+    }));
   }
 
   async updateProduct(id: string, updateProductDto: UpdateProductDto): Promise<any> {
@@ -267,17 +315,27 @@ export class ProductService extends BaseService {
       isActive?: boolean;
       sortBy?: 'name' | 'price' | 'createdAt' | 'updatedAt';
       sortOrder?: 'asc' | 'desc';
+      locale?: string;
+      currency?: string;
     } = {}
   ): Promise<{ items: any[]; total: number }> {
     const conditions = [];
 
     if (filters.search) {
-      const term = `%${filters.search}%`;
-      conditions.push(or(
-        ilike(products.name, term),
-        ilike(products.sku, term),
-        ilike(products.description, term)
-      ));
+      const terms = await searchService.expand(filters.search);
+      const clauses = terms.flatMap((term) => {
+        const like = `%${term}%`;
+        return [
+          sql`to_tsvector('english', coalesce(${products.name}, '') || ' ' || coalesce(${products.description}, '') || ' ' || coalesce(${products.sku}, '')) @@ plainto_tsquery('english', ${term})`,
+          ilike(products.name, like),
+          ilike(products.sku, like),
+          ilike(products.description, like),
+          // Trigram similarity gives basic typo tolerance for product names/SKUs.
+          sql`word_similarity(${term}, ${products.name}) > 0.4`,
+          sql`word_similarity(${term}, ${products.sku}) > 0.5`,
+        ];
+      });
+      conditions.push(or(...clauses)!);
     }
     if (filters.category) conditions.push(eq(products.categoryId, filters.category));
     if (filters.sellerId) conditions.push(eq(products.sellerId, filters.sellerId));
@@ -295,9 +353,21 @@ export class ProductService extends BaseService {
           ? products.updatedAt
           : products.createdAt;
 
-    const orderByClause = filters.sortOrder === 'asc' ? asc(sortColumn) : desc(sortColumn);
+    let orderByClause: any = filters.sortOrder === 'asc' ? asc(sortColumn) : desc(sortColumn);
 
-    return this.findAll(page, limit, conditions, orderByClause);
+    if (filters.search && !filters.sortBy) {
+      orderByClause = sql`ts_rank(
+        to_tsvector('english', coalesce(${products.name}, '') || ' ' || coalesce(${products.description}, '') || ' ' || coalesce(${products.sku}, '')),
+        plainto_tsquery('english', ${filters.search})
+      ) desc, similarity(${products.name}, ${filters.search}) desc, ${products.createdAt} desc`;
+    }
+
+    const result = await this.findAll(page, limit, conditions, orderByClause);
+    const localizedItems = await translationService.applyProducts(result.items, filters.locale);
+    return {
+      ...result,
+      items: await this.applyCurrencyList(localizedItems, filters.currency),
+    };
   }
 
   async getImages(productId: string): Promise<any[]> {

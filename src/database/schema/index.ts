@@ -27,3 +27,8 @@ export * from './reviewMedia';
 export * from './sellerPayout';
 export * from './auditLog';
 export * from './giftCard';
+export * from './apiKey';
+export * from './twoFactorRecoveryCode';
+export * from './currency';
+export * from './translation';
+export * from './searchSynonym';

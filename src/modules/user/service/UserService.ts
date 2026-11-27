@@ -1,9 +1,9 @@
-import { and, eq, ilike, ne, or, sql } from 'drizzle-orm';
+import { and, eq, ilike, isNull, ne, or, sql } from 'drizzle-orm';
 import { db } from '../../../config/database';
-import { users } from '../../../database/schema';
+import { addresses, carts, orders, reviews, users, wishlists } from '../../../database/schema';
 import { CreateUserDto, UpdateUserDto } from '../dto/UserDto';
 import { comparePassword, hashPassword, normalizeEmail } from '../../../utils/auth';
-import { ConflictError, ForbiddenError, ValidationError } from '../../../core/errors';
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../../../core/errors';
 import { UserRole } from '../../../core/roles';
 import { BaseService } from '../../../core/base.service';
 import { PAGINATION } from '../../../core/constants';
@@ -125,7 +125,60 @@ export class UserService extends BaseService {
       }
     }
 
-    await db.delete(users).where(eq(users.id, id));
+    await this.deleteAccount(id);
+  }
+
+  async deleteAccount(userId: string): Promise<void> {
+    const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    if (!user) throw new NotFoundError('User not found');
+
+    if (user.role === UserRole.ADMIN) {
+      const otherAdmins = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(users)
+        .where(and(eq(users.role, UserRole.ADMIN), eq(users.isActive, true), isNull(users.deletedAt), ne(users.id, userId)));
+      if (!otherAdmins[0] || Number(otherAdmins[0].count) === 0) {
+        throw new ConflictError('Cannot delete the last active admin', 'LAST_ADMIN');
+      }
+    }
+
+    await db.transaction(async (tx) => {
+      await tx.update(users).set({
+        email: `deleted-${userId}@deleted.local`,
+        password: await hashPassword(crypto.randomUUID()),
+        firstName: null,
+        lastName: null,
+        isActive: false,
+        emailVerified: false,
+        emailVerificationToken: null,
+        emailVerificationExpires: null,
+        passwordResetToken: null,
+        passwordResetExpires: null,
+        twoFactorEnabled: false,
+        twoFactorSecret: null,
+        deletedAt: new Date(),
+        tokenVersion: sql`${users.tokenVersion} + 1`,
+        updatedAt: new Date(),
+      }).where(eq(users.id, userId));
+
+      await tx.delete(addresses).where(eq(addresses.userId, userId));
+      await tx.delete(carts).where(eq(carts.userId, userId));
+      await tx.delete(wishlists).where(eq(wishlists.userId, userId));
+      await tx.delete(reviews).where(eq(reviews.userId, userId));
+    });
+  }
+
+  async exportData(userId: string) {
+    const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    if (!user) throw new NotFoundError('User not found');
+    const [addressRows, orderRows, reviewRows, wishlistRows] = await Promise.all([
+      db.select().from(addresses).where(eq(addresses.userId, userId)),
+      db.select().from(orders).where(eq(orders.userId, userId)),
+      db.select().from(reviews).where(eq(reviews.userId, userId)),
+      db.select().from(wishlists).where(eq(wishlists.userId, userId)),
+    ]);
+    const { password, emailVerificationToken, passwordResetToken, ...profile } = user;
+    return { profile, addresses: addressRows, orders: orderRows, reviews: reviewRows, wishlist: wishlistRows };
   }
 
   async getUsers(
@@ -134,6 +187,7 @@ export class UserService extends BaseService {
     filters: { role?: UserRole; search?: string } = {}
   ): Promise<{ items: any[]; total: number }> {
     const conditions = [];
+    conditions.push(isNull(users.deletedAt));
     if (filters.role) conditions.push(eq(users.role, filters.role));
     if (filters.search) {
       const term = `%${filters.search}%`;

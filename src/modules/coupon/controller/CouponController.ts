@@ -24,6 +24,8 @@ export const couponController = new Elysia({ prefix: '/coupons', tags: ['Coupon'
       endDate: t.String({ format: 'date-time' }),
       usageLimit: t.Optional(t.Integer({ minimum: 1 })),
       perUserLimit: t.Optional(t.Integer({ minimum: 1 })),
+      stackable: t.Optional(t.Boolean()),
+      appliesToShipping: t.Optional(t.Boolean()),
       isActive: t.Optional(t.Boolean())
     }),
     hasRole: UserRole.ADMIN,
@@ -141,6 +143,8 @@ export const couponController = new Elysia({ prefix: '/coupons', tags: ['Coupon'
       endDate: t.Optional(t.String({ format: 'date-time' })),
       usageLimit: t.Optional(t.Integer({ minimum: 1 })),
       perUserLimit: t.Optional(t.Integer({ minimum: 1 })),
+      stackable: t.Optional(t.Boolean()),
+      appliesToShipping: t.Optional(t.Boolean()),
       isActive: t.Optional(t.Boolean())
     }),
     hasRole: UserRole.ADMIN,

@@ -138,7 +138,7 @@ export class SellerService extends BaseService {
             db
                 .select({
                     itemsSold: sql<number>`coalesce(sum(${orderItems.quantity}), 0)`,
-                    revenue: sql<string>`coalesce(sum(${orderItems.price} * ${orderItems.quantity}), 0)`,
+                    revenue: sql<string>`coalesce(sum((${orderItems.price} * ${orderItems.quantity}) / ${orders.exchangeRate}), 0)`,
                 })
                 .from(orderItems)
                 .innerJoin(orders, eq(orderItems.orderId, orders.id))

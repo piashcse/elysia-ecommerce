@@ -42,6 +42,12 @@ import { payoutController } from './modules/seller/controller/PayoutController';
 import { reportController } from './modules/admin/controller/ReportController';
 import { auditController } from './modules/admin/controller/AuditController';
 import { auditMiddleware } from './modules/admin/middleware/audit';
+import { apiKeyController } from './modules/auth/controller/ApiKeyController';
+import { metricsController } from './modules/system/controller/MetricsController';
+import { currencyController } from './modules/currency/controller/CurrencyController';
+import { searchController } from './modules/search/controller/SearchController';
+import { translationController } from './modules/translation/controller/TranslationController';
+import { emailService } from './modules/notification/service/EmailService';
 
 const app = new Elysia();
 
@@ -200,7 +206,53 @@ app
   .use(payoutController)
   .use(reportController)
   .use(auditController)
+  .use(apiKeyController)
+  .use(metricsController)
+  .use(currencyController)
+  .use(searchController)
+  .use(translationController)
 ;
+
+// API v1 aliases keep the current unversioned routes while providing a stable
+// versioned surface for new integrations.
+const apiV1 = new Elysia({ prefix: '/api/v1' })
+  .use(authController)
+  .use(userController)
+  .use(sellerController)
+  .use(productController)
+  .use(categoryController)
+  .use(cartController)
+  .use(wishlistController)
+  .use(orderController)
+  .use(paymentController)
+  .use(reviewController)
+  .use(couponController)
+  .use(notificationController)
+  .use(shippingController)
+  .use(addressController)
+  .use(checkoutController)
+  .use(taxController)
+  .use(returnsController)
+  .use(invoiceController)
+  .use(paymentMethodController)
+  .use(paymentWebhookController)
+  .use(emailController)
+  .use(notificationPreferenceController)
+  .use(brandController)
+  .use(productQaController)
+  .use(uploadController)
+  .use(sitemapController)
+  .use(giftCardController)
+  .use(payoutController)
+  .use(reportController)
+  .use(auditController)
+  .use(apiKeyController)
+  .use(metricsController)
+  .use(currencyController)
+  .use(searchController)
+  .use(translationController);
+
+app.use(apiV1);
 
 // OpenAPI documentation. The bearer scheme is also attached per protected
 // route by the auth macros.
@@ -273,6 +325,11 @@ if (import.meta.main) {
     console.log(`Elysia E-commerce server is running on port ${PORT}`);
     console.log(`Environment: ${envConfig.NODE_ENV}`);
     console.log(`Swagger UI available at http://localhost:${PORT}/swagger`);
+
+    if (envConfig.EMAIL_WORKER_ENABLED) {
+      emailService.startWorker();
+      console.log(`Email worker started (interval: ${envConfig.EMAIL_WORKER_INTERVAL_MS}ms)`);
+    }
   });
 }
 

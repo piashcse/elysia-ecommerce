@@ -161,7 +161,7 @@ export class CouponService extends BaseService {
     return this.findAll(page, limit, conditions);
   }
 
-  async validateCoupon(code: string, orderAmount: number, userId: string, context: { productIds?: string[]; categoryIds?: string[] } = {}): Promise<CouponValidation> {
+  async validateCoupon(code: string, orderAmount: number, userId: string, context: { productIds?: string[]; categoryIds?: string[]; shippingCents?: number } = {}): Promise<CouponValidation> {
     const coupon = await this.getCouponByCode(code, true);
 
     if (!coupon) {
@@ -199,15 +199,17 @@ export class CouponService extends BaseService {
       }
     }
 
+    // Coupons that apply to shipping may discount the shipping cost as well.
+    const discountableCents = orderCents + (coupon.appliesToShipping ? Math.max(0, context.shippingCents ?? 0) : 0);
     let discountCents = coupon.discountType === 'percentage'
-      ? Math.round((orderCents * Number(coupon.discountValue)) / 100)
+      ? Math.round((discountableCents * Number(coupon.discountValue)) / 100)
       : toCents(coupon.discountValue);
 
     if (coupon.maxDiscountAmount !== null) {
       discountCents = Math.min(discountCents, toCents(coupon.maxDiscountAmount));
     }
 
-    discountCents = Math.min(discountCents, orderCents);
+    discountCents = Math.min(discountCents, discountableCents);
 
     return {
       coupon,

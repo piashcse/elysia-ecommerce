@@ -10,7 +10,7 @@ export class PayoutService {
     if (!seller) throw new NotFoundError('Seller not found');
 
     const [revenueRow] = await db.select({
-      revenue: sql<string>`coalesce(sum(${orderItems.price} * ${orderItems.quantity}), 0)`,
+      revenue: sql<string>`coalesce(sum((${orderItems.price} * ${orderItems.quantity}) / ${orders.exchangeRate}), 0)`,
     }).from(orderItems).innerJoin(orders, eq(orderItems.orderId, orders.id)).where(and(
       eq(orderItems.sellerId, sellerId),
       eq(orders.status, 'delivered')
@@ -26,6 +26,7 @@ export class PayoutService {
     const payouts = await db.select().from(sellerPayouts).where(eq(sellerPayouts.sellerId, sellerId)).orderBy(sellerPayouts.createdAt);
 
     return {
+      currency: 'USD',
       revenue: fromCents(revenueCents),
       commission: fromCents(commissionCents),
       paid: fromCents(paidCents),

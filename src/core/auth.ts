@@ -7,6 +7,8 @@ import { JwtPayload, CurrentUser } from '../utils/jwt';
 import { UserRole } from './roles';
 import { jwtPlugin } from './jwt';
 import { JWT_AUDIENCE, JWT_ISSUER } from './constants';
+import { ApiKeyService } from '../modules/auth/service/ApiKeyService';
+import { ForbiddenError } from './errors';
 
 const unauthorized = (set: any, message = 'Authentication required') => {
   set.status = 401;
@@ -19,11 +21,52 @@ const forbidden = (set: any, message = 'Access denied') => {
 };
 
 const securityDetail = { security: [{ bearerAuth: [] }] };
+const apiKeyService = new ApiKeyService();
 
 export const authPlugin = new Elysia({ name: 'auth-plugin' })
     .use(jwtPlugin)
-    .derive('global', async ({ jwt, headers }): Promise<{ user: CurrentUser | null }> => {
+    .derive('global', async ({ jwt, headers, request }): Promise<{ user: CurrentUser | null }> => {
     const authHeader = headers['authorization'];
+    const apiKeyHeader = headers['x-api-key'];
+
+    if (!authHeader?.startsWith('Bearer ') && typeof apiKeyHeader === 'string') {
+        const apiUser = await apiKeyService.resolve(apiKeyHeader);
+        if (!apiUser) return { user: null };
+
+        const scopes = apiUser.scopes ?? [];
+        if (scopes.length > 0) {
+            const method = request?.method ?? 'GET';
+            const pathname = new URL(request.url).pathname;
+            const segments = pathname
+                .split('/')
+                .filter(Boolean)
+                .filter((segment) => segment !== 'api' && !/^v\d+$/.test(segment));
+            const resource = segments[0] ?? '';
+            const action = ['GET', 'HEAD', 'OPTIONS'].includes(method) ? 'read' : 'write';
+            const allowed = scopes.includes('*')
+                || scopes.includes(action)
+                || scopes.includes(`${action}:*`)
+                || scopes.includes(`${action}:${resource}`);
+            if (!allowed) {
+                throw new ForbiddenError(
+                    `API key is missing the required scope: ${action}:${resource}`,
+                    'API_KEY_SCOPE_DENIED'
+                );
+            }
+        }
+
+        return {
+            user: {
+                sub: apiUser.id,
+                email: apiUser.email,
+                role: apiUser.role,
+                ver: apiUser.tokenVersion,
+                scopes,
+                authType: 'apiKey',
+            },
+        };
+    }
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return { user: null };
     }
@@ -49,12 +92,13 @@ export const authPlugin = new Elysia({ name: 'auth-plugin' })
                 role: users.role,
                 isActive: users.isActive,
                 tokenVersion: users.tokenVersion,
+                deletedAt: users.deletedAt,
             })
             .from(users)
             .where(eq(users.id, payload.sub))
             .limit(1);
 
-        if (!current || !current.isActive || current.tokenVersion !== payload.ver) {
+        if (!current || !current.isActive || current.deletedAt || current.tokenVersion !== payload.ver) {
             return { user: null };
         }
 
@@ -64,6 +108,7 @@ export const authPlugin = new Elysia({ name: 'auth-plugin' })
                 email: current.email,
                 role: current.role,
                 ver: current.tokenVersion,
+                authType: 'jwt',
             },
         };
     } catch {

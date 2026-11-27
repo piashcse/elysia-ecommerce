@@ -33,6 +33,15 @@ A modern, high-performance eCommerce backend built with Elysia.js, Bun, and Driz
 -   **Comprehensive Logging**: Detailed logging for monitoring and debugging.
 -   **Type-Safe & Validated**: Ensures data integrity with Zod schema validation (using a custom `zodValidate` hook) and Drizzle ORM's type-safe queries.
 -   **Automatic Sanitization**: Sensitive fields like `password` are automatically removed from all API responses using a global hook.
+-   **Guest & Idempotent Checkout**: Guest carts/orders, checkout quotes, and idempotent order creation.
+-   **Variants & Inventory**: Variant-level pricing/stock with atomic stock updates and cancellation restores.
+-   **Taxes, Shipping Rules & Returns**: Regional tax rates, country-aware shipping/free-shipping thresholds, and RMA/refund workflows.
+-   **Payments & Messaging**: Provider adapter with signed webhooks, saved tokenized methods, email outbox/templates, and notification preferences.
+-   **Catalog Growth**: Brands, category hierarchy, product slugs/SEO, search facets, related products, sitemap, media uploads, review images, and product Q&A.
+-   **Marketplace & Admin**: Coupon scoping/stacking, gift cards, seller fulfillment/commission payouts, sales reports, and audit logs.
+-   **Security & Platform**: TOTP 2FA with recovery codes, scoped API keys, GDPR export/account deletion, `/api/v1` aliases, and Prometheus metrics.
+-   **Multi-Currency & i18n**: Exchange-rate conversion for quotes/orders, plus product/category translations.
+-   **Full-Text Search**: PostgreSQL full-text ranking with trigram typo tolerance and admin-managed synonyms.
 
 ## 🏗️ Architecture & Best Practices
 
@@ -95,6 +104,13 @@ The API is organized by modules. For a complete and interactive list of all endp
 - `POST /auth/resend-verification`: Resend the verification email
 - `POST /auth/forgot-password`: Request a password reset email
 - `POST /auth/reset-password`: Reset a password with a reset token
+- `POST /auth/2fa/setup`: Start TOTP two-factor setup
+- `POST /auth/2fa/enable`: Enable 2FA and receive recovery codes
+- `POST /auth/2fa/recovery-codes`: Regenerate recovery codes
+- `POST /auth/2fa/disable`: Disable 2FA with password + code
+- `GET/POST/DELETE /api-keys`: Manage scoped API keys (`X-API-Key` header)
+- `GET /users/me/export`: Export personal data (GDPR)
+- `DELETE /users/me`: Delete/anonymize the current account
 
 ### User
 - `GET /users/profile`: Get current user profile
@@ -115,8 +131,13 @@ The API is organized by modules. For a complete and interactive list of all endp
 
 ### Product
 - `POST /products/`: Create a new product (Admin only)
-- `GET /products/`: Get products with search, filters, sorting, and pagination
+- `GET /products/`: Get products with search, filters, sorting, pagination, `locale`, and display `currency`
 - `GET /products/:id`: Get product details with seller, images, and variants
+- `GET /products/slug/:slug`: Get a product by slug (`?locale=es&currency=EUR` supported)
+- `GET /products/facets`: Brand/category/price/stock facets
+- `GET /products/:id/related`: Related products by category/brand
+- `GET /products/:id/questions` / `POST`: Product Q&A
+- `GET/PUT/DELETE /products/:id/translations`: Product translations (`/translations/:locale`)
 - `PUT /products/:id`: Update product by ID (Admin only)
 - `DELETE /products/:id`: Delete product by ID (Admin only)
 - `GET /products/:id/images`: List product images
@@ -131,7 +152,10 @@ The API is organized by modules. For a complete and interactive list of all endp
 ### Category
 - `POST /categories/`: Create a new category (Admin only)
 - `GET /categories/`: Get all categories
-- `GET /categories/:id`: Get category by ID
+- `GET /categories/:id`: Get category by ID (`?locale=es` supported)
+- `GET /categories/tree`: Nested category tree
+- `GET /categories/slug/:slug`: Category by slug
+- `GET/PUT/DELETE /categories/:id/translations`: Category translations (Admin)
 - `PUT /categories/:id`: Update category by ID (Admin only)
 - `DELETE /categories/:id`: Delete category by ID (Admin only)
 
@@ -151,7 +175,10 @@ The API is organized by modules. For a complete and interactive list of all endp
 - `GET /wishlist/count`: Get total wishlist count
 
 ### Order
-- `POST /orders/`: Place a new order (supports saved address IDs, coupons, and shipping methods)
+- `POST /orders/`: Place a new order (saved addresses, multiple coupons, currency, gift cards)
+- `POST /checkout/quote`: Calculate totals without creating an order
+- `GET /orders/:id/invoice`: Printable HTML invoice
+- `POST /orders/release-expired`: Release unpaid orders (Admin)
 - `GET /orders/`: Get orders (Admin: all, Customer: own)
 - `GET /orders/stats`: Get order/revenue statistics (Admin only)
 - `GET /orders/:id`: Get order details by ID
@@ -183,6 +210,24 @@ The API is organized by modules. For a complete and interactive list of all endp
 - `POST /coupons/validate`: Validate and calculate a coupon discount
 - `PUT /coupons/:id`: Update coupon by ID (Admin only)
 - `DELETE /coupons/:id`: Delete coupon by ID (Admin only)
+- `PUT /coupons/:id/scopes`: Restrict a coupon to products/categories (Admin)
+- `POST /orders` accepts `couponCodes` for stackable coupons; `appliesToShipping` lets a coupon discount shipping
+
+### Gift Cards, Payouts & Reports
+- `GET/POST/DELETE /gift-cards`: Issue and manage gift cards (Admin)
+- `GET /gift-cards/:code`: Check a gift card balance
+- `GET /payouts`, `POST /payouts`, `PATCH /payouts/:id`: Seller payouts (Admin)
+- `GET /seller/payouts`: Seller balance and payout history
+- `PUT /seller/orders/:orderId/items/:itemId`: Update item fulfillment
+- `GET /admin/reports/sales`: Sales/product/category reports (Admin)
+- `GET /admin/audit-logs`: Audit trail (Admin)
+
+### Currency, Search & i18n
+- `GET /currencies`, `POST /currencies`, `PATCH/DELETE /currencies/:code`
+- `GET /currencies/convert?amount=10&from=USD&to=EUR`
+- `GET/POST/DELETE /admin/search/synonyms`: Manage search synonyms
+- `GET /sitemap.xml`: SEO sitemap
+- `POST /uploads`: Image upload (Admin/Seller); files served from `/uploads/:filename`
 
 ### Notification
 - `GET /notifications/`: Get all notifications for the authenticated user
@@ -190,6 +235,8 @@ The API is organized by modules. For a complete and interactive list of all endp
 - `PATCH /notifications/:id/read`: Mark a notification as read
 - `PATCH /notifications/read/all`: Mark all notifications as read
 - `DELETE /notifications/:id`: Delete a notification
+- `GET/PUT /notifications/preferences`: In-app/email notification preferences
+- `GET /emails`, `POST /emails/process`: Email outbox administration (Admin)
 
 ### Shipping
 - `POST /shipping-methods/`: Create a new shipping method (Admin only)
@@ -206,6 +253,16 @@ The API is organized by modules. For a complete and interactive list of all endp
 - `PUT /addresses/:id`: Update address
 - `DELETE /addresses/:id`: Delete address
 - `POST /addresses/:id/set-default`: Set address as default
+
+### Returns, Taxes & Payments (additional)
+- `GET/POST /tax-rates`, `PUT/DELETE /tax-rates/:id`: Regional tax rates (Admin)
+- `GET/POST /returns`, `POST /returns/:id/refund`: Returns/RMA workflow
+- `GET/POST/DELETE /payment-methods`: Saved tokenized payment methods
+- `POST /payments/webhook`: Signed, idempotent provider webhook
+- `GET /metrics`: Prometheus-style metrics
+- `GET /health`: Health/readiness check
+
+All routes are also available under the stable `/api/v1` prefix.
 
 ## 🚀 Getting Started
 
@@ -244,8 +301,12 @@ The API is organized by modules. For a complete and interactive list of all endp
 
 5.  **Run database migrations:**
     ```bash
-    bun run db:push
+    bun run db:migrate
     ```
+
+    The catalog search migration enables the PostgreSQL `pg_trgm` extension. If
+    your database user cannot create extensions, enable it once as a superuser:
+    `CREATE EXTENSION IF NOT EXISTS pg_trgm;`
 
 6.  **Start the development server:**
     ```bash
@@ -260,7 +321,8 @@ The server will start on the port defined in your `.env` file (default: 3000), a
 -   `bun run build`: Build the application for production.
 -   `bun run start`: Start the production server.
 -   `bun run db:generate`: Generate a new database migration.
--   `bun run db:push`: Apply migrations to the database.
+-   `bun run db:migrate`: Apply tracked migrations to the database.
+-   `bun run db:push`: Push the schema directly (development only).
 -   `bun run db:studio`: Open Drizzle Studio to manage your database.
 
 ## 🔑 Authentication
@@ -272,6 +334,23 @@ Authorization: Bearer <your-jwt-token>
 ```
 
 You can obtain a token by registering and logging in via the `/auth/register` and `/auth/login` endpoints.
+
+API keys can be sent instead of a bearer token:
+
+```
+X-API-Key: <your-api-key>
+```
+
+API key scopes support `read`, `write`, `*`, or resource scopes such as
+`read:products`. Keys without scopes have full access. Create keys with
+`POST /api-keys` and revoke them with `DELETE /api-keys/:id`.
+
+### Email worker & retries
+
+Transactional emails are written to an outbox. Set `EMAIL_WORKER_ENABLED=true`
+to process them in-process every `EMAIL_WORKER_INTERVAL_MS`, or call
+`POST /emails/process` from your scheduler. Failed attempts use exponential
+backoff and stop after `EMAIL_MAX_ATTEMPTS`.
 
 ## 📊 Response Format
 

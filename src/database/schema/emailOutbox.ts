@@ -10,6 +10,7 @@ export const emailOutbox = pgTable('email_outbox', {
   html: text('html'),
   status: emailStatusEnum('status').default('pending').notNull(),
   attempts: integer('attempts').default(0).notNull(),
+  nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }).defaultNow().notNull(),
   lastError: text('last_error'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   sentAt: timestamp('sent_at', { withTimezone: true }),

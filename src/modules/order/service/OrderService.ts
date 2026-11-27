@@ -1,6 +1,8 @@
 import { and, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 import { db } from '../../../config/database';
 import {
+  giftCardTransactions,
+  giftCards,
   orderItems as orderItemsTable,
   orders as ordersTable,
   payments,
@@ -17,11 +19,12 @@ import envConfig from '../../../config/env';
 import { PAGINATION, ORDER_STATUSES, type OrderStatus } from '../../../core/constants';
 import { CouponService } from '../../coupon/service/CouponService';
 import { calculateShippingCostCents } from '../../shipping/shipping.calculator';
-import { fromCents, toCents } from '../../../core/money';
+import { convertCents, fromCents, toCents } from '../../../core/money';
 import { NotificationService } from '../../notification/service/NotificationService';
 import { OrderEventService } from './OrderEventService';
 import { taxService } from '../../tax/service/TaxService';
 import { GiftCardService } from '../../gift-card/service/GiftCardService';
+import { CurrencyService } from '../../currency/service/CurrencyService';
 import { generateRandomString, sha256Hash } from '../../../utils/auth';
 import { emailService } from '../../notification/service/EmailService';
 import { emailTemplates } from '../../notification/email.templates';
@@ -36,6 +39,15 @@ const TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
 };
 
 const PAYMENT_WINDOW_MS = 30 * 60 * 1000;
+
+const emailPreferenceType = (status: string) => ({
+  processing: 'payment_success',
+  shipped: 'order_shipped',
+  delivered: 'order_delivered',
+  cancelled: 'order_cancelled',
+  refunded: 'payment_refunded',
+}[status] ?? 'order_confirmation');
+
 
 export interface PriceableItem {
   productId: string;
@@ -63,6 +75,10 @@ export interface OrderPricing {
   totalCents: number;
   weightGrams: number;
   coupon: any;
+  coupons: any[];
+  couponCodes: string[];
+  currency: string;
+  exchangeRate: number;
   shippingMethodId: string | null;
 }
 
@@ -86,6 +102,7 @@ export class OrderService extends BaseService {
   private notificationService = new NotificationService();
   private eventService = new OrderEventService();
   private giftCards = new GiftCardService();
+  private currencies = new CurrencyService();
 
   constructor() {
     super(ordersTable);
@@ -93,7 +110,15 @@ export class OrderService extends BaseService {
 
   async priceOrder(
     items: PriceableItem[],
-    options: { userId?: string; couponCode?: string; giftCardCode?: string; shippingMethodId?: string; country?: string } = {}
+    options: {
+      userId?: string;
+      couponCode?: string;
+      couponCodes?: string[];
+      currency?: string;
+      giftCardCode?: string;
+      shippingMethodId?: string;
+      country?: string;
+    } = {}
   ): Promise<OrderPricing> {
     if (!items.length) throw new ValidationError('At least one order item is required');
 
@@ -173,49 +198,101 @@ export class OrderService extends BaseService {
       shippingMethodId = method.id;
     }
 
-    let discountCents = 0;
-    let coupon: any = null;
+    const couponCodes = [...new Set(
+      [
+        ...(options.couponCodes ?? []),
+        ...(options.couponCode ? [options.couponCode] : []),
+      ]
+        .map((code) => code.trim().toUpperCase())
+        .filter(Boolean)
+    )];
 
-    if (options.couponCode) {
-      if (!options.userId) throw new ValidationError('Coupons require an authenticated account');
+    if (couponCodes.length > 5) {
+      throw new ValidationError('At most 5 coupons can be applied to an order', 'TOO_MANY_COUPONS');
+    }
+
+    if (couponCodes.length && !options.userId) {
+      throw new ValidationError('Coupons require an authenticated account');
+    }
+
+    const currencies = await this.currencies.get(options.currency ?? 'USD');
+    const exchangeRate = Number(currencies.rate);
+    const coupons: any[] = [];
+    let discountBaseCents = 0;
+
+    for (const code of couponCodes) {
       const validation = await this.couponService.validateCoupon(
-        options.couponCode,
+        code,
         subtotalCents / 100,
-        options.userId,
+        options.userId!,
         {
           productIds: lineItems.map((item) => item.product.id),
           categoryIds: lineItems.map((item) => item.product.categoryId).filter(Boolean) as string[],
+          shippingCents: shippingCostCents,
         }
       );
-      discountCents = validation.discountCents;
-      coupon = validation.coupon;
+      coupons.push(validation.coupon);
+      discountBaseCents += validation.discountCents;
     }
 
-    const taxableCents = Math.max(0, subtotalCents - discountCents);
-    const tax = await taxService.calculate(taxableCents, options.country);
+    if (coupons.length > 1 && coupons.some((coupon) => !coupon.stackable)) {
+      throw new ValidationError(
+        'One or more coupons cannot be combined with other coupons',
+        'COUPON_NOT_STACKABLE'
+      );
+    }
+
+    // Discounts apply to the subtotal first, with any remainder reducing the
+    // shipping cost when the coupon allows it.
+    discountBaseCents = Math.min(discountBaseCents, subtotalCents + shippingCostCents);
+    const subtotalDiscountCents = Math.min(discountBaseCents, subtotalCents);
+    const shippingDiscountCents = Math.min(discountBaseCents - subtotalDiscountCents, shippingCostCents);
+    const discountedSubtotalCents = Math.max(0, subtotalCents - subtotalDiscountCents);
+    const discountedShippingCents = Math.max(0, shippingCostCents - shippingDiscountCents);
+
+    const tax = await taxService.calculate(discountedSubtotalCents, options.country);
     const taxRate = tax.rate || envConfig.TAX_RATE;
-    const taxCents = tax.rate ? tax.taxCents : Math.round(taxableCents * envConfig.TAX_RATE);
-    const grossCents = Math.max(0, taxableCents + shippingCostCents + taxCents);
+    const taxBaseCents = tax.rate ? tax.taxCents : Math.round(discountedSubtotalCents * envConfig.TAX_RATE);
+
+    const convertedLineItems = lineItems.map((item) => {
+      const unitPriceCents = convertCents(item.unitPriceCents, exchangeRate);
+      return {
+        ...item,
+        unitPriceCents,
+        lineTotalCents: unitPriceCents * item.quantity,
+      };
+    });
+
+    const convertedSubtotalCents = convertedLineItems.reduce((sum, item) => sum + item.lineTotalCents, 0);
+    const convertedDiscountCents = convertCents(discountBaseCents, exchangeRate);
+    const convertedShippingCents = convertCents(discountedShippingCents, exchangeRate);
+    const convertedTaxCents = convertCents(taxBaseCents, exchangeRate);
+    const grossCents = Math.max(0, convertedSubtotalCents - convertedDiscountCents + convertedShippingCents + convertedTaxCents);
+
     let giftCardCents = 0;
     let giftCard: any = null;
     if (options.giftCardCode) {
-      const gift = await this.giftCards.calculate(options.giftCardCode, grossCents);
+      const gift = await this.giftCards.calculate(options.giftCardCode, grossCents, currencies.code);
       giftCard = gift.card;
       giftCardCents = gift.amountCents;
     }
 
     return {
-      lineItems,
-      subtotalCents,
-      shippingCostCents,
-      taxCents,
+      lineItems: convertedLineItems,
+      subtotalCents: convertedSubtotalCents,
+      shippingCostCents: convertedShippingCents,
+      taxCents: convertedTaxCents,
       taxRate,
-      discountCents,
+      discountCents: convertedDiscountCents,
       giftCardCents,
       giftCard,
       totalCents: Math.max(0, grossCents - giftCardCents),
       weightGrams,
-      coupon,
+      coupon: coupons[0] ?? null,
+      coupons,
+      couponCodes,
+      currency: currencies.code,
+      exchangeRate,
       shippingMethodId,
     };
   }
@@ -224,7 +301,14 @@ export class OrderService extends BaseService {
     userId: string | undefined,
     customerEmail: string,
     items: PriceableItem[],
-    options: { couponCode?: string; giftCardCode?: string; shippingMethodId?: string; country?: string } = {}
+    options: {
+      couponCode?: string;
+      couponCodes?: string[];
+      currency?: string;
+      giftCardCode?: string;
+      shippingMethodId?: string;
+      country?: string;
+    } = {}
   ) {
     void customerEmail;
     const pricing = await this.priceOrder(items, { userId, ...options });
@@ -245,6 +329,9 @@ export class OrderService extends BaseService {
       total: fromCents(pricing.totalCents),
       weightGrams: pricing.weightGrams,
       couponCode: pricing.coupon?.code ?? null,
+      couponCodes: pricing.couponCodes,
+      currency: pricing.currency,
+      exchangeRate: pricing.exchangeRate,
       giftCardCode: pricing.giftCard?.code ?? null,
       giftCardAmount: fromCents(pricing.giftCardCents),
       shippingMethodId: pricing.shippingMethodId,
@@ -266,6 +353,8 @@ export class OrderService extends BaseService {
     const pricing = await this.priceOrder(createOrderDto.items, {
       userId: userId ?? undefined,
       couponCode: createOrderDto.couponCode,
+      couponCodes: createOrderDto.couponCodes,
+      currency: createOrderDto.currency,
       giftCardCode: createOrderDto.giftCardCode,
       shippingMethodId: createOrderDto.shippingMethodId,
       country: createOrderDto.shippingAddress.country,
@@ -290,8 +379,11 @@ export class OrderService extends BaseService {
           taxRate: pricing.taxRate.toString(),
           discountAmount: fromCents(pricing.discountCents),
           couponCode: pricing.coupon?.code ?? null,
-      giftCardCode: pricing.giftCard?.code ?? null,
-      giftCardAmount: fromCents(pricing.giftCardCents),
+          couponCodes: pricing.couponCodes,
+          currency: pricing.currency,
+          exchangeRate: pricing.exchangeRate.toString(),
+          giftCardCode: pricing.giftCard?.code ?? null,
+          giftCardAmount: fromCents(pricing.giftCardCents),
           shippingMethodId: pricing.shippingMethodId,
           status: 'pending',
           shippingAddress: createOrderDto.shippingAddress,
@@ -341,8 +433,10 @@ export class OrderService extends BaseService {
         }
       }
 
-      if (pricing.coupon && userId) {
-        await this.couponService.recordUsage(tx, pricing.coupon.id, userId, newOrder.id);
+      if (userId) {
+        for (const appliedCoupon of pricing.coupons) {
+          await this.couponService.recordUsage(tx, appliedCoupon.id, userId, newOrder.id);
+        }
       }
 
       if (pricing.giftCard && pricing.giftCardCents > 0) {
@@ -358,7 +452,7 @@ export class OrderService extends BaseService {
     const order = await this.getOrderById(newOrderId);
     if (customerEmail) {
       const template = emailTemplates.orderConfirmation(order);
-      await emailService.enqueue({ to: customerEmail, ...template }).catch(() => undefined);
+      await emailService.enqueue({ to: customerEmail, userId, type: 'order_confirmation', ...template }).catch(() => undefined);
     }
     return guestToken ? { ...order, guestToken } : order;
   }
@@ -483,7 +577,7 @@ export class OrderService extends BaseService {
       }
       if (updateOrderDto.status && order.customerEmail) {
         const template = emailTemplates.orderStatus(order, updateOrderDto.status);
-        await emailService.enqueue({ to: order.customerEmail, ...template }).catch(() => undefined);
+        await emailService.enqueue({ to: order.customerEmail, userId: order.userId, type: emailPreferenceType(updateOrderDto.status), ...template }).catch(() => undefined);
       }
     }
 
@@ -525,6 +619,21 @@ export class OrderService extends BaseService {
 
       await this.couponService.releaseUsage(tx, orderId);
 
+      if (order.giftCardCode && Number(order.giftCardAmount) > 0) {
+        const [card] = await tx.select().from(giftCards).where(eq(giftCards.code, order.giftCardCode)).limit(1).for('update');
+        if (card) {
+          await tx.update(giftCards)
+            .set({ balance: sql`${giftCards.balance} + ${order.giftCardAmount}` })
+            .where(eq(giftCards.id, card.id));
+          await tx.insert(giftCardTransactions).values({
+            giftCardId: card.id,
+            userId: order.userId,
+            orderId,
+            amount: order.giftCardAmount,
+          });
+        }
+      }
+
       const nextStatus = finalStatus === 'refunded' || payment?.status === 'completed' ? 'refunded' : 'cancelled';
       const [updated] = await tx
         .update(ordersTable)
@@ -541,7 +650,7 @@ export class OrderService extends BaseService {
     }
     if (result?.customerEmail) {
       const template = emailTemplates.orderStatus(result, result.status);
-      await emailService.enqueue({ to: result.customerEmail, ...template }).catch(() => undefined);
+      await emailService.enqueue({ to: result.customerEmail, userId: result.userId, type: emailPreferenceType(result.status), ...template }).catch(() => undefined);
     }
 
     return result;
@@ -574,7 +683,7 @@ export class OrderService extends BaseService {
     const [result] = await db
       .select({
         totalOrders: sql<number>`count(*)`,
-        totalRevenue: sql<string>`coalesce(sum(${ordersTable.totalAmount}), 0)`,
+        totalRevenue: sql<string>`coalesce(sum(${ordersTable.totalAmount} / ${ordersTable.exchangeRate}), 0)`,
       })
       .from(ordersTable)
       .where(whereClause);

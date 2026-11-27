@@ -11,40 +11,41 @@ export class ReportService {
 
     const [summary] = await db.select({
       orders: sql<number>`count(*)`,
-      revenue: sql<string>`coalesce(sum(${orders.totalAmount}), 0)`,
-      tax: sql<string>`coalesce(sum(${orders.taxAmount}), 0)`,
-      shipping: sql<string>`coalesce(sum(${orders.shippingCost}), 0)`,
-      discounts: sql<string>`coalesce(sum(${orders.discountAmount}), 0)`,
+      revenue: sql<string>`coalesce(sum(${orders.totalAmount} / ${orders.exchangeRate}), 0)`,
+      tax: sql<string>`coalesce(sum(${orders.taxAmount} / ${orders.exchangeRate}), 0)`,
+      shipping: sql<string>`coalesce(sum(${orders.shippingCost} / ${orders.exchangeRate}), 0)`,
+      discounts: sql<string>`coalesce(sum(${orders.discountAmount} / ${orders.exchangeRate}), 0)`,
     }).from(orders).where(where);
 
     const topProducts = await db.select({
       productId: orderItems.productId,
       name: orderItems.productName,
       quantity: sql<number>`sum(${orderItems.quantity})`,
-      revenue: sql<string>`sum(${orderItems.price} * ${orderItems.quantity})`,
+      revenue: sql<string>`sum((${orderItems.price} * ${orderItems.quantity}) / ${orders.exchangeRate})`,
     }).from(orderItems).innerJoin(orders, eq(orderItems.orderId, orders.id)).where(where)
       .groupBy(orderItems.productId, orderItems.productName)
-      .orderBy(sql`sum(${orderItems.price} * ${orderItems.quantity}) desc`)
+      .orderBy(sql`sum((${orderItems.price} * ${orderItems.quantity}) / ${orders.exchangeRate}) desc`)
       .limit(10);
 
     const topCategories = await db.select({
       categoryId: products.categoryId,
       name: categories.name,
       quantity: sql<number>`sum(${orderItems.quantity})`,
-      revenue: sql<string>`sum(${orderItems.price} * ${orderItems.quantity})`,
+      revenue: sql<string>`sum((${orderItems.price} * ${orderItems.quantity}) / ${orders.exchangeRate})`,
     }).from(orderItems)
       .innerJoin(orders, eq(orderItems.orderId, orders.id))
       .innerJoin(products, eq(orderItems.productId, products.id))
       .leftJoin(categories, eq(products.categoryId, categories.id))
       .where(where)
       .groupBy(products.categoryId, categories.name)
-      .orderBy(sql`sum(${orderItems.price} * ${orderItems.quantity}) desc`)
+      .orderBy(sql`sum((${orderItems.price} * ${orderItems.quantity}) / ${orders.exchangeRate}) desc`)
       .limit(10);
 
     const [returnCount] = await db.select({ count: sql<number>`count(*)` }).from(returns);
     const [couponCount] = await db.select({ count: sql<number>`count(*)` }).from(couponUsage);
 
     return {
+      currency: 'USD',
       summary: {
         orders: summary ? Number(summary.orders) : 0,
         revenue: summary?.revenue ?? '0',

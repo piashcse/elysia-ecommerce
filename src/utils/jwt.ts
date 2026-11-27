@@ -17,4 +17,6 @@ export interface CurrentUser {
   email: string;
   role: UserRole;
   ver: number;
+  scopes?: string[];
+  authType?: 'jwt' | 'apiKey';
 }

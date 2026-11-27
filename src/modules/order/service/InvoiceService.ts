@@ -41,11 +41,11 @@ ${escapeHtml(order.billingAddress?.address ?? '')}, ${escapeHtml(order.billingAd
 <table><thead><tr><th>Item</th><th>SKU</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Total</th></tr></thead>
 <tbody>${rows}</tbody></table>
 <table class="totals">
-<tr><td>Subtotal</td><td class="num">${order.subtotal}</td></tr>
+<tr><td>Subtotal (${escapeHtml(order.currency ?? 'USD')})</td><td class="num">${order.subtotal}</td></tr>
 <tr><td>Discount</td><td class="num">-${order.discountAmount}</td></tr>
 <tr><td>Shipping</td><td class="num">${order.shippingCost}</td></tr>
 <tr><td>Tax (${(Number(order.taxRate) * 100).toFixed(2)}%)</td><td class="num">${order.taxAmount}</td></tr>
-<tr class="total"><td>Total</td><td class="num">${order.totalAmount}</td></tr>
+<tr class="total"><td>Total (${escapeHtml(order.currency ?? 'USD')})</td><td class="num">${order.totalAmount}</td></tr>
 </table>
 <p class="muted">Status: ${escapeHtml(order.status)}</p>
 </body></html>`;
