@@ -32,6 +32,7 @@ export const orders = pgTable('orders', {
   subtotal: numeric('subtotal', { precision: 10, scale: 2 }).notNull(),
   shippingCost: numeric('shipping_cost', { precision: 10, scale: 2 }).default('0').notNull(),
   taxAmount: numeric('tax_amount', { precision: 10, scale: 2 }).default('0').notNull(),
+  taxRate: numeric('tax_rate', { precision: 5, scale: 4 }).default('0').notNull(),
   discountAmount: numeric('discount_amount', { precision: 10, scale: 2 }).default('0').notNull(),
   couponCode: varchar('coupon_code', { length: 50 }),
   status: orderStatusEnum('status').default('pending').notNull(),

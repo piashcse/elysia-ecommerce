@@ -17,3 +17,5 @@ export * from './shipping';
 export * from './productImage';
 export * from './productVariant';
 export * from './notification';
+export * from './return';
+export * from './taxRate';

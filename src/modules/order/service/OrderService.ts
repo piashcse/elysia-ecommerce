@@ -20,6 +20,7 @@ import { calculateShippingCostCents } from '../../shipping/shipping.calculator';
 import { fromCents, toCents } from '../../../core/money';
 import { NotificationService } from '../../notification/service/NotificationService';
 import { OrderEventService } from './OrderEventService';
+import { taxService } from '../../tax/service/TaxService';
 import { generateRandomString, sha256Hash } from '../../../utils/auth';
 
 const TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
@@ -52,6 +53,7 @@ export interface OrderPricing {
   subtotalCents: number;
   shippingCostCents: number;
   taxCents: number;
+  taxRate: number;
   discountCents: number;
   totalCents: number;
   weightGrams: number;
@@ -85,7 +87,7 @@ export class OrderService extends BaseService {
 
   async priceOrder(
     items: PriceableItem[],
-    options: { userId?: string; couponCode?: string; shippingMethodId?: string } = {}
+    options: { userId?: string; couponCode?: string; shippingMethodId?: string; country?: string } = {}
   ): Promise<OrderPricing> {
     if (!items.length) throw new ValidationError('At least one order item is required');
 
@@ -158,7 +160,10 @@ export class OrderService extends BaseService {
         .limit(1);
 
       if (!method) throw new NotFoundError('Shipping method not found');
-      shippingCostCents = calculateShippingCostCents(method, weightGrams);
+      if (options.country && method.countries.length && !method.countries.some((item) => item.toLowerCase() === options.country!.toLowerCase())) {
+        throw new NotFoundError('Shipping method is not available for this country');
+      }
+      shippingCostCents = calculateShippingCostCents(method, weightGrams, subtotalCents);
       shippingMethodId = method.id;
     }
 
@@ -177,13 +182,15 @@ export class OrderService extends BaseService {
     }
 
     const taxableCents = Math.max(0, subtotalCents - discountCents);
-    const taxCents = Math.round(taxableCents * envConfig.TAX_RATE);
-
+    const tax = await taxService.calculate(taxableCents, options.country);
+    const taxRate = tax.rate || envConfig.TAX_RATE;
+    const taxCents = tax.rate ? tax.taxCents : Math.round(taxableCents * envConfig.TAX_RATE);
     return {
       lineItems,
       subtotalCents,
       shippingCostCents,
       taxCents,
+      taxRate,
       discountCents,
       totalCents: Math.max(0, taxableCents + shippingCostCents + taxCents),
       weightGrams,
@@ -196,7 +203,7 @@ export class OrderService extends BaseService {
     userId: string | undefined,
     customerEmail: string,
     items: PriceableItem[],
-    options: { couponCode?: string; shippingMethodId?: string } = {}
+    options: { couponCode?: string; shippingMethodId?: string; country?: string } = {}
   ) {
     void customerEmail;
     const pricing = await this.priceOrder(items, { userId, ...options });
@@ -237,6 +244,7 @@ export class OrderService extends BaseService {
       userId: userId ?? undefined,
       couponCode: createOrderDto.couponCode,
       shippingMethodId: createOrderDto.shippingMethodId,
+      country: createOrderDto.shippingAddress.country,
     });
 
     const guestToken = userId ? null : generateRandomString(32);
@@ -255,6 +263,7 @@ export class OrderService extends BaseService {
           subtotal: fromCents(pricing.subtotalCents),
           shippingCost: fromCents(pricing.shippingCostCents),
           taxAmount: fromCents(pricing.taxCents),
+          taxRate: pricing.taxRate.toString(),
           discountAmount: fromCents(pricing.discountCents),
           couponCode: pricing.coupon?.code ?? null,
           shippingMethodId: pricing.shippingMethodId,

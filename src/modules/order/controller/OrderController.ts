@@ -8,17 +8,12 @@ import { ForbiddenError, NotFoundError, ValidationError } from '../../../core/er
 import { AddressService } from '../../address/service/AddressService';
 import { ORDER_STATUSES, PAGINATION } from '../../../core/constants';
 import { getPagination } from '../../../utils/validation';
-import { sha256Hash } from '../../../utils/auth';
 import { IdempotencyService } from '../../../core/idempotency.service';
+import { canAccessOrder } from '../order-access';
 
 const orderService = new OrderService();
 const addressService = new AddressService();
 const idempotency = new IdempotencyService();
-
-const canAccessOrder = (order: any, user: any, guestToken?: string) =>
-  user
-    ? user.role === UserRole.ADMIN || order.userId === user.sub
-    : Boolean(guestToken && order.guestTokenHash && order.guestTokenHash === sha256Hash(guestToken));
 
 const toOrderAddress = (address: any) => ({
   firstName: address.fullName.split(' ')[0] || address.fullName,

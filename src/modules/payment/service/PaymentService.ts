@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, lte, sql } from 'drizzle-orm';
 import { db } from '../../../config/database';
-import { orderItems, orders, payments, products } from '../../../database/schema';
+import { orderItems, orders, payments, productVariants, products } from '../../../database/schema';
 import { CreatePaymentDto, ProcessPaymentDto } from '../dto/PaymentDto';
 import {
   ConflictError,
@@ -270,7 +270,7 @@ export class PaymentService extends BaseService {
     };
   }
 
-  async refundPayment(paymentId: string, amount?: number): Promise<any> {
+  async refundPayment(paymentId: string, amount?: number, restoreStock = true): Promise<any> {
     const refundedPayment = await db.transaction(async (tx) => {
       const [payment] = await tx.select().from(payments).where(eq(payments.id, paymentId)).limit(1).for('update');
       if (!payment) throw new NotFoundError('Payment not found');
@@ -308,14 +308,22 @@ export class PaymentService extends BaseService {
         const [order] = await tx.select().from(orders).where(eq(orders.id, payment.orderId)).limit(1).for('update');
 
         if (order && order.status !== 'refunded' && order.status !== 'cancelled') {
-          const items = await tx.select().from(orderItems).where(eq(orderItems.orderId, order.id));
+          if (restoreStock) {
+            const items = await tx.select().from(orderItems).where(eq(orderItems.orderId, order.id));
 
-          for (const item of items) {
-            if (!item.productId) continue;
-            await tx
-              .update(products)
-              .set({ stockQuantity: sql`${products.stockQuantity} + ${item.quantity}` })
-              .where(eq(products.id, item.productId));
+            for (const item of items) {
+              if (item.variantId) {
+                await tx
+                  .update(productVariants)
+                  .set({ stockQuantity: sql`${productVariants.stockQuantity} + ${item.quantity}`, updatedAt: new Date() })
+                  .where(eq(productVariants.id, item.variantId));
+              } else if (item.productId) {
+                await tx
+                  .update(products)
+                  .set({ stockQuantity: sql`${products.stockQuantity} + ${item.quantity}` })
+                  .where(eq(products.id, item.productId));
+              }
+            }
           }
 
           await tx

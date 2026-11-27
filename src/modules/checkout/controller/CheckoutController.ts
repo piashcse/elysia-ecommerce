@@ -22,6 +22,7 @@ export const checkoutController = new Elysia({ prefix: '/checkout', tags: ['Chec
       couponCode: t.Optional(t.String({ maxLength: 50 })),
       shippingMethodId: t.Optional(uuid),
       email: t.Optional(t.String({ format: 'email', maxLength: 255 })),
+      country: t.Optional(t.String({ maxLength: 100 })),
     }),
     response: { 200: successSchema(), 409: errorSchema, 422: errorSchema },
     detail: { summary: 'Calculate order totals without creating an order' }
@@ -30,6 +31,7 @@ export const checkoutController = new Elysia({ prefix: '/checkout', tags: ['Chec
     const quote = await orderService.quote(user?.sub, body.email ?? '', body.items, {
       couponCode: body.couponCode,
       shippingMethodId: body.shippingMethodId,
+      country: body.country,
     });
     return successResponse(quote, 'Checkout quote calculated successfully');
   });
