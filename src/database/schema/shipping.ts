@@ -1,4 +1,4 @@
-import { boolean, check, index, integer, numeric, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
+import { boolean, check, index, integer, jsonb, numeric, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 export const shippingMethods = pgTable('shipping_methods', {
@@ -9,6 +9,8 @@ export const shippingMethods = pgTable('shipping_methods', {
     costPerKg: numeric('cost_per_kg', { precision: 10, scale: 2 }),
     estimatedDaysMin: integer('estimated_days_min').notNull(),
     estimatedDaysMax: integer('estimated_days_max').notNull(),
+    countries: jsonb('countries').$type<string[]>().default([]).notNull(),
+    freeShippingThreshold: numeric('free_shipping_threshold', { precision: 10, scale: 2 }),
     isActive: boolean('is_active').default(true).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),

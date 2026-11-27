@@ -13,6 +13,7 @@ export class ShippingService {
     costPerKg?: number;
     estimatedDaysMin?: number;
     estimatedDaysMax?: number;
+    freeShippingThreshold?: number;
   }) {
     if (data.baseCost !== undefined && data.baseCost < 0) {
       throw new ValidationError('Base cost cannot be negative');
@@ -33,6 +34,9 @@ export class ShippingService {
     ) {
       throw new ValidationError('Minimum estimated days cannot exceed maximum estimated days');
     }
+    if (data.freeShippingThreshold !== undefined && data.freeShippingThreshold < 0) {
+      throw new ValidationError('Free shipping threshold cannot be negative');
+    }
   }
 
   async createShippingMethod(createShippingMethodDto: CreateShippingMethodDto): Promise<any> {
@@ -49,6 +53,8 @@ export class ShippingService {
       ...createShippingMethodDto,
       baseCost: createShippingMethodDto.baseCost.toString(),
       costPerKg: createShippingMethodDto.costPerKg?.toString(),
+      freeShippingThreshold: createShippingMethodDto.freeShippingThreshold?.toString(),
+      countries: createShippingMethodDto.countries ?? [],
     }).returning();
 
     return newShippingMethod;
@@ -68,6 +74,7 @@ export class ShippingService {
       costPerKg: updateShippingMethodDto.costPerKg,
       estimatedDaysMin: updateShippingMethodDto.estimatedDaysMin ?? shippingMethod.estimatedDaysMin,
       estimatedDaysMax: updateShippingMethodDto.estimatedDaysMax ?? shippingMethod.estimatedDaysMax,
+      freeShippingThreshold: updateShippingMethodDto.freeShippingThreshold,
     });
 
     if (updateShippingMethodDto.name && updateShippingMethodDto.name !== shippingMethod.name) {
@@ -82,6 +89,7 @@ export class ShippingService {
     const updateData: any = { ...updateShippingMethodDto };
     if (updateShippingMethodDto.baseCost !== undefined) updateData.baseCost = updateShippingMethodDto.baseCost.toString();
     if (updateShippingMethodDto.costPerKg !== undefined) updateData.costPerKg = updateShippingMethodDto.costPerKg.toString();
+    if (updateShippingMethodDto.freeShippingThreshold !== undefined) updateData.freeShippingThreshold = updateShippingMethodDto.freeShippingThreshold.toString();
 
     const [updatedShippingMethod] = await db
       .update(shippingMethods)
@@ -134,7 +142,7 @@ export class ShippingService {
     };
   }
 
-  async quote(items: Array<{ productId: string; quantity: number }>): Promise<any> {
+  async quote(items: Array<{ productId: string; quantity: number }>, country?: string): Promise<any> {
     if (!items.length) throw new ValidationError('At least one item is required');
 
     const productIds = [...new Set(items.map((item) => item.productId))];
@@ -156,11 +164,14 @@ export class ShippingService {
     }
 
     const methods = await db.select().from(shippingMethods).where(eq(shippingMethods.isActive, true));
+    const eligible = methods.filter((method) =>
+      !country || !method.countries.length || method.countries.some((item) => item.toLowerCase() === country.toLowerCase())
+    );
 
     return {
       subtotal: fromCents(subtotalCents),
       weightGrams,
-      options: methods.map((method) => ({
+      options: eligible.map((method) => ({
         id: method.id,
         name: method.name,
         description: method.description,
@@ -168,7 +179,7 @@ export class ShippingService {
         costPerKg: method.costPerKg,
         estimatedDaysMin: method.estimatedDaysMin,
         estimatedDaysMax: method.estimatedDaysMax,
-        shippingCost: fromCents(calculateShippingCostCents(method, weightGrams)),
+        shippingCost: fromCents(calculateShippingCostCents(method, weightGrams, subtotalCents)),
       })),
     };
   }

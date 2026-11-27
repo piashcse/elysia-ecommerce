@@ -5,6 +5,8 @@ export interface CreateShippingMethodDto {
   costPerKg?: number;
   estimatedDaysMin: number;
   estimatedDaysMax: number;
+  countries?: string[];
+  freeShippingThreshold?: number;
   isActive?: boolean;
 }
 

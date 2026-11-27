@@ -20,6 +20,8 @@ export const shippingController = new Elysia({ prefix: '/shipping-methods', tags
       costPerKg: t.Optional(t.Number({ minimum: 0 })),
       estimatedDaysMin: t.Integer({ minimum: 0 }),
       estimatedDaysMax: t.Integer({ minimum: 0 }),
+      countries: t.Optional(t.Array(t.String({ minLength: 2, maxLength: 100 }))),
+      freeShippingThreshold: t.Optional(t.Number({ minimum: 0 })),
       isActive: t.Optional(t.Boolean()),
     }),
     hasRole: UserRole.ADMIN,
@@ -40,11 +42,12 @@ export const shippingController = new Elysia({ prefix: '/shipping-methods', tags
         }),
         { minItems: 1, maxItems: 50 }
       ),
+      country: t.Optional(t.String({ maxLength: 100 })),
     }),
     response: { 200: successSchema(), 409: errorSchema, 422: errorSchema },
     detail: { summary: 'Calculate shipping options for a cart' }
   }, async ({ body }) => {
-    const quote = await shippingService.quote(body.items);
+    const quote = await shippingService.quote(body.items, body.country);
     return successResponse(quote, 'Shipping quote calculated successfully');
   })
 
