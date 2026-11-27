@@ -16,6 +16,29 @@ const paths = Object.fromEntries(
   Object.entries(document.paths ?? {}).filter(([path]) => path.startsWith('/api/v1') || path === '/health')
 );
 
+// Elysia's OpenAPI plugin does not expose raw XML responders, so document the
+// sitemap explicitly to keep the reference complete.
+if (!paths['/api/v1/sitemap.xml']) {
+  paths['/api/v1/sitemap.xml'] = {
+    get: {
+      tags: ['SEO'],
+      summary: 'SEO sitemap (XML)',
+      description: 'Returns an XML sitemap of active products, categories, and brands.',
+      operationId: 'getSitemap',
+      responses: {
+        200: {
+          description: 'XML sitemap',
+          content: {
+            'application/xml': {
+              schema: { type: 'string' },
+            },
+          },
+        },
+      },
+    },
+  };
+}
+
 const snapshot = {
   openapi: document.openapi,
   info: document.info,

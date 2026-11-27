@@ -1,6 +1,6 @@
 # API Reference
 
-This reference documents **174 operations** across **25 modules**. It is generated from the application's OpenAPI schema.
+This reference documents **175 operations** across **26 modules**. It is generated from the application's OpenAPI schema.
 
 All endpoints are served under the stable `/api/v1` prefix; unversioned routes remain for backwards compatibility.
 
@@ -25,6 +25,7 @@ All endpoints are served under the stable `/api/v1` prefix; unversioned routes r
 | Reviews & Ratings | 8 |
 | Search & Synonyms | 3 |
 | Seller Portal | 11 |
+| SEO & Sitemap | 1 |
 | Shipping Methods | 6 |
 | System & Monitoring | 2 |
 | Tax Rates | 4 |
@@ -59,6 +60,7 @@ All endpoints are served under the stable `/api/v1` prefix; unversioned routes r
 - [Media Uploads](../media.md) — 2 endpoints
 - [Admin Reports & Audit](../admin.md) — 2 endpoints
 - [System & Monitoring](../system.md) — 2 endpoints
+- [SEO & Sitemap](../seo.md) — 1 endpoint
 
 ## Addresses
 
@@ -332,6 +334,14 @@ Full details: [Seller Portal](../sellers.md)
 | <span class="method-badge put">PUT</span> | `/api/v1/seller/products/{id}` | Update product by seller | Bearer · Seller |
 | <span class="method-badge delete">DELETE</span> | `/api/v1/seller/products/{id}` | Delete product by seller | Bearer · Seller |
 | <span class="method-badge get">GET</span> | `/api/v1/seller/stats` | Get seller product and sales statistics | Bearer · Seller |
+
+## SEO & Sitemap
+
+Full details: [SEO & Sitemap](../seo.md)
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| <span class="method-badge get">GET</span> | `/api/v1/sitemap.xml` | SEO sitemap (XML) | Public |
 
 ## Shipping Methods
 

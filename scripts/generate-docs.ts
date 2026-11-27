@@ -184,6 +184,12 @@ const PAGES: PageConfig[] = [
     title: 'System & Monitoring',
     intro: 'Health/readiness checks and Prometheus-style runtime metrics.',
   },
+  {
+    tag: 'SEO',
+    file: 'seo.md',
+    title: 'SEO & Sitemap',
+    intro: 'XML sitemap generation for search engines, covering active products, categories, and brands.',
+  },
 ];
 
 const METHOD_ORDER: Record<string, number> = { get: 0, post: 1, put: 2, patch: 3, delete: 4 };
@@ -315,7 +321,7 @@ const sampleObject = (schema: any, depth = 0): Record<string, any> => {
 
 const isPublicRoute = (path: string, method: string): boolean => {
   method = method.toLowerCase();
-  if (path === '/health' || path === '/api/v1/metrics') return true;
+  if (path === '/health' || path === '/api/v1/metrics' || path.endsWith('/sitemap.xml')) return true;
   if (path.startsWith('/api/v1/auth/')) {
     return /^\/api\/v1\/auth\/(register|login|refresh|verify-email|forgot-password|reset-password)$/.test(path);
   }

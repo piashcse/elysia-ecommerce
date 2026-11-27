@@ -80,7 +80,7 @@ API key scopes support `read`, `write`, `*`, or resource scopes such as
 
 ## Explore the reference
 
-- [Endpoint index](api-reference/index.md) — all 174 operations grouped by module
+- [Endpoint index](api-reference/index.md) — all operations grouped by module
 - [Authentication & API keys](authentication.md)
 - [Orders](orders.md) · [Payments](payments.md) · [Products](products.md)
 - [Currencies & FX](currencies.md) · [Translations](translations.md) · [Search](search.md)
