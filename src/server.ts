@@ -25,6 +25,7 @@ import { couponController } from './modules/coupon/controller/CouponController';
 import { notificationController } from './modules/notification/controller/NotificationController';
 import { shippingController } from './modules/shipping/controller/ShippingController';
 import { addressController } from './modules/address/controller/AddressController';
+import { checkoutController } from './modules/checkout/controller/CheckoutController';
 
 const app = new Elysia();
 
@@ -165,7 +166,8 @@ app
   .use(couponController)
   .use(notificationController)
   .use(shippingController)
-  .use(addressController);
+  .use(addressController)
+  .use(checkoutController);
 
 // OpenAPI documentation. The bearer scheme is also attached per protected
 // route by the auth macros.

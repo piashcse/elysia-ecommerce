@@ -15,31 +15,35 @@ import { PAGINATION } from '../../../core/constants';
 import envConfig from '../../../config/env';
 import { NotificationService } from '../../notification/service/NotificationService';
 import { CouponService } from '../../coupon/service/CouponService';
+import { OrderEventService } from '../../order/service/OrderEventService';
 import { fromCents, toCents } from '../../../core/money';
+import { sha256Hash } from '../../../utils/auth';
 
 interface Actor {
-  sub: string;
-  role: UserRole;
+  sub?: string;
+  role?: UserRole;
 }
 
-const assertOwner = (actor: Actor, orderUserId: string | null) => {
-  if (actor.role !== UserRole.ADMIN && orderUserId !== actor.sub) {
-    throw new ForbiddenError('You can only access payments for your own orders');
-  }
+const assertOrderAccess = (actor: Actor | null, order: any, guestToken?: string) => {
+  if (actor?.role === UserRole.ADMIN) return;
+  if (order.userId && actor?.sub === order.userId) return;
+  if (!order.userId && guestToken && order.guestTokenHash === sha256Hash(guestToken)) return;
+  throw new ForbiddenError('You can only access payments for your own orders');
 };
 
 export class PaymentService extends BaseService {
   private notificationService = new NotificationService();
   private couponService = new CouponService();
+  private eventService = new OrderEventService();
 
   constructor() {
     super(payments);
   }
 
-  async createPayment(actor: Actor, createPaymentDto: CreatePaymentDto): Promise<any> {
+  async createPayment(actor: Actor | null, createPaymentDto: CreatePaymentDto, guestToken?: string): Promise<any> {
     const [order] = await db.select().from(orders).where(eq(orders.id, createPaymentDto.orderId)).limit(1);
     if (!order) throw new NotFoundError('Order not found');
-    assertOwner(actor, order.userId);
+    assertOrderAccess(actor, order, guestToken);
 
     if (order.status !== 'pending') {
       throw new ConflictError(`Cannot create a payment for an order in "${order.status}" status`, 'ORDER_NOT_PAYABLE');
@@ -61,10 +65,10 @@ export class PaymentService extends BaseService {
     });
   }
 
-  async processPayment(actor: Actor, processPaymentDto: ProcessPaymentDto): Promise<any> {
+  async processPayment(actor: Actor | null, processPaymentDto: ProcessPaymentDto, guestToken?: string): Promise<any> {
     const [order] = await db.select().from(orders).where(eq(orders.id, processPaymentDto.orderId)).limit(1);
     if (!order) throw new NotFoundError('Order not found');
-    assertOwner(actor, order.userId);
+    assertOrderAccess(actor, order, guestToken);
 
     if (order.status !== 'pending' && order.status !== 'processing') {
       throw new ConflictError(`Order is not payable in "${order.status}" status`, 'ORDER_NOT_PAYABLE');
@@ -114,8 +118,9 @@ export class PaymentService extends BaseService {
 
       await db
         .update(orders)
-        .set({ status: 'processing', updatedAt: new Date() })
+        .set({ status: 'processing', paymentExpiresAt: null, updatedAt: new Date() })
         .where(eq(orders.id, order.id));
+      await this.eventService.add(order.id, 'payment_pending', `Offline payment initiated via ${processPaymentDto.method}`);
 
       if (order.userId) {
         await this.notificationService.notifyOrderStatus(order.userId, order.id, 'processing');
@@ -141,8 +146,9 @@ export class PaymentService extends BaseService {
       if (paymentResult.status === 'completed') {
         await db
           .update(orders)
-          .set({ status: 'processing', updatedAt: new Date() })
+          .set({ status: 'processing', paymentExpiresAt: null, updatedAt: new Date() })
           .where(eq(orders.id, order.id));
+        await this.eventService.add(order.id, 'payment_completed', 'Payment completed');
 
         if (order.userId) {
           await this.notificationService.notifyPaymentCompleted(order.userId, order.id);
@@ -152,6 +158,7 @@ export class PaymentService extends BaseService {
       return updatedPayment;
     } catch (error) {
       await this.update(payment.id, { status: 'failed' });
+      await this.eventService.add(order.id, 'payment_failed', 'Payment failed');
       if (order.userId) {
         await this.notificationService.notifyPaymentFailed(order.userId, order.id);
       }
@@ -184,7 +191,7 @@ export class PaymentService extends BaseService {
     };
   }
 
-  async getPaymentById(actor: Actor, paymentId: string): Promise<any> {
+  async getPaymentById(actor: Actor | null, paymentId: string, guestToken?: string): Promise<any> {
     const [result] = await db
       .select({
         payment: payments,
@@ -197,9 +204,9 @@ export class PaymentService extends BaseService {
 
     if (!result) throw new NotFoundError('Payment not found');
     if (!result.order) {
-      if (actor.role !== UserRole.ADMIN) throw new ForbiddenError('You cannot access this payment');
+      if (actor?.role !== UserRole.ADMIN) throw new ForbiddenError('You cannot access this payment');
     } else {
-      assertOwner(actor, result.order.userId);
+      assertOrderAccess(actor, result.order, guestToken);
     }
 
     return { ...result.payment, order: result.order };
@@ -324,6 +331,7 @@ export class PaymentService extends BaseService {
     });
 
     if (refundedPayment?.orderId) {
+      await this.eventService.add(refundedPayment.orderId, 'refunded', 'Payment refunded');
       const [order] = await db
         .select({ userId: orders.userId })
         .from(orders)

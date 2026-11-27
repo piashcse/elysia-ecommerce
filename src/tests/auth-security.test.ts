@@ -22,7 +22,6 @@ describe('Security and authentication', () => {
       '/users',
       '/coupons',
       '/orders',
-      '/cart',
       '/wishlist',
       '/notifications',
       '/seller/products',
@@ -35,6 +34,11 @@ describe('Security and authentication', () => {
 
     const products = await api('/products');
     expect(products.status).toBe(200);
+
+    // Cart is intentionally available to guests via X-Session-Id.
+    const guestCart = await api('/cart');
+    expect(guestCart.status).toBe(200);
+    expect(guestCart.headers.get('x-session-id')).toBeTruthy();
   });
 
   test('admin can create privileged users but customers cannot', async () => {

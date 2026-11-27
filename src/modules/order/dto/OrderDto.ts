@@ -4,6 +4,7 @@ import type { OrderStatus } from '../../../core/constants';
 export interface CreateOrderDto {
   items: Array<{
     productId: string;
+    variantId?: string;
     quantity: number;
   }>;
   shippingAddress: OrderAddress;

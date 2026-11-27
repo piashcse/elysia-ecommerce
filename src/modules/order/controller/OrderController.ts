@@ -8,9 +8,17 @@ import { ForbiddenError, NotFoundError, ValidationError } from '../../../core/er
 import { AddressService } from '../../address/service/AddressService';
 import { ORDER_STATUSES, PAGINATION } from '../../../core/constants';
 import { getPagination } from '../../../utils/validation';
+import { sha256Hash } from '../../../utils/auth';
+import { IdempotencyService } from '../../../core/idempotency.service';
 
 const orderService = new OrderService();
 const addressService = new AddressService();
+const idempotency = new IdempotencyService();
+
+const canAccessOrder = (order: any, user: any, guestToken?: string) =>
+  user
+    ? user.role === UserRole.ADMIN || order.userId === user.sub
+    : Boolean(guestToken && order.guestTokenHash && order.guestTokenHash === sha256Hash(guestToken));
 
 const toOrderAddress = (address: any) => ({
   firstName: address.fullName.split(' ')[0] || address.fullName,
@@ -38,14 +46,12 @@ const orderStatusSchema = t.Union(ORDER_STATUSES.map((status) => t.Literal(statu
 
 export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] })
   .use(authPlugin)
-  .guard({
-    isAuth: true
-  })
   .post('/', {
     body: t.Object({
       items: t.Array(
         t.Object({
           productId: uuid,
+          variantId: t.Optional(uuid),
           quantity: t.Integer({ minimum: 1, maximum: 100 })
         }),
         { minItems: 1, maxItems: 50 }
@@ -57,6 +63,7 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
       notes: t.Optional(t.String({ maxLength: 1000 })),
       couponCode: t.Optional(t.String({ maxLength: 50 })),
       shippingMethodId: t.Optional(uuid),
+      email: t.Optional(t.String({ format: 'email', maxLength: 255 })),
     }),
     response: {
       201: successSchema(),
@@ -65,33 +72,52 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
       422: errorSchema
     },
     detail: { summary: 'Place a new order' }
-  }, async ({ body, set, user }) => {
+  }, async ({ body, set, user, headers }) => {
+    const idempotencyKey = headers['idempotency-key'];
+    if (typeof idempotencyKey === 'string' && idempotencyKey.length > 0) {
+      const existing = await idempotency.get(idempotencyKey, 'order:create');
+      if (existing) {
+        set.status = existing.statusCode;
+        return existing.response;
+      }
+    }
+
     let shippingAddress = body.shippingAddress;
-  
     if (!shippingAddress && body.shippingAddressId) {
-      const saved = await addressService.getAddressById(body.shippingAddressId, user!.sub);
+      if (!user) throw new ValidationError('Saved addresses require an account');
+      const saved = await addressService.getAddressById(body.shippingAddressId, user.sub);
       if (!saved) throw new NotFoundError('Shipping address not found');
       shippingAddress = toOrderAddress(saved);
     }
-  
+
     if (!shippingAddress) {
       throw new ValidationError('shippingAddress or shippingAddressId is required');
     }
-  
+
     let billingAddress = body.billingAddress;
     if (!billingAddress && body.billingAddressId) {
-      const saved = await addressService.getAddressById(body.billingAddressId, user!.sub);
+      if (!user) throw new ValidationError('Saved addresses require an account');
+      const saved = await addressService.getAddressById(body.billingAddressId, user.sub);
       if (!saved) throw new NotFoundError('Billing address not found');
       billingAddress = toOrderAddress(saved);
     }
-  
-    const order = await orderService.createOrder(user!.sub as string, {
+
+    const email = user?.email ?? body.email;
+    if (!email) throw new ValidationError('Email is required for guest checkout');
+
+    const order = await orderService.createOrder(user?.sub ?? null, email, {
       ...body,
       shippingAddress,
       billingAddress: billingAddress || shippingAddress,
     } as any);
+
+    const response = successResponse(order, 'Order created successfully', 201);
+    if (typeof idempotencyKey === 'string' && idempotencyKey.length > 0) {
+      await idempotency.save(idempotencyKey, 'order:create', 201, response, user?.sub);
+    }
+
     set.status = 201;
-    return successResponse(order, 'Order created successfully', 201);
+    return response;
   })
 
   // Admin order statistics
@@ -106,6 +132,7 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
 
   // Get all orders (admin only) or user's orders
   .get('/', {
+    isAuth: true,
     query: t.Object({
       page: t.Optional(t.Integer({ minimum: 1 })),
       limit: t.Optional(t.Integer({ minimum: 1, maximum: PAGINATION.MAX_LIMIT })),
@@ -140,21 +167,44 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
   // Get order by ID
   .get('/:id', {
     params: idParams,
+    query: t.Object({ guestToken: t.Optional(t.String({ maxLength: 128 })) }),
     response: {
       200: successSchema(),
       403: errorSchema,
       404: errorSchema
     },
     detail: { summary: 'Get order details by ID' }
-  }, async ({ params, user }) => {
+  }, async ({ params, user, query }) => {
     const order = await orderService.getOrderById(params.id);
     if (!order) throw new NotFoundError('Order not found');
-  
-    if (user?.role !== UserRole.ADMIN && order.userId !== user?.sub) {
+    if (!canAccessOrder(order, user, query.guestToken)) {
       throw new ForbiddenError('You can only view your own orders');
     }
-  
     return successResponse(order, 'Order retrieved successfully');
+  })
+
+  .get('/:id/events', {
+    params: idParams,
+    query: t.Object({ guestToken: t.Optional(t.String({ maxLength: 128 })) }),
+    response: { 200: successSchema(), 403: errorSchema, 404: errorSchema },
+    detail: { summary: 'Get the order timeline' }
+  }, async ({ params, user, query }) => {
+    const order = await orderService.getOrderById(params.id);
+    if (!order) throw new NotFoundError('Order not found');
+    if (!canAccessOrder(order, user, query.guestToken)) {
+      throw new ForbiddenError('You can only view your own orders');
+    }
+    const events = await orderService.getOrderEvents(params.id);
+    return successResponse(events, 'Order events retrieved successfully');
+  })
+
+  .post('/release-expired', {
+    hasRole: UserRole.ADMIN,
+    response: { 200: successSchema() },
+    detail: { summary: 'Release expired pending orders (Admin only)' }
+  }, async () => {
+    const released = await orderService.releaseExpiredOrders();
+    return successResponse({ released }, 'Expired orders released successfully');
   })
 
   // Update order (admin only)
@@ -181,6 +231,7 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
   // Cancel order
   .put('/:id/cancel', {
     params: idParams,
+    query: t.Object({ guestToken: t.Optional(t.String({ maxLength: 128 })) }),
     response: {
       200: successSchema(),
       403: errorSchema,
@@ -188,14 +239,12 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
       409: errorSchema
     },
     detail: { summary: 'Cancel order' }
-  }, async ({ params, user }) => {
+  }, async ({ params, user, query }) => {
     const order = await orderService.getOrderById(params.id);
     if (!order) throw new NotFoundError('Order not found');
-  
-    if (user?.role !== UserRole.ADMIN && order.userId !== user?.sub) {
+    if (!canAccessOrder(order, user, query.guestToken)) {
       throw new ForbiddenError('You can only cancel your own orders');
     }
-  
     await orderService.cancelOrder(params.id);
     const cancelledOrder = await orderService.getOrderById(params.id);
     return successResponse(cancelledOrder, 'Order cancelled successfully');

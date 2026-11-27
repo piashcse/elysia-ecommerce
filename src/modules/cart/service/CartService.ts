@@ -1,138 +1,174 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '../../../config/database';
-import { cartItems, carts, products } from '../../../database/schema';
+import { cartItems, carts, productVariants, products } from '../../../database/schema';
 import { AddToCartDto, UpdateCartItemDto } from '../dto/CartDto';
 import { ConflictError, NotFoundError } from '../../../core/errors';
 import { BaseService } from '../../../core/base.service';
+import type { CartOwner } from '../cart-owner';
+
+type CartItemRow = {
+  cartItem: typeof cartItems.$inferSelect;
+  product: typeof products.$inferSelect | null;
+  variant: typeof productVariants.$inferSelect | null;
+};
 
 export class CartService extends BaseService {
   constructor() {
     super(carts);
   }
 
-  async createCart(userId: string): Promise<any> {
-    const [existingCart] = await db.select().from(carts).where(eq(carts.userId, userId)).limit(1);
-    return existingCart ?? this.create({ userId });
+  private ownerCondition(owner: CartOwner) {
+    return owner.userId
+      ? eq(carts.userId, owner.userId)
+      : and(eq(carts.sessionId, owner.sessionId!), isNull(carts.userId));
+  }
+
+  async getCart(owner: CartOwner): Promise<any | null> {
+    if (!owner.userId && !owner.sessionId) return null;
+
+    const [cart] = await db.select().from(carts).where(this.ownerCondition(owner)).limit(1);
+    return cart ? this.getCartWithItems(cart.id) : null;
+  }
+
+  private async createCart(owner: CartOwner): Promise<any> {
+    if (!owner.userId && !owner.sessionId) throw new NotFoundError('Cart owner is required');
+
+    const existing = await this.getCart(owner);
+    if (existing) return existing;
+
+    return this.create({
+      userId: owner.userId,
+      sessionId: owner.sessionId,
+    });
+  }
+
+  private async getOwnedCart(owner: CartOwner): Promise<any> {
+    const [cart] = await db.select().from(carts).where(this.ownerCondition(owner)).limit(1);
+    if (!cart) throw new NotFoundError('Cart not found');
+    return cart;
   }
 
   async getCartWithItems(cartId: string): Promise<any> {
-    const results = await db
+    const [cart] = await db.select().from(carts).where(eq(carts.id, cartId)).limit(1);
+    if (!cart) throw new NotFoundError('Cart not found');
+
+    const rows: CartItemRow[] = await db
       .select({
-        cart: carts,
         cartItem: cartItems,
         product: products,
+        variant: productVariants,
       })
-      .from(carts)
-      .leftJoin(cartItems, eq(carts.id, cartItems.cartId))
+      .from(cartItems)
       .leftJoin(products, eq(cartItems.productId, products.id))
-      .where(eq(carts.id, cartId));
-
-    const cart = results[0]?.cart;
-    if (!cart) throw new NotFoundError('Cart not found');
+      .leftJoin(productVariants, eq(cartItems.variantId, productVariants.id))
+      .where(eq(cartItems.cartId, cartId));
 
     let totalItems = 0;
     let totalAmount = 0;
 
-    const items = results
-      .filter((row) => row.cartItem !== null)
-      .map((row) => {
-        const itemTotal = Number(row.cartItem!.quantity) * Number(row.product?.price ?? 0);
-        totalItems += row.cartItem!.quantity;
-        totalAmount += itemTotal;
-        return {
-          ...row.cartItem,
-          subtotal: itemTotal,
-          product: row.product,
-        };
-      });
+    const items = rows.map((row) => {
+      const unitPrice = Number(row.variant?.price ?? row.product?.price ?? 0);
+      const itemTotal = unitPrice * row.cartItem.quantity;
+      totalItems += row.cartItem.quantity;
+      totalAmount += itemTotal;
+      return {
+        ...row.cartItem,
+        subtotal: itemTotal,
+        product: row.product,
+        variant: row.variant,
+      };
+    });
 
     return { ...cart, items, totalItems, totalAmount };
   }
 
-  async addToCart(userId: string, addToCartDto: AddToCartDto): Promise<any> {
-    const [product] = await db.select().from(products).where(eq(products.id, addToCartDto.productId)).limit(1);
+  async addItem(owner: CartOwner, dto: AddToCartDto): Promise<any> {
+    const [product] = await db.select().from(products).where(eq(products.id, dto.productId)).limit(1);
     if (!product) throw new NotFoundError('Product not found');
     if (!product.isActive) throw new ConflictError('Product is not available', 'PRODUCT_INACTIVE');
 
-    if (product.stockQuantity < addToCartDto.quantity) {
-      throw new ConflictError('Insufficient stock for this product', 'INSUFFICIENT_STOCK');
+    let variant: typeof productVariants.$inferSelect | undefined;
+    let unitStock = product.stockQuantity;
+
+    if (dto.variantId) {
+      [variant] = await db
+        .select()
+        .from(productVariants)
+        .where(and(eq(productVariants.id, dto.variantId), eq(productVariants.productId, dto.productId)))
+        .limit(1);
+
+      if (!variant || !variant.isActive) throw new NotFoundError('Product variant not found');
+      unitStock = variant.stockQuantity;
     }
 
-    let [cart] = await db.select().from(carts).where(eq(carts.userId, userId)).limit(1);
-    if (!cart) cart = await this.createCart(userId);
-    if (!cart) throw new NotFoundError('Cart not found');
+    if (unitStock < dto.quantity) {
+      throw new ConflictError('Insufficient stock for this item', 'INSUFFICIENT_STOCK');
+    }
 
+    const cart = await this.createCart(owner);
     const [existingItem] = await db
       .select()
       .from(cartItems)
-      .where(and(eq(cartItems.cartId, cart.id), eq(cartItems.productId, addToCartDto.productId)))
+      .where(and(
+        eq(cartItems.cartId, cart.id),
+        eq(cartItems.productId, dto.productId),
+        dto.variantId ? eq(cartItems.variantId, dto.variantId) : isNull(cartItems.variantId)
+      ))
       .limit(1);
 
     if (existingItem) {
-      const newQuantity = existingItem.quantity + addToCartDto.quantity;
-      if (product.stockQuantity < newQuantity) {
+      const quantity = existingItem.quantity + dto.quantity;
+      if (unitStock < quantity) {
         throw new ConflictError('Insufficient stock for the updated quantity', 'INSUFFICIENT_STOCK');
       }
-      await db.update(cartItems).set({ quantity: newQuantity, updatedAt: new Date() }).where(eq(cartItems.id, existingItem.id));
+      await db.update(cartItems).set({ quantity }).where(eq(cartItems.id, existingItem.id));
     } else {
       await db.insert(cartItems).values({
         cartId: cart.id,
-        productId: addToCartDto.productId,
-        quantity: addToCartDto.quantity,
+        productId: dto.productId,
+        variantId: dto.variantId,
+        quantity: dto.quantity,
       });
     }
 
     return this.getCartWithItems(cart.id);
   }
 
-  async updateCartItem(userId: string, cartItemId: string, updateCartItemDto: UpdateCartItemDto): Promise<any> {
-    const [item] = await db
-      .select({ cartItem: cartItems, product: products })
+  async updateItem(owner: CartOwner, cartItemId: string, dto: UpdateCartItemDto): Promise<any> {
+    const cart = await this.getOwnedCart(owner);
+    const [row] = await db
+      .select({ item: cartItems, product: products, variant: productVariants })
       .from(cartItems)
-      .innerJoin(carts, eq(cartItems.cartId, carts.id))
       .leftJoin(products, eq(cartItems.productId, products.id))
-      .where(and(eq(cartItems.id, cartItemId), eq(carts.userId, userId)))
+      .leftJoin(productVariants, eq(cartItems.variantId, productVariants.id))
+      .where(and(eq(cartItems.id, cartItemId), eq(cartItems.cartId, cart.id)))
       .limit(1);
 
-    if (!item) throw new NotFoundError('Cart item not found');
-    if (!item.product?.isActive) throw new ConflictError('Product is not available', 'PRODUCT_INACTIVE');
-    if (item.product.stockQuantity < updateCartItemDto.quantity) {
-      throw new ConflictError('Insufficient stock', 'INSUFFICIENT_STOCK');
-    }
+    if (!row) throw new NotFoundError('Cart item not found');
+    const stock = row.variant?.stockQuantity ?? row.product?.stockQuantity ?? 0;
+    if (stock < dto.quantity) throw new ConflictError('Insufficient stock', 'INSUFFICIENT_STOCK');
 
-    await db
-      .update(cartItems)
-      .set({ quantity: updateCartItemDto.quantity, updatedAt: new Date() })
-      .where(eq(cartItems.id, cartItemId));
-
-    return this.getCartWithItems(item.cartItem.cartId);
-  }
-
-  async removeCartItem(userId: string, cartItemId: string): Promise<any> {
-    const [item] = await db
-      .select({ cartItem: cartItems })
-      .from(cartItems)
-      .innerJoin(carts, eq(cartItems.cartId, carts.id))
-      .where(and(eq(cartItems.id, cartItemId), eq(carts.userId, userId)))
-      .limit(1);
-
-    if (!item) throw new NotFoundError('Cart item not found');
-
-    await db.delete(cartItems).where(eq(cartItems.id, cartItemId));
-    return this.getCartWithItems(item.cartItem.cartId);
-  }
-
-  async clearCart(cartId: string): Promise<void> {
-    await db.delete(cartItems).where(eq(cartItems.cartId, cartId));
-  }
-
-  async getCartForUser(userId: string): Promise<any> {
-    const [cart] = await db.select().from(carts).where(eq(carts.userId, userId)).limit(1);
-    if (!cart) return null;
+    await db.update(cartItems).set({ quantity: dto.quantity }).where(eq(cartItems.id, cartItemId));
     return this.getCartWithItems(cart.id);
   }
 
-  async getCartCount(userId: string): Promise<{ items: number; quantity: number }> {
+  async removeItem(owner: CartOwner, cartItemId: string): Promise<any> {
+    const cart = await this.getOwnedCart(owner);
+    const deleted = await db
+      .delete(cartItems)
+      .where(and(eq(cartItems.id, cartItemId), eq(cartItems.cartId, cart.id)))
+      .returning({ id: cartItems.id });
+
+    if (!deleted.length) throw new NotFoundError('Cart item not found');
+    return this.getCartWithItems(cart.id);
+  }
+
+  async clearCart(owner: CartOwner): Promise<void> {
+    const cart = await this.getOwnedCart(owner);
+    await db.delete(cartItems).where(eq(cartItems.cartId, cart.id));
+  }
+
+  async getCartCount(owner: CartOwner): Promise<{ items: number; quantity: number }> {
     const [result] = await db
       .select({
         items: sql<number>`count(${cartItems.id})`,
@@ -140,11 +176,53 @@ export class CartService extends BaseService {
       })
       .from(carts)
       .leftJoin(cartItems, eq(carts.id, cartItems.cartId))
-      .where(eq(carts.userId, userId));
+      .where(this.ownerCondition(owner));
 
     return {
       items: result ? Number(result.items) : 0,
       quantity: result ? Number(result.quantity) : 0,
     };
+  }
+
+  async mergeGuestCart(userId: string, sessionId: string): Promise<any> {
+    const [guestCart] = await db
+      .select()
+      .from(carts)
+      .where(and(eq(carts.sessionId, sessionId), isNull(carts.userId)))
+      .limit(1);
+
+    if (!guestCart) return this.getCart({ userId });
+
+    const userCart = await this.createCart({ userId });
+    const guestItems = await db.select().from(cartItems).where(eq(cartItems.cartId, guestCart.id));
+
+    for (const item of guestItems) {
+      const [existing] = await db
+        .select()
+        .from(cartItems)
+        .where(and(
+          eq(cartItems.cartId, userCart.id),
+          eq(cartItems.productId, item.productId),
+          item.variantId ? eq(cartItems.variantId, item.variantId) : isNull(cartItems.variantId)
+        ))
+        .limit(1);
+
+      if (existing) {
+        await db
+          .update(cartItems)
+          .set({ quantity: existing.quantity + item.quantity })
+          .where(eq(cartItems.id, existing.id));
+      } else {
+        await db.insert(cartItems).values({
+          cartId: userCart.id,
+          productId: item.productId,
+          variantId: item.variantId,
+          quantity: item.quantity,
+        });
+      }
+    }
+
+    await db.delete(carts).where(eq(carts.id, guestCart.id));
+    return this.getCartWithItems(userCart.id);
   }
 }

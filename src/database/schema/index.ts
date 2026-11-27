@@ -6,6 +6,8 @@ export * from './cartItem';
 export * from './wishlist';
 export * from './order';
 export * from './orderItem';
+export * from './orderEvent';
+export * from './idempotencyKey';
 export * from './payment';
 export * from './review';
 export * from './reviewHelpful';

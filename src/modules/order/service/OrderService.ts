@@ -4,6 +4,7 @@ import {
   orderItems as orderItemsTable,
   orders as ordersTable,
   payments,
+  productVariants,
   products,
   shippingMethods,
   users,
@@ -18,6 +19,8 @@ import { CouponService } from '../../coupon/service/CouponService';
 import { calculateShippingCostCents } from '../../shipping/shipping.calculator';
 import { fromCents, toCents } from '../../../core/money';
 import { NotificationService } from '../../notification/service/NotificationService';
+import { OrderEventService } from './OrderEventService';
+import { generateRandomString, sha256Hash } from '../../../utils/auth';
 
 const TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   pending: ['processing', 'cancelled', 'refunded'],
@@ -27,6 +30,34 @@ const TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   cancelled: [],
   refunded: [],
 };
+
+const PAYMENT_WINDOW_MS = 30 * 60 * 1000;
+
+export interface PriceableItem {
+  productId: string;
+  variantId?: string;
+  quantity: number;
+}
+
+interface PricedLine {
+  product: typeof products.$inferSelect;
+  variant?: typeof productVariants.$inferSelect;
+  quantity: number;
+  unitPriceCents: number;
+  lineTotalCents: number;
+}
+
+export interface OrderPricing {
+  lineItems: PricedLine[];
+  subtotalCents: number;
+  shippingCostCents: number;
+  taxCents: number;
+  discountCents: number;
+  totalCents: number;
+  weightGrams: number;
+  coupon: any;
+  shippingMethodId: string | null;
+}
 
 const parseAddress = (value: unknown): OrderAddress | null => {
   if (!value) return null;
@@ -40,94 +71,106 @@ const parseAddress = (value: unknown): OrderAddress | null => {
   return value as OrderAddress;
 };
 
+const generateOrderNumber = () =>
+  `ORD-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+
 export class OrderService extends BaseService {
   private couponService = new CouponService();
   private notificationService = new NotificationService();
+  private eventService = new OrderEventService();
 
   constructor() {
     super(ordersTable);
   }
 
-  async createOrder(userId: string, createOrderDto: CreateOrderDto): Promise<any> {
-    const [user] = await db
-      .select({ id: users.id, email: users.email, isActive: users.isActive })
-      .from(users)
-      .where(eq(users.id, userId))
-      .limit(1);
+  async priceOrder(
+    items: PriceableItem[],
+    options: { userId?: string; couponCode?: string; shippingMethodId?: string } = {}
+  ): Promise<OrderPricing> {
+    if (!items.length) throw new ValidationError('At least one order item is required');
 
-    if (!user || !user.isActive) throw new NotFoundError('User not found');
-
-    // Merge duplicate product lines. Otherwise a request with the same product
-    // twice can decrement stock using a stale value for each line.
-    const requested = new Map<string, number>();
-    for (const item of createOrderDto.items) {
-      requested.set(item.productId, (requested.get(item.productId) ?? 0) + item.quantity);
-    }
-
-    const productIds = [...requested.keys()];
-    if (productIds.length === 0) {
-      throw new ValidationError('At least one order item is required');
-    }
-
-    const productRows = await db.select().from(products).where(inArray(products.id, productIds));
-    const productMap = new Map(productRows.map((product) => [product.id, product]));
-
-    const lineItems: Array<{
-      product: typeof productRows[number];
-      quantity: number;
-      unitPriceCents: number;
-      lineTotalCents: number;
-    }> = [];
-
-    for (const productId of productIds) {
-      const product = productMap.get(productId);
-      const quantity = requested.get(productId)!;
-
-      if (!product) throw new NotFoundError(`Product ${productId} not found`);
-      if (!product.isActive) throw new ConflictError(`Product "${product.name}" is not available`, 'PRODUCT_INACTIVE');
-      if (quantity < 1) throw new ValidationError('Quantity must be at least 1');
-      if (product.stockQuantity < quantity) {
-        throw new ConflictError(`Insufficient stock for product "${product.name}"`, 'INSUFFICIENT_STOCK');
-      }
-
-      const unitPriceCents = toCents(product.price);
-      lineItems.push({
-        product,
-        quantity,
-        unitPriceCents,
-        lineTotalCents: unitPriceCents * quantity,
+    const requested = new Map<string, { productId: string; variantId?: string; quantity: number }>();
+    for (const item of items) {
+      const key = `${item.productId}:${item.variantId ?? ''}`;
+      const current = requested.get(key);
+      requested.set(key, {
+        productId: item.productId,
+        variantId: item.variantId,
+        quantity: (current?.quantity ?? 0) + item.quantity,
       });
     }
 
-    let shippingCostCents = 0;
-    let shippingMethodId: string | null = null;
-    const totalWeightGrams = lineItems.reduce(
+    const productIds = [...new Set([...requested.values()].map((item) => item.productId))];
+    const variantIds = [...new Set([...requested.values()].map((item) => item.variantId).filter(Boolean) as string[])];
+
+    const [productRows, variantRows] = await Promise.all([
+      db.select().from(products).where(inArray(products.id, productIds)),
+      variantIds.length ? db.select().from(productVariants).where(inArray(productVariants.id, variantIds)) : Promise.resolve([]),
+    ]);
+
+    const productMap = new Map(productRows.map((product) => [product.id, product]));
+    const variantMap = new Map(variantRows.map((variant) => [variant.id, variant]));
+    const lineItems: PricedLine[] = [];
+
+    for (const requestedItem of requested.values()) {
+      const product = productMap.get(requestedItem.productId);
+      if (!product) throw new NotFoundError(`Product ${requestedItem.productId} not found`);
+      if (!product.isActive) throw new ConflictError(`Product "${product.name}" is not available`, 'PRODUCT_INACTIVE');
+
+      let variant: typeof productVariants.$inferSelect | undefined;
+      if (requestedItem.variantId) {
+        variant = variantMap.get(requestedItem.variantId);
+        if (!variant || variant.productId !== product.id || !variant.isActive) {
+          throw new NotFoundError('Product variant not found');
+        }
+      }
+
+      if (requestedItem.quantity < 1) throw new ValidationError('Quantity must be at least 1');
+      const available = variant?.stockQuantity ?? product.stockQuantity;
+      if (available < requestedItem.quantity) {
+        throw new ConflictError(`Insufficient stock for product "${product.name}"`, 'INSUFFICIENT_STOCK');
+      }
+
+      const unitPriceCents = toCents(variant?.price ?? product.price);
+      lineItems.push({
+        product,
+        variant,
+        quantity: requestedItem.quantity,
+        unitPriceCents,
+        lineTotalCents: unitPriceCents * requestedItem.quantity,
+      });
+    }
+
+    const subtotalCents = lineItems.reduce((sum, item) => sum + item.lineTotalCents, 0);
+    const weightGrams = lineItems.reduce(
       (sum, item) => sum + (item.product.weightGrams ?? 0) * item.quantity,
       0
     );
 
-    if (createOrderDto.shippingMethodId) {
+    let shippingCostCents = 0;
+    let shippingMethodId: string | null = null;
+
+    if (options.shippingMethodId) {
       const [method] = await db
         .select()
         .from(shippingMethods)
-        .where(and(eq(shippingMethods.id, createOrderDto.shippingMethodId), eq(shippingMethods.isActive, true)))
+        .where(and(eq(shippingMethods.id, options.shippingMethodId), eq(shippingMethods.isActive, true)))
         .limit(1);
 
       if (!method) throw new NotFoundError('Shipping method not found');
-
-      shippingCostCents = calculateShippingCostCents(method, totalWeightGrams);
+      shippingCostCents = calculateShippingCostCents(method, weightGrams);
       shippingMethodId = method.id;
     }
 
-    const subtotalCents = lineItems.reduce((sum, item) => sum + item.lineTotalCents, 0);
     let discountCents = 0;
     let coupon: any = null;
 
-    if (createOrderDto.couponCode) {
+    if (options.couponCode) {
+      if (!options.userId) throw new ValidationError('Coupons require an authenticated account');
       const validation = await this.couponService.validateCoupon(
-        createOrderDto.couponCode,
+        options.couponCode,
         subtotalCents / 100,
-        userId
+        options.userId
       );
       discountCents = validation.discountCents;
       coupon = validation.coupon;
@@ -135,21 +178,86 @@ export class OrderService extends BaseService {
 
     const taxableCents = Math.max(0, subtotalCents - discountCents);
     const taxCents = Math.round(taxableCents * envConfig.TAX_RATE);
-    const totalCents = Math.max(0, taxableCents + shippingCostCents + taxCents);
+
+    return {
+      lineItems,
+      subtotalCents,
+      shippingCostCents,
+      taxCents,
+      discountCents,
+      totalCents: Math.max(0, taxableCents + shippingCostCents + taxCents),
+      weightGrams,
+      coupon,
+      shippingMethodId,
+    };
+  }
+
+  async quote(
+    userId: string | undefined,
+    customerEmail: string,
+    items: PriceableItem[],
+    options: { couponCode?: string; shippingMethodId?: string } = {}
+  ) {
+    void customerEmail;
+    const pricing = await this.priceOrder(items, { userId, ...options });
+    return {
+      items: pricing.lineItems.map((item) => ({
+        productId: item.product.id,
+        variantId: item.variant?.id ?? null,
+        name: item.product.name,
+        variantName: item.variant?.name ?? null,
+        quantity: item.quantity,
+        unitPrice: fromCents(item.unitPriceCents),
+        subtotal: fromCents(item.lineTotalCents),
+      })),
+      subtotal: fromCents(pricing.subtotalCents),
+      discount: fromCents(pricing.discountCents),
+      shippingCost: fromCents(pricing.shippingCostCents),
+      tax: fromCents(pricing.taxCents),
+      total: fromCents(pricing.totalCents),
+      weightGrams: pricing.weightGrams,
+      couponCode: pricing.coupon?.code ?? null,
+      shippingMethodId: pricing.shippingMethodId,
+    };
+  }
+
+  async createOrder(userId: string | null, customerEmail: string, createOrderDto: CreateOrderDto): Promise<any> {
+    if (userId) {
+      const [user] = await db
+        .select({ id: users.id, isActive: users.isActive })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+      if (!user || !user.isActive) throw new NotFoundError('User not found');
+    } else if (!customerEmail) {
+      throw new ValidationError('Email is required for guest checkout');
+    }
+
+    const pricing = await this.priceOrder(createOrderDto.items, {
+      userId: userId ?? undefined,
+      couponCode: createOrderDto.couponCode,
+      shippingMethodId: createOrderDto.shippingMethodId,
+    });
+
+    const guestToken = userId ? null : generateRandomString(32);
+    const orderNumber = generateOrderNumber();
 
     const newOrderId = await db.transaction(async (tx) => {
       const [newOrder] = await tx
         .insert(ordersTable)
         .values({
+          orderNumber,
           userId,
-          customerEmail: user.email,
-          totalAmount: fromCents(totalCents),
-          subtotal: fromCents(subtotalCents),
-          shippingCost: fromCents(shippingCostCents),
-          taxAmount: fromCents(taxCents),
-          discountAmount: fromCents(discountCents),
-          couponCode: coupon?.code ?? null,
-          shippingMethodId,
+          customerEmail,
+          guestTokenHash: guestToken ? sha256Hash(guestToken) : null,
+          paymentExpiresAt: new Date(Date.now() + PAYMENT_WINDOW_MS),
+          totalAmount: fromCents(pricing.totalCents),
+          subtotal: fromCents(pricing.subtotalCents),
+          shippingCost: fromCents(pricing.shippingCostCents),
+          taxAmount: fromCents(pricing.taxCents),
+          discountAmount: fromCents(pricing.discountCents),
+          couponCode: pricing.coupon?.code ?? null,
+          shippingMethodId: pricing.shippingMethodId,
           status: 'pending',
           shippingAddress: createOrderDto.shippingAddress,
           billingAddress: createOrderDto.billingAddress || createOrderDto.shippingAddress,
@@ -159,46 +267,57 @@ export class OrderService extends BaseService {
       if (!newOrder) throw new Error('Failed to create order');
 
       await tx.insert(orderItemsTable).values(
-        lineItems.map((item) => ({
+        pricing.lineItems.map((item) => ({
           orderId: newOrder.id,
           productId: item.product.id,
+          variantId: item.variant?.id ?? null,
           sellerId: item.product.sellerId,
           productName: item.product.name,
-          productSku: item.product.sku,
-          productImageUrl: item.product.imageUrl,
+          variantName: item.variant?.name ?? null,
+          productSku: item.variant?.sku ?? item.product.sku,
+          productImageUrl: item.variant?.imageUrl ?? item.product.imageUrl,
           quantity: item.quantity,
           price: fromCents(item.unitPriceCents),
         }))
       );
 
-      for (const item of lineItems) {
-        // Atomic conditional decrement prevents overselling under concurrency.
-        const updated = await tx
-          .update(products)
-          .set({ stockQuantity: sql`${products.stockQuantity} - ${item.quantity}` })
-          .where(
-            and(
-              eq(products.id, item.product.id),
-              eq(products.isActive, true),
-              gte(products.stockQuantity, item.quantity)
-            )
-          )
-          .returning({ id: products.id });
+      for (const item of pricing.lineItems) {
+        const updated = item.variant
+          ? await tx
+              .update(productVariants)
+              .set({ stockQuantity: sql`${productVariants.stockQuantity} - ${item.quantity}`, updatedAt: new Date() })
+              .where(and(
+                eq(productVariants.id, item.variant.id),
+                gte(productVariants.stockQuantity, item.quantity)
+              ))
+              .returning({ id: productVariants.id })
+          : await tx
+              .update(products)
+              .set({ stockQuantity: sql`${products.stockQuantity} - ${item.quantity}` })
+              .where(and(
+                eq(products.id, item.product.id),
+                eq(products.isActive, true),
+                gte(products.stockQuantity, item.quantity)
+              ))
+              .returning({ id: products.id });
 
-        if (updated.length === 0) {
+        if (!updated.length) {
           throw new ConflictError(`Insufficient stock for product "${item.product.name}"`, 'INSUFFICIENT_STOCK');
         }
       }
 
-      if (coupon) {
-        await this.couponService.recordUsage(tx, coupon.id, userId, newOrder.id);
+      if (pricing.coupon && userId) {
+        await this.couponService.recordUsage(tx, pricing.coupon.id, userId, newOrder.id);
       }
 
       return newOrder.id;
     });
 
-    await this.notificationService.notifyOrderCreated(userId, newOrderId);
-    return this.getOrderById(newOrderId);
+    await this.eventService.add(newOrderId, 'created', 'Order created');
+    if (userId) await this.notificationService.notifyOrderCreated(userId, newOrderId);
+
+    const order = await this.getOrderById(newOrderId);
+    return guestToken ? { ...order, guestToken } : order;
   }
 
   async getOrderById(orderId: string): Promise<any | null> {
@@ -207,6 +326,7 @@ export class OrderService extends BaseService {
         order: ordersTable,
         orderItem: orderItemsTable,
         product: products,
+        variant: productVariants,
         user: {
           id: users.id,
           email: users.email,
@@ -217,6 +337,7 @@ export class OrderService extends BaseService {
       .from(ordersTable)
       .leftJoin(orderItemsTable, eq(ordersTable.id, orderItemsTable.orderId))
       .leftJoin(products, eq(orderItemsTable.productId, products.id))
+      .leftJoin(productVariants, eq(orderItemsTable.variantId, productVariants.id))
       .leftJoin(users, eq(ordersTable.userId, users.id))
       .where(eq(ordersTable.id, orderId));
 
@@ -228,6 +349,7 @@ export class OrderService extends BaseService {
       .map((row) => ({
         ...row.orderItem!,
         product: row.product,
+        variant: row.variant,
       }));
 
     return {
@@ -237,6 +359,10 @@ export class OrderService extends BaseService {
       shippingAddress: parseAddress(first.order.shippingAddress),
       billingAddress: parseAddress(first.order.billingAddress),
     };
+  }
+
+  async getOrderEvents(orderId: string) {
+    return this.eventService.list(orderId);
   }
 
   async getOrders(
@@ -306,6 +432,9 @@ export class OrderService extends BaseService {
 
     if (Object.keys(updateData).length > 0) {
       await db.update(ordersTable).set(updateData).where(eq(ordersTable.id, orderId));
+      if (updateOrderDto.status) {
+        await this.eventService.add(orderId, 'status_changed', `Status changed to ${updateOrderDto.status}`);
+      }
       if (updateOrderDto.status && order.userId) {
         await this.notificationService.notifyOrderStatus(order.userId, orderId, updateOrderDto.status);
       }
@@ -326,31 +455,30 @@ export class OrderService extends BaseService {
       const items = await tx.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
 
       for (const item of items) {
-        if (!item.productId) continue;
-        await tx
-          .update(products)
-          .set({ stockQuantity: sql`${products.stockQuantity} + ${item.quantity}` })
-          .where(eq(products.id, item.productId));
+        if (item.variantId) {
+          await tx
+            .update(productVariants)
+            .set({ stockQuantity: sql`${productVariants.stockQuantity} + ${item.quantity}`, updatedAt: new Date() })
+            .where(eq(productVariants.id, item.variantId));
+        } else if (item.productId) {
+          await tx
+            .update(products)
+            .set({ stockQuantity: sql`${products.stockQuantity} + ${item.quantity}` })
+            .where(eq(products.id, item.productId));
+        }
       }
 
       const [payment] = await tx.select().from(payments).where(eq(payments.orderId, orderId)).limit(1);
       if (payment?.status === 'completed') {
         await tx
           .update(payments)
-          .set({
-            status: 'refunded',
-            refundedAmount: payment.amount,
-            updatedAt: new Date(),
-          })
+          .set({ status: 'refunded', refundedAmount: payment.amount, updatedAt: new Date() })
           .where(eq(payments.id, payment.id));
       }
 
       await this.couponService.releaseUsage(tx, orderId);
 
-      const nextStatus = finalStatus === 'refunded' || payment?.status === 'completed'
-        ? 'refunded'
-        : 'cancelled';
-
+      const nextStatus = finalStatus === 'refunded' || payment?.status === 'completed' ? 'refunded' : 'cancelled';
       const [updated] = await tx
         .update(ordersTable)
         .set({ status: nextStatus, updatedAt: new Date() })
@@ -360,11 +488,31 @@ export class OrderService extends BaseService {
       return updated;
     });
 
+    await this.eventService.add(orderId, 'status_changed', `Order ${result?.status}`);
     if (result?.userId) {
       await this.notificationService.notifyOrderStatus(result.userId, orderId, result.status);
     }
 
     return result;
+  }
+
+  async releaseExpiredOrders(limit = 100): Promise<number> {
+    const expired = await db
+      .select({ id: ordersTable.id })
+      .from(ordersTable)
+      .where(and(eq(ordersTable.status, 'pending'), lte(ordersTable.paymentExpiresAt, new Date())))
+      .limit(limit);
+
+    let released = 0;
+    for (const order of expired) {
+      try {
+        await this.cancelOrder(order.id);
+        released += 1;
+      } catch {
+        // Another process may have changed the order; continue.
+      }
+    }
+    return released;
   }
 
   async getOrderStats(userId?: string) {

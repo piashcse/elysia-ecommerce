@@ -25,6 +25,7 @@ export interface OrderAddress {
 
 export const orders = pgTable('orders', {
   id: uuid('id').defaultRandom().primaryKey(),
+  orderNumber: varchar('order_number', { length: 40 }).unique(),
   userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
   customerEmail: varchar('customer_email', { length: 255 }),
   totalAmount: numeric('total_amount', { precision: 10, scale: 2 }).notNull(),
@@ -38,6 +39,8 @@ export const orders = pgTable('orders', {
   billingAddress: jsonb('billing_address').$type<OrderAddress>().notNull(),
   shippingMethodId: uuid('shipping_method_id').references(() => shippingMethods.id, { onDelete: 'set null' }),
   trackingNumber: varchar('tracking_number', { length: 100 }),
+  guestTokenHash: varchar('guest_token_hash', { length: 64 }),
+  paymentExpiresAt: timestamp('payment_expires_at', { withTimezone: true }),
   notes: text('notes'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),

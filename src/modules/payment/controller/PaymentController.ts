@@ -34,15 +34,13 @@ const paymentStatusSchema = t.Union([
 
 export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payment'] })
   .use(authPlugin)
-  .guard({
-    isAuth: true
-  })
   .post('/', {
     body: t.Object({
       orderId: uuid,
       method: paymentMethodSchema,
       amount: t.Number({ minimum: 0.01, maximum: 999999.99 }),
       metadata: t.Optional(t.Record(t.String(), t.Any())),
+      guestToken: t.Optional(t.String({ maxLength: 128 })),
     }),
     response: {
       201: successSchema(),
@@ -53,7 +51,7 @@ export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payme
     },
     detail: { summary: 'Create initial payment record' }
   }, async ({ body, set, user }) => {
-    const payment = await paymentService.createPayment(user!, body as any);
+    const payment = await paymentService.createPayment(user, body as any, body.guestToken);
     set.status = 201;
     return successResponse(payment, 'Payment created successfully', 201);
   })
@@ -64,6 +62,7 @@ export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payme
       method: paymentMethodSchema,
       amount: t.Number({ minimum: 0.01, maximum: 999999.99 }),
       paymentDetails: paymentDetailsSchema,
+      guestToken: t.Optional(t.String({ maxLength: 128 })),
     }),
     response: {
       200: successSchema(),
@@ -75,11 +74,12 @@ export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payme
     },
     detail: { summary: 'Process payment with gateway simulation' }
   }, async ({ body, user }) => {
-    const payment = await paymentService.processPayment(user!, body as any);
+    const payment = await paymentService.processPayment(user, body as any, body.guestToken);
     return successResponse(payment, 'Payment processed successfully');
   })
 
   .get('/', {
+    isAuth: true,
     query: t.Object({
       page: t.Optional(t.Integer({ minimum: 1 })),
       limit: t.Optional(t.Integer({ minimum: 1, maximum: PAGINATION.MAX_LIMIT })),
@@ -118,14 +118,15 @@ export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payme
 
   .get('/:id', {
     params: idParams,
+    query: t.Object({ guestToken: t.Optional(t.String({ maxLength: 128 })) }),
     response: {
       200: successSchema(),
       403: errorSchema,
       404: errorSchema
     },
     detail: { summary: 'Get payment details by ID' }
-  }, async ({ params, user }) => {
-    const payment = await paymentService.getPaymentById(user!, params.id);
+  }, async ({ params, user, query }) => {
+    const payment = await paymentService.getPaymentById(user, params.id, query.guestToken);
     return successResponse(payment, 'Payment retrieved successfully');
   })
 
