@@ -1,6 +1,6 @@
-import { and, eq, gt, sql } from 'drizzle-orm';
+import { and, eq, gt, isNull, sql } from 'drizzle-orm';
 import { db } from '../../../config/database';
-import { users } from '../../../database/schema';
+import { twoFactorRecoveryCodes, users } from '../../../database/schema';
 import {
   comparePassword,
   generateRandomString,
@@ -138,8 +138,12 @@ export class AuthService {
       if (!data.twoFactorCode) {
         throw new ForbiddenError('Two-factor authentication code required', 'TWO_FACTOR_REQUIRED');
       }
-      if (!user.twoFactorSecret || !verifyTotp(user.twoFactorSecret, data.twoFactorCode)) {
-        throw new UnauthorizedError('Invalid two-factor authentication code', 'INVALID_TWO_FACTOR_CODE');
+      const totpValid = Boolean(user.twoFactorSecret) && verifyTotp(user.twoFactorSecret!, data.twoFactorCode);
+      if (!totpValid) {
+        const recoveryValid = await this.consumeRecoveryCode(user.id, data.twoFactorCode);
+        if (!recoveryValid) {
+          throw new UnauthorizedError('Invalid two-factor authentication code', 'INVALID_TWO_FACTOR_CODE');
+        }
       }
     }
 
@@ -193,6 +197,62 @@ export class AuthService {
     if (!user?.twoFactorSecret) throw new NotFoundError('Two-factor setup not started');
     if (!verifyTotp(user.twoFactorSecret, code)) throw new UnauthorizedError('Invalid two-factor code', 'INVALID_TWO_FACTOR_CODE');
     await db.update(users).set({ twoFactorEnabled: true, tokenVersion: sql`${users.tokenVersion} + 1`, updatedAt: new Date() }).where(eq(users.id, userId));
+    const recoveryCodes = await this.issueRecoveryCodes(userId);
+    return { recoveryCodes };
+  }
+
+  private normalizeRecoveryCode(code: string) {
+    return code.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+  }
+
+  private async issueRecoveryCodes(userId: string) {
+    const codes = Array.from({ length: 10 }, () => {
+      const raw = crypto.randomUUID().replaceAll('-', '').slice(0, 10).toUpperCase();
+      return `${raw.slice(0, 5)}-${raw.slice(5)}`;
+    });
+
+    await db.transaction(async (tx) => {
+      await tx.delete(twoFactorRecoveryCodes).where(eq(twoFactorRecoveryCodes.userId, userId));
+      await tx.insert(twoFactorRecoveryCodes).values(
+        codes.map((code) => ({
+          userId,
+          codeHash: sha256Hash(this.normalizeRecoveryCode(code)),
+        }))
+      );
+    });
+
+    return codes;
+  }
+
+  private async consumeRecoveryCode(userId: string, code: string): Promise<boolean> {
+    const hash = sha256Hash(this.normalizeRecoveryCode(code));
+    const [record] = await db
+      .select()
+      .from(twoFactorRecoveryCodes)
+      .where(and(
+        eq(twoFactorRecoveryCodes.userId, userId),
+        eq(twoFactorRecoveryCodes.codeHash, hash),
+        isNull(twoFactorRecoveryCodes.usedAt)
+      ))
+      .limit(1);
+
+    if (!record) return false;
+
+    const [updated] = await db
+      .update(twoFactorRecoveryCodes)
+      .set({ usedAt: new Date() })
+      .where(and(eq(twoFactorRecoveryCodes.id, record.id), isNull(twoFactorRecoveryCodes.usedAt)))
+      .returning({ id: twoFactorRecoveryCodes.id });
+
+    return Boolean(updated);
+  }
+
+  async regenerateRecoveryCodes(userId: string, password: string) {
+    const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    if (!user) throw new NotFoundError('User not found');
+    if (!(await comparePassword(password, user.password))) throw new UnauthorizedError('Invalid password');
+    if (!user.twoFactorEnabled) throw new ValidationError('Two-factor authentication is not enabled');
+    return this.issueRecoveryCodes(userId);
   }
 
   async disableTwoFactor(userId: string, password: string, code: string) {
@@ -203,6 +263,7 @@ export class AuthService {
       throw new UnauthorizedError('Invalid two-factor code', 'INVALID_TWO_FACTOR_CODE');
     }
     await db.update(users).set({ twoFactorEnabled: false, twoFactorSecret: null, tokenVersion: sql`${users.tokenVersion} + 1`, updatedAt: new Date() }).where(eq(users.id, userId));
+    await db.delete(twoFactorRecoveryCodes).where(eq(twoFactorRecoveryCodes.userId, userId));
   }
 
   private async findById(userId: string) {

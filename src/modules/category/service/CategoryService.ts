@@ -6,6 +6,7 @@ import { ConflictError, NotFoundError } from '../../../core/errors';
 import { BaseService } from '../../../core/base.service';
 import { PAGINATION } from '../../../core/constants';
 import { slugify } from '../../brand/service/BrandService';
+import { translationService } from '../../translation/service/TranslationService';
 
 export class CategoryService extends BaseService {
   constructor() {
@@ -42,13 +43,18 @@ export class CategoryService extends BaseService {
     return updated;
   }
 
-  async getBySlug(slug: string) {
-    const [category] = await db.select().from(categories).where(eq(categories.slug, slug)).limit(1);
-    if (!category) throw new NotFoundError('Category not found');
-    return category;
+  async getById(id: string, locale?: string) {
+    const category = await this.findByIdOrFail(id, 'Category');
+    return translationService.applyCategory(category, locale);
   }
 
-  async getTree() {
+  async getBySlug(slug: string, locale?: string) {
+    const [category] = await db.select().from(categories).where(eq(categories.slug, slug)).limit(1);
+    if (!category) throw new NotFoundError('Category not found');
+    return translationService.applyCategory(category, locale);
+  }
+
+  async getTree(locale?: string) {
     const rows = await db.select().from(categories).orderBy(categories.name);
     const byParent = new Map<string | null, any[]>();
     for (const row of rows) {
@@ -60,7 +66,7 @@ export class CategoryService extends BaseService {
         ...category,
         children: attach(category.id),
       }));
-    return attach(null);
+    return translationService.applyCategoryTree(attach(null), locale);
   }
 
   async deleteCategory(id: string): Promise<void> {
@@ -80,6 +86,7 @@ export class CategoryService extends BaseService {
     filters: {
       search?: string;
       isActive?: boolean;
+      locale?: string;
     } = {}
   ): Promise<{ items: any[]; total: number }> {
     const conditions = [];
@@ -93,14 +100,18 @@ export class CategoryService extends BaseService {
     }
     if (filters.isActive !== undefined) conditions.push(eq(categories.isActive, filters.isActive));
 
-    return this.findAll(page, limit, conditions);
+    const result = await this.findAll(page, limit, conditions);
+    return {
+      ...result,
+      items: await translationService.applyCategories(result.items, filters.locale),
+    };
   }
 
   async getCategoryWithProducts(
     id: string,
     page: number = 1,
     limit: number = PAGINATION.DEFAULT_LIMIT,
-    filters: { isActive?: boolean } = {}
+    filters: { isActive?: boolean; locale?: string } = {}
   ): Promise<any> {
     const [category] = await db.select().from(categories).where(eq(categories.id, id)).limit(1);
     if (!category) throw new NotFoundError('Category not found');
@@ -130,8 +141,8 @@ export class CategoryService extends BaseService {
     const total = countResult ? Number(countResult.count) : 0;
 
     return {
-      category,
-      products: productsResult,
+      category: await translationService.applyCategory(category, filters.locale),
+      products: await translationService.applyProducts(productsResult, filters.locale),
       pagination: {
         page: safePage,
         limit: safeLimit,

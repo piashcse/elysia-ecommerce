@@ -16,6 +16,15 @@ export class NotificationPreferenceService {
     return record ? record.enabled : true;
   }
 
+  async isEmailEnabled(userId: string, type: string) {
+    const [record] = await db
+      .select({ enabled: notificationPreferences.emailEnabled })
+      .from(notificationPreferences)
+      .where(and(eq(notificationPreferences.userId, userId), eq(notificationPreferences.type, type)))
+      .limit(1);
+    return record ? record.enabled : true;
+  }
+
   async update(
     userId: string,
     preferences: Array<{ type: string; inAppEnabled?: boolean; emailEnabled?: boolean }>

@@ -44,6 +44,10 @@ import { auditController } from './modules/admin/controller/AuditController';
 import { auditMiddleware } from './modules/admin/middleware/audit';
 import { apiKeyController } from './modules/auth/controller/ApiKeyController';
 import { metricsController } from './modules/system/controller/MetricsController';
+import { currencyController } from './modules/currency/controller/CurrencyController';
+import { searchController } from './modules/search/controller/SearchController';
+import { translationController } from './modules/translation/controller/TranslationController';
+import { emailService } from './modules/notification/service/EmailService';
 
 const app = new Elysia();
 
@@ -204,6 +208,9 @@ app
   .use(auditController)
   .use(apiKeyController)
   .use(metricsController)
+  .use(currencyController)
+  .use(searchController)
+  .use(translationController)
 ;
 
 // API v1 aliases keep the current unversioned routes while providing a stable
@@ -240,7 +247,10 @@ const apiV1 = new Elysia({ prefix: '/api/v1' })
   .use(reportController)
   .use(auditController)
   .use(apiKeyController)
-  .use(metricsController);
+  .use(metricsController)
+  .use(currencyController)
+  .use(searchController)
+  .use(translationController);
 
 app.use(apiV1);
 
@@ -315,6 +325,11 @@ if (import.meta.main) {
     console.log(`Elysia E-commerce server is running on port ${PORT}`);
     console.log(`Environment: ${envConfig.NODE_ENV}`);
     console.log(`Swagger UI available at http://localhost:${PORT}/swagger`);
+
+    if (envConfig.EMAIL_WORKER_ENABLED) {
+      emailService.startWorker();
+      console.log(`Email worker started (interval: ${envConfig.EMAIL_WORKER_INTERVAL_MS}ms)`);
+    }
   });
 }
 

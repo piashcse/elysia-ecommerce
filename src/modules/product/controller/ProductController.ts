@@ -79,6 +79,8 @@ export const productController = new Elysia({ prefix: '/products', tags: ['Produ
         t.Literal('updatedAt'),
       ])),
       sortOrder: t.Optional(t.Union([t.Literal('asc'), t.Literal('desc')])),
+      locale: t.Optional(t.String({ minLength: 2, maxLength: 10 })),
+      currency: t.Optional(t.String({ minLength: 3, maxLength: 3 })),
       page: t.Optional(t.Integer({ minimum: 1 })),
       limit: t.Optional(t.Integer({ minimum: 1, maximum: PAGINATION.MAX_LIMIT })),
     }),
@@ -93,6 +95,7 @@ export const productController = new Elysia({ prefix: '/products', tags: ['Produ
     const filters = {
       search: query.search,
       category: query.category,
+      brandId: query.brandId,
       sellerId: query.sellerId,
       minPrice: query.minPrice,
       maxPrice: query.maxPrice,
@@ -101,6 +104,8 @@ export const productController = new Elysia({ prefix: '/products', tags: ['Produ
       isActive: isAdmin ? query.isActive : true,
       sortBy: query.sortBy as any,
       sortOrder: query.sortOrder as any,
+      locale: query.locale,
+      currency: query.currency,
     };
   
     const { items, total } = await productService.getAllProducts(page, limit, filters);
@@ -119,29 +124,41 @@ export const productController = new Elysia({ prefix: '/products', tags: ['Produ
   }, async () => successResponse(await productService.getFacets(), 'Facets retrieved successfully'))
   .get('/slug/:slug', {
     params: t.Object({ slug: t.String({ maxLength: 280 }) }),
+    query: t.Object({
+      locale: t.Optional(t.String({ minLength: 2, maxLength: 10 })),
+      currency: t.Optional(t.String({ minLength: 3, maxLength: 3 })),
+    }),
     response: { 200: successSchema(), 404: errorSchema },
     detail: { summary: 'Get a product by slug' }
-  }, async ({ params, user }) => {
-    const product = await productService.getBySlug(params.slug, user?.role === UserRole.ADMIN);
+  }, async ({ params, query, user }) => {
+    const product = await productService.getBySlug(params.slug, user?.role === UserRole.ADMIN, query.locale, query.currency);
     if (!product) throw new NotFoundError('Product not found');
     return successResponse(product, 'Product retrieved successfully');
   })
   .get('/:id/related', {
     params: idParams,
-    query: t.Object({ limit: t.Optional(t.Integer({ minimum: 1, maximum: 20 })) }),
+    query: t.Object({
+      limit: t.Optional(t.Integer({ minimum: 1, maximum: 20 })),
+      locale: t.Optional(t.String({ minLength: 2, maxLength: 10 })),
+      currency: t.Optional(t.String({ minLength: 3, maxLength: 3 })),
+    }),
     response: { 200: successSchema(), 404: errorSchema },
     detail: { summary: 'Get related products' }
-  }, async ({ params, query }) => successResponse(await productService.getRelated(params.id, query.limit), 'Related products retrieved successfully'))
+  }, async ({ params, query }) => successResponse(await productService.getRelated(params.id, query.limit, query.locale, query.currency), 'Related products retrieved successfully'))
   .get('/:id', {
     params: idParams,
+    query: t.Object({
+      locale: t.Optional(t.String({ minLength: 2, maxLength: 10 })),
+      currency: t.Optional(t.String({ minLength: 3, maxLength: 3 })),
+    }),
     response: {
       200: successSchema(),
       404: errorSchema
     },
     detail: { summary: 'Get product by ID' }
-  }, async ({ params, user }) => {
+  }, async ({ params, query, user }) => {
     const isAdmin = user?.role === UserRole.ADMIN;
-    const product = await productService.findProductByIdWithDetails(params.id, isAdmin);
+    const product = await productService.findProductByIdWithDetails(params.id, isAdmin, query.locale, query.currency);
     if (!product) throw new NotFoundError('Product not found');
     return successResponse(product, 'Product retrieved successfully');
   })

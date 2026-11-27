@@ -42,6 +42,7 @@ export class ApiKeyService {
           deletedAt: users.deletedAt,
         },
         keyId: apiKeys.id,
+        scopes: apiKeys.scopes,
       })
       .from(apiKeys)
       .innerJoin(users, eq(apiKeys.userId, users.id))
@@ -54,6 +55,6 @@ export class ApiKeyService {
 
     if (!row || !row.user.isActive || row.user.deletedAt) return null;
     await db.update(apiKeys).set({ lastUsedAt: new Date() }).where(eq(apiKeys.id, row.keyId));
-    return row.user;
+    return { ...row.user, scopes: row.scopes ?? [] };
   }
 }

@@ -27,6 +27,9 @@ const envSchema = z.object({
 
   MAIL_FROM: z.string().default('no-reply@elysia-ecom.local'),
   MAIL_WEBHOOK_URL: z.string().url().optional(),
+  EMAIL_WORKER_ENABLED: booleanString,
+  EMAIL_WORKER_INTERVAL_MS: z.coerce.number().int().min(1000).max(3600000).default(60000),
+  EMAIL_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(5),
 
   TAX_RATE: z.coerce.number().min(0).max(1).default(0),
   PAYMENT_SIMULATE_FAILURE_RATE: z.coerce.number().min(0).max(1).default(0),
@@ -51,6 +54,9 @@ const parsed = envSchema.safeParse({
   REQUIRE_EMAIL_VERIFICATION: process.env.REQUIRE_EMAIL_VERIFICATION,
   MAIL_FROM: process.env.MAIL_FROM,
   MAIL_WEBHOOK_URL: process.env.MAIL_WEBHOOK_URL,
+  EMAIL_WORKER_ENABLED: process.env.EMAIL_WORKER_ENABLED,
+  EMAIL_WORKER_INTERVAL_MS: process.env.EMAIL_WORKER_INTERVAL_MS,
+  EMAIL_MAX_ATTEMPTS: process.env.EMAIL_MAX_ATTEMPTS,
   TAX_RATE: process.env.TAX_RATE,
   PAYMENT_SIMULATE_FAILURE_RATE: process.env.PAYMENT_SIMULATE_FAILURE_RATE,
   PAYMENT_WEBHOOK_SECRET: process.env.PAYMENT_WEBHOOK_SECRET,

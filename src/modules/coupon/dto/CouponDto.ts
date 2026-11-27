@@ -7,6 +7,8 @@ export interface CreateCouponDto {
   maxDiscountAmount?: number;
   usageLimit?: number;
   perUserLimit?: number;
+  stackable?: boolean;
+  appliesToShipping?: boolean;
   startDate: Date;
   endDate: Date;
 }

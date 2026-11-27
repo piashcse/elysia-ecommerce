@@ -175,7 +175,7 @@ export class PaymentService extends BaseService {
         }
         if (order.customerEmail) {
           const template = emailTemplates.paymentCompleted(order);
-          await emailService.enqueue({ to: order.customerEmail, ...template }).catch(() => undefined);
+          await emailService.enqueue({ to: order.customerEmail, userId: order.userId, type: 'payment_success', ...template }).catch(() => undefined);
         }
       }
 
@@ -188,7 +188,7 @@ export class PaymentService extends BaseService {
       }
       if (order.customerEmail) {
         const template = emailTemplates.paymentFailed(order);
-        await emailService.enqueue({ to: order.customerEmail, ...template }).catch(() => undefined);
+        await emailService.enqueue({ to: order.customerEmail, userId: order.userId, type: 'payment_failed', ...template }).catch(() => undefined);
       }
       throw error;
     }
@@ -365,10 +365,10 @@ export class PaymentService extends BaseService {
       if (order?.userId) {
         await this.notificationService.notifyPaymentRefunded(order.userId, refundedPayment.orderId);
       }
-      const [emailOrder] = await db.select({ email: orders.customerEmail }).from(orders).where(eq(orders.id, refundedPayment.orderId)).limit(1);
+      const [emailOrder] = await db.select({ email: orders.customerEmail, userId: orders.userId }).from(orders).where(eq(orders.id, refundedPayment.orderId)).limit(1);
       if (emailOrder?.email) {
         const template = emailTemplates.refunded({ orderNumber: refundedPayment.orderId }, refundedPayment.refundedAmount);
-        await emailService.enqueue({ to: emailOrder.email, ...template }).catch(() => undefined);
+        await emailService.enqueue({ to: emailOrder.email, userId: emailOrder.userId, type: 'payment_refunded', ...template }).catch(() => undefined);
       }
     }
 

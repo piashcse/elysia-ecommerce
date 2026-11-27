@@ -42,6 +42,7 @@ export const categoryController = new Elysia({ prefix: '/categories', tags: ['Ca
       limit: t.Optional(t.Integer({ minimum: 1, maximum: PAGINATION.MAX_LIMIT })),
       search: t.Optional(t.String({ maxLength: 100 })),
       isActive: t.Optional(t.Boolean()),
+      locale: t.Optional(t.String({ minLength: 2, maxLength: 10 })),
     }),
     response: { 200: paginatedSchema() },
     detail: { summary: 'Get all categories with pagination' }
@@ -52,6 +53,7 @@ export const categoryController = new Elysia({ prefix: '/categories', tags: ['Ca
     const { items, total } = await categoryService.getAllCategories(page, limit, {
       search: query.search,
       isActive: isAdmin ? query.isActive : true,
+      locale: query.locale,
     });
   
     return paginatedResponse(items, {
@@ -63,23 +65,26 @@ export const categoryController = new Elysia({ prefix: '/categories', tags: ['Ca
   })
 
   .get('/tree', {
+    query: t.Object({ locale: t.Optional(t.String({ minLength: 2, maxLength: 10 })) }),
     response: { 200: successSchema() },
     detail: { summary: 'Get the category tree' }
-  }, async () => successResponse(await categoryService.getTree(), 'Category tree retrieved successfully'))
+  }, async ({ query }) => successResponse(await categoryService.getTree(query.locale), 'Category tree retrieved successfully'))
   .get('/slug/:slug', {
     params: t.Object({ slug: t.String({ maxLength: 120 }) }),
+    query: t.Object({ locale: t.Optional(t.String({ minLength: 2, maxLength: 10 })) }),
     response: { 200: successSchema(), 404: errorSchema },
     detail: { summary: 'Get a category by slug' }
-  }, async ({ params }) => successResponse(await categoryService.getBySlug(params.slug), 'Category retrieved successfully'))
+  }, async ({ params, query }) => successResponse(await categoryService.getBySlug(params.slug, query.locale), 'Category retrieved successfully'))
   .get('/:id', {
     params: idParams,
+    query: t.Object({ locale: t.Optional(t.String({ minLength: 2, maxLength: 10 })) }),
     response: {
       200: successSchema(),
       404: errorSchema
     },
     detail: { summary: 'Get category by ID' }
-  }, async ({ params }) => {
-    const category = await categoryService.findByIdOrFail(params.id, 'Category');
+  }, async ({ params, query }) => {
+    const category = await categoryService.getById(params.id, query.locale);
     return successResponse(category, 'Category retrieved successfully');
   })
 
@@ -129,6 +134,7 @@ export const categoryController = new Elysia({ prefix: '/categories', tags: ['Ca
       page: t.Optional(t.Integer({ minimum: 1 })),
       limit: t.Optional(t.Integer({ minimum: 1, maximum: PAGINATION.MAX_LIMIT })),
       isActive: t.Optional(t.Boolean()),
+      locale: t.Optional(t.String({ minLength: 2, maxLength: 10 })),
     }),
     response: {
       200: successSchema(),
@@ -141,6 +147,7 @@ export const categoryController = new Elysia({ prefix: '/categories', tags: ['Ca
   
     const result = await categoryService.getCategoryWithProducts(params.id, page, limit, {
       isActive: isAdmin ? query.isActive : true,
+      locale: query.locale,
     });
   
     return successResponse(result, 'Category products retrieved successfully');

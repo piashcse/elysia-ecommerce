@@ -43,7 +43,7 @@ export const authController = new Elysia({ prefix: '/auth', tags: ['Auth'] })
         body: t.Object({
             email: t.String({ format: 'email', maxLength: 255 }),
             password: t.String({ minLength: 1, maxLength: PASSWORD.MAX_LENGTH }),
-            twoFactorCode: t.Optional(t.String({ pattern: '^[0-9]{6}$' })),
+            twoFactorCode: t.Optional(t.String({ minLength: 6, maxLength: 20 })),
         }),
         response: {
             200: t.Object({
@@ -152,8 +152,19 @@ export const authController = new Elysia({ prefix: '/auth', tags: ['Auth'] })
     response: { 200: successSchema(), 401: errorSchema },
     detail: { summary: 'Enable two-factor authentication' }
   }, async ({ user, body }) => {
-    await authService.enableTwoFactor(user!.sub, body.code);
-    return successResponse(null, 'Two-factor authentication enabled');
+    const result = await authService.enableTwoFactor(user!.sub, body.code);
+    return successResponse(result, 'Two-factor authentication enabled');
+  })
+  .post('/2fa/recovery-codes', {
+    isAuth: true,
+    body: t.Object({
+      password: t.String({ minLength: 1, maxLength: PASSWORD.MAX_LENGTH }),
+    }),
+    response: { 200: successSchema(), 401: errorSchema, 422: errorSchema },
+    detail: { summary: 'Regenerate two-factor recovery codes' }
+  }, async ({ user, body }) => {
+    const recoveryCodes = await authService.regenerateRecoveryCodes(user!.sub, body.password);
+    return successResponse({ recoveryCodes }, 'Recovery codes regenerated successfully');
   })
   .post('/2fa/disable', {
     isAuth: true,

@@ -38,8 +38,11 @@ export class GiftCardService {
     return record;
   }
 
-  async calculate(code: string, totalCents: number) {
+  async calculate(code: string, totalCents: number, currency = 'USD') {
     const card = await this.getByCode(code);
+    if (card.currency.toUpperCase() !== currency.toUpperCase()) {
+      throw new ConflictError('Gift card currency does not match the order currency', 'GIFT_CARD_CURRENCY');
+    }
     const balanceCents = toCents(card.balance);
     return {
       card,
