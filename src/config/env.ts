@@ -19,7 +19,7 @@ const envSchema = z.object({
   DB_SSL: booleanString,
 
   JWT_SECRET: z.string().min(16, 'JWT_SECRET must be at least 16 characters'),
-  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
 
   ALLOWED_ORIGINS: z.string().default('http://localhost:3000,http://localhost:3005'),
   TRUST_PROXY: booleanString,
