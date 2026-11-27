@@ -1,10 +1,10 @@
 # Elysia E-commerce
 ![Elysia](https://img.shields.io/badge/Elysia-2.0.0--rc.6-6E56CF?style=flat)
-![Bun](https://img.shields.io/badge/Bun-1.3.11-black?logo=bun&style=flat)
-![Drizzle](https://img.shields.io/badge/Drizzle-0.45.1-0C4A6E?style=flat)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-8.20.0-336791?style=flat)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.9.3-3178C6?style=flat)
-![Zod](https://img.shields.io/badge/Zod-4.3.6-3E67B1?style=flat)
+![Bun](https://img.shields.io/badge/Bun-1.4.5-black?logo=bun&style=flat)
+![Drizzle](https://img.shields.io/badge/Drizzle-0.45.4-0C4A6E?style=flat)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16%2B-336791?style=flat)
+![TypeScript](https://img.shields.io/badge/TypeScript-7.0.2-3178C6?style=flat)
+![Zod](https://img.shields.io/badge/Zod-4.6.7-3E67B1?style=flat)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg?style=flat)](https://www.apache.org/licenses/LICENSE-2.0)
 <a href="https://github.com/piashcse">
   <img alt="Author" src="https://img.shields.io/static/v1?label=GitHub&message=piashcse&color=C51162&style=flat"/>
@@ -57,16 +57,17 @@ This project adheres to modern software architecture principles to ensure it is 
 
 ## 🛠 Tech Stack
 
--   **Runtime**: [Bun](https://bun.sh/) 1.3.11 - Fast JavaScript runtime with built-in bundler, transpiler, and package manager
+-   **Runtime**: [Bun](https://bun.sh/) 1.4.5 - Fast JavaScript runtime with built-in bundler, transpiler, and package manager
 -   **Framework**: [Elysia.js](https://elysiajs.com/) 2.0.0-rc.6 - Fast, friendly, and type-safe web framework for Bun
--   **Database**: [PostgreSQL](https://www.postgresql.org/) 8.20.0 - Powerful, open-source object-relational database system
--   **ORM**: [Drizzle ORM](https://orm.drizzle.team/) 0.45.1 - TypeScript ORM with a focus on type safety and runtime efficiency
+-   **Database**: [PostgreSQL](https://www.postgresql.org/) 16+ (pg 8.23.1 driver) - Powerful, open-source object-relational database system
+-   **ORM**: [Drizzle ORM](https://orm.drizzle.team/) 0.45.4 - TypeScript ORM with a focus on type safety and runtime efficiency
 -   **Authentication**: [@elysia/jwt](https://github.com/elysiajs/elysia-jwt) 2.0.0-rc.0 (JSON Web Tokens) - Secure token-based authentication
 -   **API Documentation**: [Swagger UI](https://swagger.io/tools/swagger-ui/) - Interactive API documentation interface
--   **Validation**: Elysia TypeBox 1.x for route schemas; Zod for environment validation
--   **Security**: [Helmet](https://helmetjs.github.io/), [CORS](https://github.com/elysiajs/elysia-cors), [Rate Limiting](https://www.npmjs.com/package/rate-limiter-flexible) 9.1.1 - Comprehensive security middleware
+-   **Validation**: Elysia TypeBox 1.x for route schemas; Zod 4.6.7 for environment validation
+-   **Tooling**: TypeScript 7.0.2, Drizzle Kit 0.31.11
+-   **Security**: [Helmet](https://helmetjs.github.io/), [CORS](https://github.com/elysiajs/elysia-cors), [Rate Limiting](https://www.npmjs.com/package/rate-limiter-flexible) 11.6.1 - Comprehensive security middleware
 -   **Password Hashing**: [bcryptjs](https://www.npmjs.com/package/bcryptjs) 3.0.3 - Robust password hashing library
--   **Environment Variables**: [dotenv](https://www.npmjs.com/package/dotenv) 17.3.1 - Zero-dependency module to load environment variables
+-   **Environment Variables**: [dotenv](https://www.npmjs.com/package/dotenv) 18.0.10 - Zero-dependency module to load environment variables
 -   **Logging**: [Pino](https://getpino.io/) via a local Elysia lifecycle middleware
 
 ## 🗂️ Project Structure

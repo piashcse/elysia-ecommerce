@@ -47,7 +47,6 @@ import { metricsController } from './modules/system/controller/MetricsController
 import { currencyController } from './modules/currency/controller/CurrencyController';
 import { searchController } from './modules/search/controller/SearchController';
 import { translationController } from './modules/translation/controller/TranslationController';
-import { emailService } from './modules/notification/service/EmailService';
 
 const app = new Elysia();
 
@@ -317,21 +316,6 @@ app.get('/health', async ({ set }) => {
 
   return healthStatus;
 });
-
-if (import.meta.main) {
-  const PORT = envConfig.PORT;
-
-  app.listen(PORT, () => {
-    console.log(`Elysia E-commerce server is running on port ${PORT}`);
-    console.log(`Environment: ${envConfig.NODE_ENV}`);
-    console.log(`Swagger UI available at http://localhost:${PORT}/swagger`);
-
-    if (envConfig.EMAIL_WORKER_ENABLED) {
-      emailService.startWorker();
-      console.log(`Email worker started (interval: ${envConfig.EMAIL_WORKER_INTERVAL_MS}ms)`);
-    }
-  });
-}
 
 const shutdown = async (signal: string) => {
   console.log(`Received ${signal}; shutting down gracefully...`);
