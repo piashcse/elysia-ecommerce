@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: write
+  pages: read
 
 concurrency:
   group: docs-deploy
@@ -39,8 +40,38 @@ jobs:
       - name: Build documentation
         run: mkdocs build --strict
 
+      - name: Verify MkDocs output
+        run: |
+          test -f site/index.html
+          grep -q "Elysia E-Commerce" site/index.html
+
       - name: Deploy to gh-pages
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           mkdocs gh-deploy --force --message "Deploy docs from ${GITHUB_SHA::7}"
+
+      - name: Check GitHub Pages source
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              const { data } = await github.rest.repos.getPages({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+              });
+              const source = data.source
+                ? `${data.source.branch}${data.source.path}`
+                : data.build_type;
+              if (!data.source || data.source.branch !== 'gh-pages') {
+                core.warning(
+                  `GitHub Pages is currently serving "${source}". ` +
+                  'Set Settings -> Pages -> Source to "Deploy from a branch" -> gh-pages -> / (root). ' +
+                  'The main branch root renders README.md with Jekyll instead of the MkDocs site.'
+                );
+              } else {
+                core.info(`GitHub Pages source is ${source}.`);
+              }
+            } catch (error) {
+              core.warning(`Could not read GitHub Pages settings: ${error.message}`);
+            }

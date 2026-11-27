@@ -10,7 +10,7 @@ process with a descriptive error instead of failing later at runtime.
 | `NODE_ENV` | `development` | `development`, `test`, or `production` |
 | `PORT` | `3000` | HTTP port |
 | `APP_URL` | `http://localhost:3000` | Public application URL used in emails and sitemaps |
-| `LOG_LEVEL` | `info` | `fatal`, `error`, `warn`, `info`, `debug`, `trace` |
+| `LOG_LEVEL` | `info` | `fatal`, `error`, `warn`, `info`, `debug`, `trace`, `silent` |
 | `ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:3005` | Comma-separated CORS origins |
 | `TRUST_PROXY` | `false` | Trust `X-Forwarded-*` headers behind a proxy |
 

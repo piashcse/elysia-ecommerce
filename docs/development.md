@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- [Bun](https://bun.sh/) 1.3+
+- [Bun](https://bun.sh/) 1.4+
 - PostgreSQL 16+
 - Python 3.12+ (documentation only)
 
@@ -107,5 +107,16 @@ One-time repository setup:
 2. Open **Settings → Pages**.
 3. Set **Source** to **Deploy from a branch**.
 4. Select the `gh-pages` branch and `/ (root)`.
+5. Save. The first workflow run creates/updates the branch.
 
-The first workflow run creates the branch.
+!!! warning "If the site shows only the README"
+    This means GitHub Pages is still serving the `main` branch root, not the
+    built MkDocs site. Change **Settings → Pages → Source** to
+    **Deploy from a branch → `gh-pages` → `/ (root)`**.
+
+    `main / (root)` uses Jekyll and renders `README.md`; it does **not** serve
+    the MkDocs output. The `docs.yml` workflow deploys the MkDocs site to the
+    `gh-pages` branch with `mkdocs gh-deploy`.
+
+The workflow also prints a warning annotation if the repository's Pages source
+is not `gh-pages`.
