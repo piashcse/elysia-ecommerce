@@ -19,3 +19,6 @@ export * from './productVariant';
 export * from './notification';
 export * from './return';
 export * from './taxRate';
+export * from './savedPaymentMethod';
+export * from './emailOutbox';
+export * from './notificationPreference';

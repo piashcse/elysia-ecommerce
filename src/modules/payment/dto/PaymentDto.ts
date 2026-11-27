@@ -27,4 +27,5 @@ export interface ProcessPaymentDto {
   method: PaymentMethod;
   amount: number;
   paymentDetails: PaymentDetails;
+  paymentMethodId?: string;
 }

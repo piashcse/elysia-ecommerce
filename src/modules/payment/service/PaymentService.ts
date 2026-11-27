@@ -12,10 +12,13 @@ import {
 import { BaseService } from '../../../core/base.service';
 import { UserRole } from '../../../core/roles';
 import { PAGINATION } from '../../../core/constants';
-import envConfig from '../../../config/env';
 import { NotificationService } from '../../notification/service/NotificationService';
 import { CouponService } from '../../coupon/service/CouponService';
+import { SavedPaymentMethodService } from './SavedPaymentMethodService';
 import { OrderEventService } from '../../order/service/OrderEventService';
+import { emailService } from '../../notification/service/EmailService';
+import { emailTemplates } from '../../notification/email.templates';
+import { paymentProvider } from '../providers/simulated';
 import { fromCents, toCents } from '../../../core/money';
 import { sha256Hash } from '../../../utils/auth';
 
@@ -35,6 +38,7 @@ export class PaymentService extends BaseService {
   private notificationService = new NotificationService();
   private couponService = new CouponService();
   private eventService = new OrderEventService();
+  private savedMethods = new SavedPaymentMethodService();
 
   constructor() {
     super(payments);
@@ -78,7 +82,14 @@ export class PaymentService extends BaseService {
       throw new ValidationError('Payment amount does not match order total', 'PAYMENT_AMOUNT_MISMATCH');
     }
 
-    this.validatePaymentDetails(processPaymentDto.method, processPaymentDto.paymentDetails);
+    let paymentMethodToken: string | undefined;
+    if (processPaymentDto.paymentMethodId) {
+      if (!actor?.sub) throw new ForbiddenError('Saved payment methods require an account');
+      const saved = await this.savedMethods.findForUser(actor.sub, processPaymentDto.paymentMethodId);
+      paymentMethodToken = saved.token;
+    }
+
+    this.validatePaymentDetails(processPaymentDto.method, processPaymentDto.paymentDetails, Boolean(paymentMethodToken));
 
     let [payment] = await db.select().from(payments).where(eq(payments.orderId, order.id)).limit(1);
 
@@ -130,14 +141,23 @@ export class PaymentService extends BaseService {
     }
 
     try {
-      const paymentResult = await this.simulatePayment();
+      const paymentResult = await paymentProvider.charge({
+        orderId: order.id,
+        amountCents: toCents(order.totalAmount),
+        method: processPaymentDto.method,
+        paymentMethodToken,
+      });
+
+      if (paymentResult.status === 'failed') {
+        throw new PaymentRequiredError('Payment processing failed', 'PAYMENT_FAILED');
+      }
 
       const [updatedPayment] = await db
         .update(payments)
         .set({
           status: paymentResult.status,
           transactionId: paymentResult.transactionId,
-          paymentGateway: 'simulated',
+          paymentGateway: paymentResult.gateway,
           updatedAt: new Date(),
         })
         .where(eq(payments.id, payment.id))
@@ -153,6 +173,10 @@ export class PaymentService extends BaseService {
         if (order.userId) {
           await this.notificationService.notifyPaymentCompleted(order.userId, order.id);
         }
+        if (order.customerEmail) {
+          const template = emailTemplates.paymentCompleted(order);
+          await emailService.enqueue({ to: order.customerEmail, ...template }).catch(() => undefined);
+        }
       }
 
       return updatedPayment;
@@ -162,11 +186,16 @@ export class PaymentService extends BaseService {
       if (order.userId) {
         await this.notificationService.notifyPaymentFailed(order.userId, order.id);
       }
+      if (order.customerEmail) {
+        const template = emailTemplates.paymentFailed(order);
+        await emailService.enqueue({ to: order.customerEmail, ...template }).catch(() => undefined);
+      }
       throw error;
     }
   }
 
-  private validatePaymentDetails(method: string, details: any): void {
+  private validatePaymentDetails(method: string, details: any, hasToken = false): void {
+    if (hasToken) return;
     if (method === 'credit_card' || method === 'debit_card') {
       if (!details?.cardNumber || !details?.cardExpiry || !details?.cardCvv) {
         throw new ValidationError('Credit/debit card details are incomplete');
@@ -178,18 +207,6 @@ export class PaymentService extends BaseService {
     }
   }
 
-  private async simulatePayment(): Promise<{ status: 'completed' | 'failed'; transactionId?: string }> {
-    // Deterministic by default. Set PAYMENT_SIMULATE_FAILURE_RATE to exercise
-    // failure paths in tests/staging.
-    if (Math.random() < envConfig.PAYMENT_SIMULATE_FAILURE_RATE) {
-      throw new PaymentRequiredError('Payment processing failed', 'PAYMENT_FAILED');
-    }
-
-    return {
-      status: 'completed',
-      transactionId: `txn_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`,
-    };
-  }
 
   async getPaymentById(actor: Actor | null, paymentId: string, guestToken?: string): Promise<any> {
     const [result] = await db
@@ -347,6 +364,11 @@ export class PaymentService extends BaseService {
         .limit(1);
       if (order?.userId) {
         await this.notificationService.notifyPaymentRefunded(order.userId, refundedPayment.orderId);
+      }
+      const [emailOrder] = await db.select({ email: orders.customerEmail }).from(orders).where(eq(orders.id, refundedPayment.orderId)).limit(1);
+      if (emailOrder?.email) {
+        const template = emailTemplates.refunded({ orderNumber: refundedPayment.orderId }, refundedPayment.refundedAmount);
+        await emailService.enqueue({ to: emailOrder.email, ...template }).catch(() => undefined);
       }
     }
 

@@ -22,6 +22,8 @@ import { NotificationService } from '../../notification/service/NotificationServ
 import { OrderEventService } from './OrderEventService';
 import { taxService } from '../../tax/service/TaxService';
 import { generateRandomString, sha256Hash } from '../../../utils/auth';
+import { emailService } from '../../notification/service/EmailService';
+import { emailTemplates } from '../../notification/email.templates';
 
 const TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   pending: ['processing', 'cancelled', 'refunded'],
@@ -326,6 +328,10 @@ export class OrderService extends BaseService {
     if (userId) await this.notificationService.notifyOrderCreated(userId, newOrderId);
 
     const order = await this.getOrderById(newOrderId);
+    if (customerEmail) {
+      const template = emailTemplates.orderConfirmation(order);
+      await emailService.enqueue({ to: customerEmail, ...template }).catch(() => undefined);
+    }
     return guestToken ? { ...order, guestToken } : order;
   }
 
@@ -447,6 +453,10 @@ export class OrderService extends BaseService {
       if (updateOrderDto.status && order.userId) {
         await this.notificationService.notifyOrderStatus(order.userId, orderId, updateOrderDto.status);
       }
+      if (updateOrderDto.status && order.customerEmail) {
+        const template = emailTemplates.orderStatus(order, updateOrderDto.status);
+        await emailService.enqueue({ to: order.customerEmail, ...template }).catch(() => undefined);
+      }
     }
 
     return this.getOrderById(orderId);
@@ -500,6 +510,10 @@ export class OrderService extends BaseService {
     await this.eventService.add(orderId, 'status_changed', `Order ${result?.status}`);
     if (result?.userId) {
       await this.notificationService.notifyOrderStatus(result.userId, orderId, result.status);
+    }
+    if (result?.customerEmail) {
+      const template = emailTemplates.orderStatus(result, result.status);
+      await emailService.enqueue({ to: result.customerEmail, ...template }).catch(() => undefined);
     }
 
     return result;
