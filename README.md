@@ -443,6 +443,22 @@ This application is built to be production-ready. Before deploying to a live env
 -   Configured a production-grade PostgreSQL database with automated backups.
 -   Implemented a CDN for serving static assets and product images.
 
+### Documentation deployment
+
+The MkDocs site is deployed to the `gh-pages` branch by
+`.github/workflows/docs.yml`.
+
+If <https://piashcse.github.io/elysia-ecommerce/> shows only this README,
+GitHub Pages is serving `main / (root)` instead of the built docs. Fix it once:
+
+1. Open **Settings → Pages**.
+2. Set **Source** to **Deploy from a branch**.
+3. Select **`gh-pages`** and **`/ (root)`**.
+4. Save and re-run the **Deploy docs** workflow if needed.
+
+`main / (root)` renders `README.md` with Jekyll; the MkDocs site only exists on
+`gh-pages`.
+
 ## 🤝 Contributing
 
 Contributions are welcome! Please follow these steps:
