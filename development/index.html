@@ -1603,7 +1603,7 @@
 <h1 id="development">Development</h1>
 <h2 id="prerequisites">Prerequisites</h2>
 <ul>
-<li><a href="https://bun.sh/">Bun</a> 1.3+</li>
+<li><a href="https://bun.sh/">Bun</a> 1.4+</li>
 <li>PostgreSQL 16+</li>
 <li>Python 3.12+ (documentation only)</li>
 </ul>
@@ -1723,8 +1723,19 @@ on pushes to <code>main</code> that touch docs-related files, and can be trigger
 <li>Open <strong>Settings → Pages</strong>.</li>
 <li>Set <strong>Source</strong> to <strong>Deploy from a branch</strong>.</li>
 <li>Select the <code>gh-pages</code> branch and <code>/ (root)</code>.</li>
+<li>Save. The first workflow run creates/updates the branch.</li>
 </ol>
-<p>The first workflow run creates the branch.</p>
+<div class="admonition warning">
+<p class="admonition-title">If the site shows only the README</p>
+<p>This means GitHub Pages is still serving the <code>main</code> branch root, not the
+built MkDocs site. Change <strong>Settings → Pages → Source</strong> to
+<strong>Deploy from a branch → <code>gh-pages</code> → <code>/ (root)</code></strong>.</p>
+<p><code>main / (root)</code> uses Jekyll and renders <code>README.md</code>; it does <strong>not</strong> serve
+the MkDocs output. The <code>docs.yml</code> workflow deploys the MkDocs site to the
+<code>gh-pages</code> branch with <code>mkdocs gh-deploy</code>.</p>
+</div>
+<p>The workflow also prints a warning annotation if the repository's Pages source
+is not <code>gh-pages</code>.</p>
 
 
 
