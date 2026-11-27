@@ -18,7 +18,8 @@
     "docs:snapshot": "bun run scripts/snapshot-openapi.ts",
     "docs:generate": "bun run scripts/generate-docs.ts",
     "docs:serve": "mkdocs serve",
-    "docs:build": "mkdocs build --strict"
+    "docs:build": "mkdocs build --strict",
+    "docs:fix-pages": "bash scripts/fix-pages-source.sh"
   },
   "keywords": [
     "elysia",

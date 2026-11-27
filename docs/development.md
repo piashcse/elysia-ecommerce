@@ -81,7 +81,17 @@ bun run docs:generate
 
 # 3. Preview
 bun run docs:serve
+
+# 4. Build exactly like CI
+bun run docs:build
 ```
+
+Publishing helpers:
+
+| Command | Description |
+|---------|-------------|
+| `bun run docs:fix-pages` | Point GitHub Pages at `gh-pages` and queue a build |
+| `bun run docs:build` | Build with `mkdocs build --strict` |
 
 `docs/openapi.json` is committed so the GitHub Pages workflow can build the
 site without a database or running server. Regenerate the snapshot whenever a
@@ -104,19 +114,21 @@ on pushes to `main` that touch docs-related files, and can be triggered manually
 One-time repository setup:
 
 1. Push the repository to GitHub.
-2. Open **Settings → Pages**.
-3. Set **Source** to **Deploy from a branch**.
-4. Select the `gh-pages` branch and `/ (root)`.
-5. Save. The first workflow run creates/updates the branch.
+2. Run `bun run docs:fix-pages` (requires `gh auth login`), **or** open
+   **Settings → Pages** and set **Source** to **Deploy from a branch →
+   `gh-pages` → `/ (root)`**.
+3. The docs workflow creates/updates `gh-pages` and queues a Pages build.
 
 !!! warning "If the site shows only the README"
     This means GitHub Pages is still serving the `main` branch root, not the
-    built MkDocs site. Change **Settings → Pages → Source** to
+    built MkDocs site. Run `bun run docs:fix-pages`, or change
+    **Settings → Pages → Source** to
     **Deploy from a branch → `gh-pages` → `/ (root)`**.
 
     `main / (root)` uses Jekyll and renders `README.md`; it does **not** serve
     the MkDocs output. The `docs.yml` workflow deploys the MkDocs site to the
     `gh-pages` branch with `mkdocs gh-deploy`.
 
-The workflow also prints a warning annotation if the repository's Pages source
-is not `gh-pages`.
+Because pushes made with the workflow's `GITHUB_TOKEN` do not trigger a Pages
+build, the workflow explicitly requests a build after deploying. It also fails
+with the exact `gh api` command if the Pages source is not `gh-pages`.

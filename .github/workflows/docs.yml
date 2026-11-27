@@ -12,7 +12,7 @@ on:
 
 permissions:
   contents: write
-  pages: read
+  pages: write
 
 concurrency:
   group: docs-deploy
@@ -51,27 +51,43 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           mkdocs gh-deploy --force --message "Deploy docs from ${GITHUB_SHA::7}"
 
-      - name: Check GitHub Pages source
+      # Pushes made with GITHUB_TOKEN do not trigger a Pages build, so the
+      # deploy above would otherwise leave the live site stale.
+      - name: Verify Pages source and trigger a build
         uses: actions/github-script@v7
         with:
           script: |
+            const { owner, repo } = context.repo;
+            const fix =
+              `gh api -X PUT repos/${owner}/${repo}/pages ` +
+              `-f build_type=legacy -f 'source[branch]=gh-pages' -f 'source[path]=/'`;
+
+            let site;
             try {
-              const { data } = await github.rest.repos.getPages({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-              });
-              const source = data.source
-                ? `${data.source.branch}${data.source.path}`
-                : data.build_type;
-              if (!data.source || data.source.branch !== 'gh-pages') {
-                core.warning(
-                  `GitHub Pages is currently serving "${source}". ` +
-                  'Set Settings -> Pages -> Source to "Deploy from a branch" -> gh-pages -> / (root). ' +
-                  'The main branch root renders README.md with Jekyll instead of the MkDocs site.'
-                );
-              } else {
-                core.info(`GitHub Pages source is ${source}.`);
-              }
+              ({ data: site } = await github.rest.repos.getPages({ owner, repo }));
             } catch (error) {
-              core.warning(`Could not read GitHub Pages settings: ${error.message}`);
+              core.setFailed(
+                `GitHub Pages is not enabled (${error.message}). ` +
+                  'Enable it under Settings -> Pages -> Deploy from a branch -> gh-pages -> / (root).'
+              );
+              return;
             }
+
+            const source = site.source
+              ? `${site.source.branch}${site.source.path}`
+              : site.build_type;
+
+            if (
+              !site.source ||
+              site.source.branch !== 'gh-pages' ||
+              site.source.path !== '/'
+            ) {
+              core.setFailed(
+                `GitHub Pages is serving "${source}", so the MkDocs site on gh-pages is ignored. ` +
+                  `Run: ${fix}`
+              );
+              return;
+            }
+
+            const { data: build } = await github.rest.repos.requestPagesBuild({ owner, repo });
+            core.info(`Requested a GitHub Pages build (${build.status}).`);

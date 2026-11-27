@@ -448,16 +448,20 @@ This application is built to be production-ready. Before deploying to a live env
 The MkDocs site is deployed to the `gh-pages` branch by
 `.github/workflows/docs.yml`.
 
-If <https://piashcse.github.io/elysia-ecommerce/> shows only this README,
-GitHub Pages is serving `main / (root)` instead of the built docs. Fix it once:
+GitHub Pages must serve that branch. If
+<https://piashcse.github.io/elysia-ecommerce/> shows only this README, run:
 
-1. Open **Settings → Pages**.
-2. Set **Source** to **Deploy from a branch**.
-3. Select **`gh-pages`** and **`/ (root)`**.
-4. Save and re-run the **Deploy docs** workflow if needed.
+```bash
+gh auth login          # once
+bun run docs:fix-pages # point Pages at gh-pages and queue a build
+```
+
+Or set it in the UI: **Settings → Pages → Source → Deploy from a branch →
+`gh-pages` → `/ (root)`**.
 
 `main / (root)` renders `README.md` with Jekyll; the MkDocs site only exists on
-`gh-pages`.
+`gh-pages`. The docs workflow verifies the Pages source and fails with the exact
+`gh api` command when it is still pointing at `main`.
 
 ## 🤝 Contributing
 
