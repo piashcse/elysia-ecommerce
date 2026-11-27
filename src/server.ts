@@ -37,6 +37,11 @@ import { brandController } from './modules/brand/controller/BrandController';
 import { productQaController } from './modules/product/controller/ProductQaController';
 import { uploadController } from './modules/media/controller/UploadController';
 import { sitemapController } from './modules/seo/controller/SitemapController';
+import { giftCardController } from './modules/gift-card/controller/GiftCardController';
+import { payoutController } from './modules/seller/controller/PayoutController';
+import { reportController } from './modules/admin/controller/ReportController';
+import { auditController } from './modules/admin/controller/AuditController';
+import { auditMiddleware } from './modules/admin/middleware/audit';
 
 const app = new Elysia();
 
@@ -67,6 +72,7 @@ app
   .use(rateLimiterMiddleware)
   .use(requestIdMiddleware)
   .use(jwtPlugin)
+  .use(auditMiddleware)
   .onAfterHandle(({ responseValue }) => {
     if (
       responseValue &&
@@ -189,7 +195,12 @@ app
   .use(brandController)
   .use(productQaController)
   .use(uploadController)
-  .use(sitemapController);
+  .use(sitemapController)
+  .use(giftCardController)
+  .use(payoutController)
+  .use(reportController)
+  .use(auditController)
+;
 
 // OpenAPI documentation. The bearer scheme is also attached per protected
 // route by the auth macros.

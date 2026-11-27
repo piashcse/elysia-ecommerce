@@ -121,6 +121,28 @@ export const sellerController = new Elysia({ prefix: '/seller', tags: ['Seller']
             totalPages: Math.ceil(total / limit)
         }, 'Seller orders retrieved successfully');
     })
+    .put('/orders/:orderId/items/:itemId', {
+        params: t.Object({ orderId: t.String({ format: 'uuid' }), itemId: t.String({ format: 'uuid' }) }),
+        body: t.Object({ status: t.Union([
+            t.Literal('pending'), t.Literal('shipped'), t.Literal('delivered'), t.Literal('cancelled')
+        ]) }),
+        response: { 200: successSchema(), 404: errorSchema },
+        detail: { summary: 'Update fulfillment status for a seller order item' }
+    }, async ({ user, params, body }) => {
+        const item = await sellerService.updateFulfillment(
+            user!.sub as string,
+            params.orderId,
+            params.itemId,
+            body.status
+        );
+        return successResponse(item, 'Fulfillment updated successfully');
+    })
+    .get('/payouts', {
+        response: { 200: successSchema() },
+        detail: { summary: 'Get seller payout balance and history' }
+    }, async ({ user }) => {
+        return successResponse(await sellerService.getSellerPayouts(user!.sub as string), 'Seller payouts retrieved successfully');
+    })
     .get('/stats', {
         response: { 200: successSchema() },
         detail: { summary: 'Get seller product and sales statistics' }

@@ -24,3 +24,6 @@ export * from './emailOutbox';
 export * from './notificationPreference';
 export * from './brand';
 export * from './reviewMedia';
+export * from './sellerPayout';
+export * from './auditLog';
+export * from './giftCard';

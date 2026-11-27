@@ -1,9 +1,11 @@
-import { check, index, integer, numeric, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
+import { check, index, integer, numeric, pgEnum, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { orders } from './order';
 import { products } from './product';
 import { productVariants } from './productVariant';
 import { users } from './user';
+
+export const fulfillmentStatusEnum = pgEnum('fulfillment_status', ['pending', 'shipped', 'delivered', 'cancelled']);
 
 export const orderItems = pgTable('order_items', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -18,6 +20,7 @@ export const orderItems = pgTable('order_items', {
   productImageUrl: varchar('product_image_url', { length: 500 }),
   quantity: integer('quantity').notNull(),
   price: numeric('price', { precision: 10, scale: 2 }).notNull(),
+  fulfillmentStatus: fulfillmentStatusEnum('fulfillment_status').default('pending').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({
   orderIdx: index('order_items_order_idx').on(table.orderId),

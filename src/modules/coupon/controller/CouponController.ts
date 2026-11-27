@@ -2,7 +2,7 @@ import { Elysia, t } from 'elysia';
 import { CouponService } from '../service/CouponService';
 import { paginatedResponse, successResponse, successSchema, paginatedSchema, errorSchema } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
-import { idParams } from '../../../core/schemas';
+import { idParams, uuid } from '../../../core/schemas';
 import { UserRole } from '../../../core/roles';
 import { NotFoundError } from '../../../core/errors';
 import { PAGINATION } from '../../../core/constants';
@@ -94,6 +94,16 @@ export const couponController = new Elysia({ prefix: '/coupons', tags: ['Coupon'
     );
   })
 
+  .put('/:id/scopes', {
+    params: idParams,
+    hasRole: UserRole.ADMIN,
+    body: t.Object({
+      productIds: t.Optional(t.Array(uuid, { maxItems: 200 })),
+      categoryIds: t.Optional(t.Array(uuid, { maxItems: 200 })),
+    }),
+    response: { 200: successSchema(), 404: errorSchema },
+    detail: { summary: 'Set coupon product/category restrictions (Admin only)' }
+  }, async ({ params, body }) => successResponse(await couponService.setRestrictions(params.id, body), 'Coupon restrictions updated successfully'))
   .get('/code/:code', {
     params: t.Object({ code: t.String({ maxLength: 50 }) }),
     isAuth: true,

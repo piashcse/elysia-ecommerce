@@ -20,6 +20,7 @@ export const checkoutController = new Elysia({ prefix: '/checkout', tags: ['Chec
         { minItems: 1, maxItems: 50 }
       ),
       couponCode: t.Optional(t.String({ maxLength: 50 })),
+      giftCardCode: t.Optional(t.String({ maxLength: 50 })),
       shippingMethodId: t.Optional(uuid),
       email: t.Optional(t.String({ format: 'email', maxLength: 255 })),
       country: t.Optional(t.String({ maxLength: 100 })),
@@ -30,6 +31,7 @@ export const checkoutController = new Elysia({ prefix: '/checkout', tags: ['Chec
     if (!user && !body.email) throw new ValidationError('Email is required for guest checkout');
     const quote = await orderService.quote(user?.sub, body.email ?? '', body.items, {
       couponCode: body.couponCode,
+      giftCardCode: body.giftCardCode,
       shippingMethodId: body.shippingMethodId,
       country: body.country,
     });

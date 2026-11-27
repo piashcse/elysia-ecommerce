@@ -1,4 +1,4 @@
-import { boolean, check, integer, pgEnum, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
+import { boolean, check, integer, numeric, pgEnum, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { UserRole } from '../../core/roles';
 
@@ -18,6 +18,7 @@ export const users = pgTable('users', {
   passwordResetToken: varchar('password_reset_token', { length: 64 }),
   passwordResetExpires: timestamp('password_reset_expires', { withTimezone: true }),
   tokenVersion: integer('token_version').default(0).notNull(),
+  commissionRate: numeric('commission_rate', { precision: 5, scale: 4 }).default('0.1').notNull(),
   lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
