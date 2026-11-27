@@ -57,6 +57,13 @@
       "when": 1795759139241,
       "tag": "0009_catalog_growth",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1795759443962,
+      "tag": "0010_marketplace_admin",
+      "breakpoints": true
     }
   ]
 }

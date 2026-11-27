@@ -35,6 +35,8 @@ export const orders = pgTable('orders', {
   taxRate: numeric('tax_rate', { precision: 5, scale: 4 }).default('0').notNull(),
   discountAmount: numeric('discount_amount', { precision: 10, scale: 2 }).default('0').notNull(),
   couponCode: varchar('coupon_code', { length: 50 }),
+  giftCardCode: varchar('gift_card_code', { length: 50 }),
+  giftCardAmount: numeric('gift_card_amount', { precision: 10, scale: 2 }).default('0').notNull(),
   status: orderStatusEnum('status').default('pending').notNull(),
   shippingAddress: jsonb('shipping_address').$type<OrderAddress>().notNull(),
   billingAddress: jsonb('billing_address').$type<OrderAddress>().notNull(),

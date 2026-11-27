@@ -57,6 +57,7 @@ export const orderController = new Elysia({ prefix: '/orders', tags: ['Order'] }
       billingAddressId: t.Optional(uuid),
       notes: t.Optional(t.String({ maxLength: 1000 })),
       couponCode: t.Optional(t.String({ maxLength: 50 })),
+      giftCardCode: t.Optional(t.String({ maxLength: 50 })),
       shippingMethodId: t.Optional(uuid),
       email: t.Optional(t.String({ format: 'email', maxLength: 255 })),
     }),

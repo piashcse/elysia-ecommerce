@@ -11,6 +11,7 @@ export interface CreateOrderDto {
   billingAddress?: OrderAddress;
   notes?: string;
   couponCode?: string;
+  giftCardCode?: string;
   shippingMethodId?: string;
 }
 

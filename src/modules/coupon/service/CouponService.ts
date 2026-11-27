@@ -1,6 +1,6 @@
 import { and, eq, gte, ilike, lte, sql } from 'drizzle-orm';
 import { db } from '../../../config/database';
-import { couponUsage, coupons } from '../../../database/schema';
+import { couponCategories, couponProducts, couponUsage, coupons } from '../../../database/schema';
 import { CreateCouponDto, UpdateCouponDto } from '../dto/CouponDto';
 import { BaseService } from '../../../core/base.service';
 import { ConflictError, NotFoundError, ValidationError } from '../../../core/errors';
@@ -113,6 +113,32 @@ export class CouponService extends BaseService {
     if (!deleted.length) throw new NotFoundError('Coupon not found');
   }
 
+  async getRestrictions(couponId: string) {
+    const [products, categories] = await Promise.all([
+      db.select({ id: couponProducts.productId }).from(couponProducts).where(eq(couponProducts.couponId, couponId)),
+      db.select({ id: couponCategories.categoryId }).from(couponCategories).where(eq(couponCategories.couponId, couponId)),
+    ]);
+    return {
+      productIds: products.map((item) => item.id),
+      categoryIds: categories.map((item) => item.id),
+    };
+  }
+
+  async setRestrictions(couponId: string, input: { productIds?: string[]; categoryIds?: string[] }) {
+    await this.findByIdOrFail(couponId, 'Coupon');
+    await db.transaction(async (tx) => {
+      await tx.delete(couponProducts).where(eq(couponProducts.couponId, couponId));
+      await tx.delete(couponCategories).where(eq(couponCategories.couponId, couponId));
+      if (input.productIds?.length) {
+        await tx.insert(couponProducts).values(input.productIds.map((productId) => ({ couponId, productId })));
+      }
+      if (input.categoryIds?.length) {
+        await tx.insert(couponCategories).values(input.categoryIds.map((categoryId) => ({ couponId, categoryId })));
+      }
+    });
+    return this.getRestrictions(couponId);
+  }
+
   async getCouponById(id: string): Promise<any> {
     return this.findByIdOrFail(id, 'Coupon');
   }
@@ -135,7 +161,7 @@ export class CouponService extends BaseService {
     return this.findAll(page, limit, conditions);
   }
 
-  async validateCoupon(code: string, orderAmount: number, userId: string): Promise<CouponValidation> {
+  async validateCoupon(code: string, orderAmount: number, userId: string, context: { productIds?: string[]; categoryIds?: string[] } = {}): Promise<CouponValidation> {
     const coupon = await this.getCouponByCode(code, true);
 
     if (!coupon) {
@@ -151,6 +177,15 @@ export class CouponService extends BaseService {
 
     if (coupon.usageLimit !== null && coupon.usedCount >= coupon.usageLimit) {
       throw new ValidationError('Coupon usage limit has been reached', 'COUPON_USAGE_LIMIT');
+    }
+
+    const restrictions = await this.getRestrictions(coupon.id);
+    if (restrictions.productIds.length || restrictions.categoryIds.length) {
+      const matchesProduct = (context.productIds ?? []).some((id) => restrictions.productIds.includes(id));
+      const matchesCategory = (context.categoryIds ?? []).some((id) => restrictions.categoryIds.includes(id));
+      if (!matchesProduct && !matchesCategory) {
+        throw new ValidationError('Coupon is not applicable to the selected items', 'COUPON_NOT_APPLICABLE');
+      }
     }
 
     if (coupon.perUserLimit !== null) {

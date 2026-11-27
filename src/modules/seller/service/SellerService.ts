@@ -1,13 +1,17 @@
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { db } from '../../../config/database';
 import { orderItems, orders, products } from '../../../database/schema';
+import { OrderEventService } from '../../order/service/OrderEventService';
 import { NotFoundError } from '../../../core/errors';
 import { BaseService } from '../../../core/base.service';
 import { PAGINATION } from '../../../core/constants';
 import { ProductService } from '../../product/service/ProductService';
+import { PayoutService } from './PayoutService';
 
 export class SellerService extends BaseService {
     private productService = new ProductService();
+    private events = new OrderEventService();
+    private payouts = new PayoutService();
 
     constructor() {
         super(products);
@@ -71,7 +75,8 @@ export class SellerService extends BaseService {
                         'productName', ${orderItems.productName},
                         'productSku', ${orderItems.productSku},
                         'quantity', ${orderItems.quantity},
-                        'price', ${orderItems.price}
+                        'price', ${orderItems.price},
+                        'fulfillmentStatus', ${orderItems.fulfillmentStatus}
                     ))`
                 })
                 .from(orders)
@@ -92,6 +97,32 @@ export class SellerService extends BaseService {
             items: sellerOrders,
             total: countResult ? Number(countResult.count) : 0,
         };
+    }
+
+    async updateFulfillment(
+        sellerId: string,
+        orderId: string,
+        itemId: string,
+        status: 'pending' | 'shipped' | 'delivered' | 'cancelled'
+    ) {
+        const [item] = await db.select().from(orderItems).where(and(
+            eq(orderItems.id, itemId),
+            eq(orderItems.orderId, orderId),
+            eq(orderItems.sellerId, sellerId)
+        )).limit(1);
+
+        if (!item) throw new NotFoundError('Order item not found');
+        const [updated] = await db.update(orderItems)
+            .set({ fulfillmentStatus: status })
+            .where(eq(orderItems.id, itemId))
+            .returning();
+
+        await this.events.add(orderId, 'fulfillment_updated', `Fulfillment status: ${status}`);
+        return updated;
+    }
+
+    async getSellerPayouts(sellerId: string) {
+        return this.payouts.summary(sellerId);
     }
 
     async getSellerStats(sellerId: string) {

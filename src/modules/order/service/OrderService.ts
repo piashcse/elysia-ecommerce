@@ -21,6 +21,7 @@ import { fromCents, toCents } from '../../../core/money';
 import { NotificationService } from '../../notification/service/NotificationService';
 import { OrderEventService } from './OrderEventService';
 import { taxService } from '../../tax/service/TaxService';
+import { GiftCardService } from '../../gift-card/service/GiftCardService';
 import { generateRandomString, sha256Hash } from '../../../utils/auth';
 import { emailService } from '../../notification/service/EmailService';
 import { emailTemplates } from '../../notification/email.templates';
@@ -57,6 +58,8 @@ export interface OrderPricing {
   taxCents: number;
   taxRate: number;
   discountCents: number;
+  giftCardCents: number;
+  giftCard: any;
   totalCents: number;
   weightGrams: number;
   coupon: any;
@@ -82,6 +85,7 @@ export class OrderService extends BaseService {
   private couponService = new CouponService();
   private notificationService = new NotificationService();
   private eventService = new OrderEventService();
+  private giftCards = new GiftCardService();
 
   constructor() {
     super(ordersTable);
@@ -89,7 +93,7 @@ export class OrderService extends BaseService {
 
   async priceOrder(
     items: PriceableItem[],
-    options: { userId?: string; couponCode?: string; shippingMethodId?: string; country?: string } = {}
+    options: { userId?: string; couponCode?: string; giftCardCode?: string; shippingMethodId?: string; country?: string } = {}
   ): Promise<OrderPricing> {
     if (!items.length) throw new ValidationError('At least one order item is required');
 
@@ -177,7 +181,11 @@ export class OrderService extends BaseService {
       const validation = await this.couponService.validateCoupon(
         options.couponCode,
         subtotalCents / 100,
-        options.userId
+        options.userId,
+        {
+          productIds: lineItems.map((item) => item.product.id),
+          categoryIds: lineItems.map((item) => item.product.categoryId).filter(Boolean) as string[],
+        }
       );
       discountCents = validation.discountCents;
       coupon = validation.coupon;
@@ -187,6 +195,15 @@ export class OrderService extends BaseService {
     const tax = await taxService.calculate(taxableCents, options.country);
     const taxRate = tax.rate || envConfig.TAX_RATE;
     const taxCents = tax.rate ? tax.taxCents : Math.round(taxableCents * envConfig.TAX_RATE);
+    const grossCents = Math.max(0, taxableCents + shippingCostCents + taxCents);
+    let giftCardCents = 0;
+    let giftCard: any = null;
+    if (options.giftCardCode) {
+      const gift = await this.giftCards.calculate(options.giftCardCode, grossCents);
+      giftCard = gift.card;
+      giftCardCents = gift.amountCents;
+    }
+
     return {
       lineItems,
       subtotalCents,
@@ -194,7 +211,9 @@ export class OrderService extends BaseService {
       taxCents,
       taxRate,
       discountCents,
-      totalCents: Math.max(0, taxableCents + shippingCostCents + taxCents),
+      giftCardCents,
+      giftCard,
+      totalCents: Math.max(0, grossCents - giftCardCents),
       weightGrams,
       coupon,
       shippingMethodId,
@@ -205,7 +224,7 @@ export class OrderService extends BaseService {
     userId: string | undefined,
     customerEmail: string,
     items: PriceableItem[],
-    options: { couponCode?: string; shippingMethodId?: string; country?: string } = {}
+    options: { couponCode?: string; giftCardCode?: string; shippingMethodId?: string; country?: string } = {}
   ) {
     void customerEmail;
     const pricing = await this.priceOrder(items, { userId, ...options });
@@ -226,6 +245,8 @@ export class OrderService extends BaseService {
       total: fromCents(pricing.totalCents),
       weightGrams: pricing.weightGrams,
       couponCode: pricing.coupon?.code ?? null,
+      giftCardCode: pricing.giftCard?.code ?? null,
+      giftCardAmount: fromCents(pricing.giftCardCents),
       shippingMethodId: pricing.shippingMethodId,
     };
   }
@@ -245,6 +266,7 @@ export class OrderService extends BaseService {
     const pricing = await this.priceOrder(createOrderDto.items, {
       userId: userId ?? undefined,
       couponCode: createOrderDto.couponCode,
+      giftCardCode: createOrderDto.giftCardCode,
       shippingMethodId: createOrderDto.shippingMethodId,
       country: createOrderDto.shippingAddress.country,
     });
@@ -268,6 +290,8 @@ export class OrderService extends BaseService {
           taxRate: pricing.taxRate.toString(),
           discountAmount: fromCents(pricing.discountCents),
           couponCode: pricing.coupon?.code ?? null,
+      giftCardCode: pricing.giftCard?.code ?? null,
+      giftCardAmount: fromCents(pricing.giftCardCents),
           shippingMethodId: pricing.shippingMethodId,
           status: 'pending',
           shippingAddress: createOrderDto.shippingAddress,
@@ -319,6 +343,10 @@ export class OrderService extends BaseService {
 
       if (pricing.coupon && userId) {
         await this.couponService.recordUsage(tx, pricing.coupon.id, userId, newOrder.id);
+      }
+
+      if (pricing.giftCard && pricing.giftCardCents > 0) {
+        await this.giftCards.redeemInTransaction(tx, pricing.giftCard.id, userId, newOrder.id, pricing.giftCardCents);
       }
 
       return newOrder.id;
