@@ -25743,6 +25743,28 @@
         "summary": "Health check and database readiness",
         "operationId": "getHealth"
       }
+    },
+    "/api/v1/sitemap.xml": {
+      "get": {
+        "tags": [
+          "SEO"
+        ],
+        "summary": "SEO sitemap (XML)",
+        "description": "Returns an XML sitemap of active products, categories, and brands.",
+        "operationId": "getSitemap",
+        "responses": {
+          "200": {
+            "description": "XML sitemap",
+            "content": {
+              "application/xml": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
