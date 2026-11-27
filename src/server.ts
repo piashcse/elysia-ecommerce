@@ -206,6 +206,44 @@ app
   .use(metricsController)
 ;
 
+// API v1 aliases keep the current unversioned routes while providing a stable
+// versioned surface for new integrations.
+const apiV1 = new Elysia({ prefix: '/api/v1' })
+  .use(authController)
+  .use(userController)
+  .use(sellerController)
+  .use(productController)
+  .use(categoryController)
+  .use(cartController)
+  .use(wishlistController)
+  .use(orderController)
+  .use(paymentController)
+  .use(reviewController)
+  .use(couponController)
+  .use(notificationController)
+  .use(shippingController)
+  .use(addressController)
+  .use(checkoutController)
+  .use(taxController)
+  .use(returnsController)
+  .use(invoiceController)
+  .use(paymentMethodController)
+  .use(paymentWebhookController)
+  .use(emailController)
+  .use(notificationPreferenceController)
+  .use(brandController)
+  .use(productQaController)
+  .use(uploadController)
+  .use(sitemapController)
+  .use(giftCardController)
+  .use(payoutController)
+  .use(reportController)
+  .use(auditController)
+  .use(apiKeyController)
+  .use(metricsController);
+
+app.use(apiV1);
+
 // OpenAPI documentation. The bearer scheme is also attached per protected
 // route by the auth macros.
 app.use(
