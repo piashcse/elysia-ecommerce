@@ -2,7 +2,7 @@ import { Elysia, t } from 'elysia';
 import { CategoryService } from '../service/CategoryService';
 import { paginatedResponse, successResponse, successSchema, paginatedSchema, errorSchema } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
-import { idParams } from '../../../core/schemas';
+import { idParams, uuid } from '../../../core/schemas';
 import { UserRole } from '../../../core/roles';
 import { PAGINATION } from '../../../core/constants';
 import { getPagination } from '../../../utils/validation';
@@ -16,6 +16,10 @@ export const categoryController = new Elysia({ prefix: '/categories', tags: ['Ca
       name: t.String({ minLength: 1, maxLength: 100 }),
       description: t.Optional(t.String({ maxLength: 5000 })),
       imageUrl: t.Optional(t.String({ format: 'uri', maxLength: 500 })),
+      parentId: t.Optional(uuid),
+      slug: t.Optional(t.String({ maxLength: 120 })),
+      metaTitle: t.Optional(t.String({ maxLength: 200 })),
+      metaDescription: t.Optional(t.String({ maxLength: 500 })),
       isActive: t.Optional(t.Boolean()),
     }),
     hasRole: UserRole.ADMIN,
@@ -58,6 +62,15 @@ export const categoryController = new Elysia({ prefix: '/categories', tags: ['Ca
     }, 'Categories retrieved successfully');
   })
 
+  .get('/tree', {
+    response: { 200: successSchema() },
+    detail: { summary: 'Get the category tree' }
+  }, async () => successResponse(await categoryService.getTree(), 'Category tree retrieved successfully'))
+  .get('/slug/:slug', {
+    params: t.Object({ slug: t.String({ maxLength: 120 }) }),
+    response: { 200: successSchema(), 404: errorSchema },
+    detail: { summary: 'Get a category by slug' }
+  }, async ({ params }) => successResponse(await categoryService.getBySlug(params.slug), 'Category retrieved successfully'))
   .get('/:id', {
     params: idParams,
     response: {
@@ -76,6 +89,10 @@ export const categoryController = new Elysia({ prefix: '/categories', tags: ['Ca
       name: t.Optional(t.String({ minLength: 1, maxLength: 100 })),
       description: t.Optional(t.String({ maxLength: 5000 })),
       imageUrl: t.Optional(t.String({ format: 'uri', maxLength: 500 })),
+      parentId: t.Optional(uuid),
+      slug: t.Optional(t.String({ maxLength: 120 })),
+      metaTitle: t.Optional(t.String({ maxLength: 200 })),
+      metaDescription: t.Optional(t.String({ maxLength: 500 })),
       isActive: t.Optional(t.Boolean()),
     }),
     hasRole: UserRole.ADMIN,

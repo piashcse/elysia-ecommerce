@@ -22,3 +22,5 @@ export * from './taxRate';
 export * from './savedPaymentMethod';
 export * from './emailOutbox';
 export * from './notificationPreference';
+export * from './brand';
+export * from './reviewMedia';

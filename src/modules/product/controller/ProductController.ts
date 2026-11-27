@@ -35,7 +35,10 @@ export const productController = new Elysia({ prefix: '/products', tags: ['Produ
   .post('/', {
     body: t.Object({
       name: t.String({ minLength: 1, maxLength: 255 }),
+      slug: t.Optional(t.String({ maxLength: 280 })),
       description: t.Optional(t.String({ maxLength: 5000 })),
+      metaTitle: t.Optional(t.String({ maxLength: 200 })),
+      metaDescription: t.Optional(t.String({ maxLength: 500 })),
       price: t.Number({ minimum: 0 }),
       imageUrl: t.Optional(t.String({ format: 'uri', maxLength: 500 })),
       stockQuantity: t.Integer({ minimum: 0 }),
@@ -43,6 +46,7 @@ export const productController = new Elysia({ prefix: '/products', tags: ['Produ
       sku: t.String({ minLength: 1, maxLength: 100 }),
       isActive: t.Optional(t.Boolean()),
       categoryId: t.Optional(uuid),
+      brandId: t.Optional(uuid),
       sellerId: uuid,
     }),
     hasRole: UserRole.ADMIN,
@@ -62,6 +66,7 @@ export const productController = new Elysia({ prefix: '/products', tags: ['Produ
     query: t.Object({
       search: t.Optional(t.String({ maxLength: 200 })),
       category: t.Optional(uuid),
+      brandId: t.Optional(uuid),
       sellerId: t.Optional(uuid),
       minPrice: t.Optional(t.Number({ minimum: 0 })),
       maxPrice: t.Optional(t.Number({ minimum: 0 })),
@@ -108,6 +113,25 @@ export const productController = new Elysia({ prefix: '/products', tags: ['Produ
     }, 'Products retrieved successfully');
   })
 
+  .get('/facets', {
+    response: { 200: successSchema() },
+    detail: { summary: 'Get catalog facets' }
+  }, async () => successResponse(await productService.getFacets(), 'Facets retrieved successfully'))
+  .get('/slug/:slug', {
+    params: t.Object({ slug: t.String({ maxLength: 280 }) }),
+    response: { 200: successSchema(), 404: errorSchema },
+    detail: { summary: 'Get a product by slug' }
+  }, async ({ params, user }) => {
+    const product = await productService.getBySlug(params.slug, user?.role === UserRole.ADMIN);
+    if (!product) throw new NotFoundError('Product not found');
+    return successResponse(product, 'Product retrieved successfully');
+  })
+  .get('/:id/related', {
+    params: idParams,
+    query: t.Object({ limit: t.Optional(t.Integer({ minimum: 1, maximum: 20 })) }),
+    response: { 200: successSchema(), 404: errorSchema },
+    detail: { summary: 'Get related products' }
+  }, async ({ params, query }) => successResponse(await productService.getRelated(params.id, query.limit), 'Related products retrieved successfully'))
   .get('/:id', {
     params: idParams,
     response: {

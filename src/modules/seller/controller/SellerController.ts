@@ -36,7 +36,10 @@ export const sellerController = new Elysia({ prefix: '/seller', tags: ['Seller']
     .post('/products', {
         body: t.Object({
             name: t.String({ minLength: 1, maxLength: 255 }),
+            slug: t.Optional(t.String({ maxLength: 280 })),
             description: t.Optional(t.String({ maxLength: 5000 })),
+            metaTitle: t.Optional(t.String({ maxLength: 200 })),
+            metaDescription: t.Optional(t.String({ maxLength: 500 })),
             price: t.Number({ minimum: 0 }),
             stockQuantity: t.Integer({ minimum: 0 }),
             weightGrams: t.Optional(t.Integer({ minimum: 0 })),
@@ -62,7 +65,10 @@ export const sellerController = new Elysia({ prefix: '/seller', tags: ['Seller']
         params: idParams,
         body: t.Partial(t.Object({
             name: t.String({ minLength: 1, maxLength: 255 }),
+            slug: t.String({ maxLength: 280 }),
             description: t.String({ maxLength: 5000 }),
+            metaTitle: t.String({ maxLength: 200 }),
+            metaDescription: t.String({ maxLength: 500 }),
             price: t.Number({ minimum: 0 }),
             stockQuantity: t.Integer({ minimum: 0 }),
             weightGrams: t.Integer({ minimum: 0 }),

@@ -1,12 +1,16 @@
 import { boolean, check, index, integer, numeric, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { categories } from './category';
+import { brands } from './brand';
 import { users } from './user';
 
 export const products = pgTable('products', {
   id: uuid('id').defaultRandom().primaryKey(),
   name: varchar('name', { length: 255 }).notNull(),
+  slug: varchar('slug', { length: 280 }).unique(),
   description: text('description'),
+  metaTitle: varchar('meta_title', { length: 200 }),
+  metaDescription: varchar('meta_description', { length: 500 }),
   price: numeric('price', { precision: 10, scale: 2 }).notNull(),
   stockQuantity: integer('stock_quantity').notNull().default(0),
   weightGrams: integer('weight_grams').default(0).notNull(),
@@ -15,6 +19,7 @@ export const products = pgTable('products', {
   imageUrl: varchar('image_url', { length: 500 }),
   isActive: boolean('is_active').default(true).notNull(),
   categoryId: uuid('category_id').references(() => categories.id, { onDelete: 'set null' }),
+  brandId: uuid('brand_id').references(() => brands.id, { onDelete: 'set null' }),
   // Products are retained if a seller account is removed; the seller association
   // is cleared instead of cascading into order history.
   sellerId: uuid('seller_id').references(() => users.id, { onDelete: 'set null' }),

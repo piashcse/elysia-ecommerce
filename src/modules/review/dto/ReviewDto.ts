@@ -3,6 +3,7 @@ export interface CreateReviewDto {
   rating: number;
   title?: string;
   comment?: string;
+  images?: string[];
 }
 
 export type UpdateReviewDto = Partial<Omit<CreateReviewDto, 'productId'>>;

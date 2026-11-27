@@ -44,6 +44,7 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
             rating: t.Integer({ minimum: 1, maximum: 5 }),
             title: t.Optional(t.String({ minLength: 1, maxLength: 200 })),
             comment: t.Optional(t.String({ minLength: 1, maxLength: 2000 })),
+            images: t.Optional(t.Array(t.String({ format: 'uri', maxLength: 500 }), { maxItems: 5 })),
         }),
         isAuth: true,
         response: {
