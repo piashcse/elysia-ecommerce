@@ -5,7 +5,7 @@ import { ConflictError, NotFoundError } from '../../../core/errors';
 import { BaseService } from '../../../core/base.service';
 import { PAGINATION } from '../../../core/constants';
 
-export class WishlistService extends BaseService<typeof wishlists> {
+export class WishlistService extends BaseService {
   constructor() {
     super(wishlists);
   }
@@ -34,25 +34,12 @@ export class WishlistService extends BaseService<typeof wishlists> {
   }
 
   async removeItem(userId: string, wishlistItemId: string): Promise<void> {
-    const [item] = await db
-      .select()
-      .from(wishlists)
+    const deleted = await db
+      .delete(wishlists)
       .where(and(eq(wishlists.id, wishlistItemId), eq(wishlists.userId, userId)))
-      .limit(1);
+      .returning({ id: wishlists.id });
 
-    if (!item) throw new NotFoundError('Wishlist item not found');
-    await this.delete(item.id);
-  }
-
-  async removeByUserAndProduct(userId: string, productId: string): Promise<void> {
-    const [wishlistItem] = await db
-      .select()
-      .from(wishlists)
-      .where(and(eq(wishlists.userId, userId), eq(wishlists.productId, productId)))
-      .limit(1);
-
-    if (!wishlistItem) throw new NotFoundError('Wishlist item not found');
-    await this.delete(wishlistItem.id);
+    if (!deleted.length) throw new NotFoundError('Wishlist item not found');
   }
 
   async toggle(userId: string, productId: string): Promise<{ inWishlist: boolean; item?: any }> {
@@ -63,7 +50,7 @@ export class WishlistService extends BaseService<typeof wishlists> {
       .limit(1);
 
     if (existing) {
-      await this.delete(existing.id);
+      await db.delete(wishlists).where(eq(wishlists.id, existing.id));
       return { inWishlist: false };
     }
 

@@ -7,7 +7,7 @@ import { BaseService } from '../../../core/base.service';
 import { PAGINATION } from '../../../core/constants';
 import envConfig from '../../../config/env';
 
-export class ReviewService extends BaseService<typeof reviews> {
+export class ReviewService extends BaseService {
   constructor() {
     super(reviews);
   }
@@ -49,24 +49,6 @@ export class ReviewService extends BaseService<typeof reviews> {
     });
   }
 
-  async getReviewById(reviewId: string): Promise<any | null> {
-    const [review] = await db
-      .select({
-        review: reviews,
-        user: {
-          id: users.id,
-          firstName: users.firstName,
-          lastName: users.lastName,
-        }
-      })
-      .from(reviews)
-      .leftJoin(users, eq(reviews.userId, users.id))
-      .where(eq(reviews.id, reviewId))
-      .limit(1);
-
-    return review || null;
-  }
-
   async getProductReviews(
     productId: string,
     page: number = 1,
@@ -77,38 +59,39 @@ export class ReviewService extends BaseService<typeof reviews> {
     const offset = (safePage - 1) * safeLimit;
     const conditions = [eq(reviews.productId, productId), eq(reviews.isApproved, true)];
 
-    const items = await db
-      .select({
-        id: reviews.id,
-        productId: reviews.productId,
-        userId: reviews.userId,
-        rating: reviews.rating,
-        title: reviews.title,
-        comment: reviews.comment,
-        isVerifiedPurchase: reviews.isVerifiedPurchase,
-        helpfulCount: reviews.helpfulCount,
-        createdAt: reviews.createdAt,
-        updatedAt: reviews.updatedAt,
-        user: {
-          id: users.id,
-          firstName: users.firstName,
-          lastName: users.lastName,
-        },
-      })
-      .from(reviews)
-      .leftJoin(users, eq(reviews.userId, users.id))
-      .where(and(...conditions))
-      .orderBy(desc(reviews.createdAt))
-      .limit(safeLimit)
-      .offset(offset);
-
-    const [aggregate] = await db
-      .select({
-        total: sql<number>`count(*)`,
-        avg: sql<number>`avg(${reviews.rating})`,
-      })
-      .from(reviews)
-      .where(and(...conditions));
+    const [items, [aggregate]] = await Promise.all([
+      db
+        .select({
+          id: reviews.id,
+          productId: reviews.productId,
+          userId: reviews.userId,
+          rating: reviews.rating,
+          title: reviews.title,
+          comment: reviews.comment,
+          isVerifiedPurchase: reviews.isVerifiedPurchase,
+          helpfulCount: reviews.helpfulCount,
+          createdAt: reviews.createdAt,
+          updatedAt: reviews.updatedAt,
+          user: {
+            id: users.id,
+            firstName: users.firstName,
+            lastName: users.lastName,
+          },
+        })
+        .from(reviews)
+        .leftJoin(users, eq(reviews.userId, users.id))
+        .where(and(...conditions))
+        .orderBy(desc(reviews.createdAt))
+        .limit(safeLimit)
+        .offset(offset),
+      db
+        .select({
+          total: sql<number>`count(*)`,
+          avg: sql<number>`avg(${reviews.rating})`,
+        })
+        .from(reviews)
+        .where(and(...conditions)),
+    ]);
 
     const total = aggregate ? Number(aggregate.total) : 0;
     const averageRating = aggregate?.avg ? Number(aggregate.avg) : 0;
@@ -129,18 +112,30 @@ export class ReviewService extends BaseService<typeof reviews> {
   }
 
   async approveReview(reviewId: string, isApproved: boolean): Promise<any> {
-    await this.findByIdOrFail(reviewId, 'Review');
-    return this.update(reviewId, { isApproved });
+    const [review] = await db
+      .update(reviews)
+      .set({ isApproved, updatedAt: new Date() })
+      .where(eq(reviews.id, reviewId))
+      .returning();
+    if (!review) throw new NotFoundError('Review not found');
+    return review;
   }
 
   async updateReview(reviewId: string, userId: string, updateReviewDto: UpdateReviewDto): Promise<any> {
     const review = await this.findByIdOrFail(reviewId, 'Review');
     if (review.userId !== userId) throw new ForbiddenError('You can only update your own reviews');
 
-    return this.update(reviewId, {
-      ...updateReviewDto,
-      isApproved: envConfig.REVIEW_AUTO_APPROVE,
-    });
+    const [updated] = await db
+      .update(reviews)
+      .set({
+        ...updateReviewDto,
+        isApproved: envConfig.REVIEW_AUTO_APPROVE,
+        updatedAt: new Date(),
+      })
+      .where(eq(reviews.id, reviewId))
+      .returning();
+    if (!updated) throw new NotFoundError('Review not found');
+    return updated;
   }
 
   async deleteReview(reviewId: string, userId: string, isAdmin: boolean = false): Promise<void> {
@@ -149,7 +144,7 @@ export class ReviewService extends BaseService<typeof reviews> {
       throw new ForbiddenError('You can only delete your own reviews');
     }
 
-    return this.delete(reviewId);
+    await db.delete(reviews).where(eq(reviews.id, reviewId));
   }
 
   async markHelpful(reviewId: string, userId: string): Promise<any> {

@@ -2,6 +2,7 @@ import { Elysia, t } from 'elysia';
 import { AddressService } from '../service/AddressService';
 import { successResponse, successSchema, errorSchema } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
+import { idParams } from '../../../core/schemas';
 import { NotFoundError } from '../../../core/errors';
 
 const addressService = new AddressService();
@@ -29,7 +30,7 @@ export const addressController = new Elysia({ prefix: '/addresses', tags: ['Addr
   })
 
   .get('/:id', {
-    params: t.Object({ id: t.String({ format: 'uuid' }) }),
+    params: idParams,
     response: { 200: successSchema(), 404: errorSchema },
     detail: { summary: 'Get address by ID' }
   }, async ({ params, user }) => {
@@ -60,7 +61,7 @@ export const addressController = new Elysia({ prefix: '/addresses', tags: ['Addr
   })
 
   .put('/:id', {
-    params: t.Object({ id: t.String({ format: 'uuid' }) }),
+    params: idParams,
     body: t.Object({
       type: t.Optional(addressTypeSchema),
       fullName: t.Optional(t.String({ minLength: 1, maxLength: 200 })),
@@ -81,7 +82,7 @@ export const addressController = new Elysia({ prefix: '/addresses', tags: ['Addr
   })
 
   .delete('/:id', {
-    params: t.Object({ id: t.String({ format: 'uuid' }) }),
+    params: idParams,
     response: { 200: successSchema(t.Null()), 404: errorSchema },
     detail: { summary: 'Delete address' }
   }, async ({ params, user }) => {
@@ -90,7 +91,7 @@ export const addressController = new Elysia({ prefix: '/addresses', tags: ['Addr
   })
 
   .post('/:id/set-default', {
-    params: t.Object({ id: t.String({ format: 'uuid' }) }),
+    params: idParams,
     response: { 200: successSchema(), 404: errorSchema },
     detail: { summary: 'Set address as default' }
   }, async ({ params, user }) => {

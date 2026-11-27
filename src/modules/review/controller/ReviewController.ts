@@ -2,6 +2,7 @@ import { Elysia, t } from 'elysia';
 import { ReviewService } from '../service/ReviewService';
 import { paginatedResponse, successResponse, successSchema, paginatedSchema, errorSchema } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
+import { idParams, uuid } from '../../../core/schemas';
 import { UserRole } from '../../../core/roles';
 import { PAGINATION } from '../../../core/constants';
 import { getPagination } from '../../../utils/validation';
@@ -12,7 +13,7 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
     .use(authPlugin)
 
     .get('/product/:productId', {
-        params: t.Object({ productId: t.String({ format: 'uuid' }) }),
+        params: t.Object({ productId: uuid }),
         query: t.Object({
             page: t.Optional(t.Integer({ minimum: 1 })),
             limit: t.Optional(t.Integer({ minimum: 1, maximum: PAGINATION.MAX_LIMIT })),
@@ -39,7 +40,7 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
 
     .post('/', {
         body: t.Object({
-            productId: t.String({ format: 'uuid' }),
+            productId: uuid,
             rating: t.Integer({ minimum: 1, maximum: 5 }),
             title: t.Optional(t.String({ minLength: 1, maxLength: 200 })),
             comment: t.Optional(t.String({ minLength: 1, maxLength: 2000 })),
@@ -102,7 +103,7 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
     })
 
     .patch('/:id/approve', {
-        params: t.Object({ id: t.String({ format: 'uuid' }) }),
+        params: idParams,
         body: t.Object({ isApproved: t.Boolean() }),
         hasRole: UserRole.ADMIN,
         response: { 200: successSchema(), 404: errorSchema },
@@ -113,7 +114,7 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
     })
 
     .put('/:id', {
-        params: t.Object({ id: t.String({ format: 'uuid' }) }),
+        params: idParams,
         body: t.Partial(t.Object({
             rating: t.Integer({ minimum: 1, maximum: 5 }),
             title: t.String({ minLength: 1, maxLength: 200 }),
@@ -133,7 +134,7 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
     })
 
     .delete('/:id', {
-        params: t.Object({ id: t.String({ format: 'uuid' }) }),
+        params: idParams,
         isAuth: true,
         response: {
             200: successSchema(t.Null()),
@@ -148,7 +149,7 @@ export const reviewController = new Elysia({ prefix: '/reviews', tags: ['Review'
     })
 
     .post('/:id/helpful', {
-        params: t.Object({ id: t.String({ format: 'uuid' }) }),
+        params: idParams,
         isAuth: true,
         response: {
             200: successSchema(),

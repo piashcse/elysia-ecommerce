@@ -2,6 +2,7 @@ import { Elysia, t } from 'elysia';
 import { CategoryService } from '../service/CategoryService';
 import { paginatedResponse, successResponse, successSchema, paginatedSchema, errorSchema } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
+import { idParams } from '../../../core/schemas';
 import { UserRole } from '../../../core/roles';
 import { PAGINATION } from '../../../core/constants';
 import { getPagination } from '../../../utils/validation';
@@ -58,7 +59,7 @@ export const categoryController = new Elysia({ prefix: '/categories', tags: ['Ca
   })
 
   .get('/:id', {
-    params: t.Object({ id: t.String({ format: 'uuid' }) }),
+    params: idParams,
     response: {
       200: successSchema(),
       404: errorSchema
@@ -70,7 +71,7 @@ export const categoryController = new Elysia({ prefix: '/categories', tags: ['Ca
   })
 
   .put('/:id', {
-    params: t.Object({ id: t.String({ format: 'uuid' }) }),
+    params: idParams,
     body: t.Object({
       name: t.Optional(t.String({ minLength: 1, maxLength: 100 })),
       description: t.Optional(t.String({ maxLength: 5000 })),
@@ -92,7 +93,7 @@ export const categoryController = new Elysia({ prefix: '/categories', tags: ['Ca
   })
 
   .delete('/:id', {
-    params: t.Object({ id: t.String({ format: 'uuid' }) }),
+    params: idParams,
     hasRole: UserRole.ADMIN,
     response: {
       200: successSchema(t.Null()),
@@ -106,7 +107,7 @@ export const categoryController = new Elysia({ prefix: '/categories', tags: ['Ca
   })
 
   .get('/:id/products', {
-    params: t.Object({ id: t.String({ format: 'uuid' }) }),
+    params: idParams,
     query: t.Object({
       page: t.Optional(t.Integer({ minimum: 1 })),
       limit: t.Optional(t.Integer({ minimum: 1, maximum: PAGINATION.MAX_LIMIT })),

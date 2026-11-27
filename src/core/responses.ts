@@ -83,36 +83,32 @@ export const paginatedResponse = <T>(
   };
 };
 
+const SENSITIVE_KEYS = new Set([
+  'password',
+  'confirmPassword',
+  'passwordHash',
+  'emailVerificationToken',
+  'emailVerificationExpires',
+  'passwordResetToken',
+  'passwordResetExpires',
+  'tokenVersion',
+  'cardNumber',
+  'cardCvv',
+  'cardExpiry',
+]);
+
 /**
- * Recursively removes sensitive keys from an object
+ * Recursively removes sensitive keys from an object.
  */
 export const sanitizeData = (data: any): any => {
-  if (Array.isArray(data)) {
-    return data.map(sanitizeData);
+  if (Array.isArray(data)) return data.map(sanitizeData);
+  if (data === null || typeof data !== 'object' || data instanceof Date) return data;
+
+  const result: Record<string, any> = {};
+  for (const key of Object.keys(data)) {
+    if (!SENSITIVE_KEYS.has(key)) result[key] = sanitizeData(data[key]);
   }
-  if (data !== null && typeof data === 'object' && !(data instanceof Date)) {
-    const sensitiveKeys = [
-      'password',
-      'confirmPassword',
-      'passwordHash',
-      'emailVerificationToken',
-      'emailVerificationExpires',
-      'passwordResetToken',
-      'passwordResetExpires',
-      'tokenVersion',
-      'cardNumber',
-      'cardCvv',
-      'cardExpiry',
-    ];
-    const newObj: any = {};
-    for (const key in data) {
-      if (!sensitiveKeys.includes(key)) {
-        newObj[key] = sanitizeData(data[key]);
-      }
-    }
-    return newObj;
-  }
-  return data;
+  return result;
 };
 
 // Common Elysia Schemas for responses

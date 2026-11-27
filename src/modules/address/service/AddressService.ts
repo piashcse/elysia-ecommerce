@@ -7,21 +7,13 @@ import { BaseService } from '../../../core/base.service';
 
 type AddressType = 'shipping' | 'billing' | 'both';
 
-export class AddressService extends BaseService<typeof addresses> {
+export class AddressService extends BaseService {
   constructor() {
     super(addresses);
   }
 
   private defaultTypesFor(type: AddressType): AddressType[] {
     return type === 'both' ? ['shipping', 'billing', 'both'] : [type, 'both'];
-  }
-
-  private async clearDefaults(userId: string, type: AddressType, excludeId?: string) {
-    const types = this.defaultTypesFor(type);
-    const conditions = [eq(addresses.userId, userId), inArray(addresses.type, types)];
-    if (excludeId) conditions.push(sql`${addresses.id} <> ${excludeId}`);
-
-    await db.update(addresses).set({ isDefault: false, updatedAt: new Date() }).where(and(...conditions));
   }
 
   async createAddress(userId: string, createAddressDto: CreateAddressDto): Promise<any> {

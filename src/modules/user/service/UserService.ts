@@ -3,13 +3,13 @@ import { db } from '../../../config/database';
 import { users } from '../../../database/schema';
 import { CreateUserDto, UpdateUserDto } from '../dto/UserDto';
 import { comparePassword, hashPassword, normalizeEmail } from '../../../utils/auth';
-import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../../../core/errors';
+import { ConflictError, ForbiddenError, ValidationError } from '../../../core/errors';
 import { UserRole } from '../../../core/roles';
 import { BaseService } from '../../../core/base.service';
 import { PAGINATION } from '../../../core/constants';
 import { AuthService } from '../../auth/service/AuthService';
 
-export class UserService extends BaseService<typeof users> {
+export class UserService extends BaseService {
   private authService = new AuthService();
 
   constructor() {
@@ -76,7 +76,11 @@ export class UserService extends BaseService<typeof users> {
       updateData.tokenVersion = sql`${users.tokenVersion} + 1`;
     }
 
-    const updated = await this.update(id, updateData);
+    const [updated] = await db
+      .update(users)
+      .set({ ...updateData, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
 
     if (updateData.email && updateData.email !== user.email) {
       await this.authService.issueEmailVerification(id, updateData.email);
@@ -98,24 +102,14 @@ export class UserService extends BaseService<typeof users> {
       throw new ValidationError('New password must be different from the current password', 'PASSWORD_UNCHANGED');
     }
 
-    await this.update(userId, {
-      password: await hashPassword(newPassword),
-      tokenVersion: sql`${users.tokenVersion} + 1`,
-    } as any);
-  }
-
-  async updateRole(userId: string, role: UserRole): Promise<any> {
-    const user = await this.findByIdOrFail(userId, 'User');
-    if (user.role === UserRole.ADMIN && role !== UserRole.ADMIN) {
-      const otherAdmins = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(users)
-        .where(and(eq(users.role, UserRole.ADMIN), eq(users.isActive, true), ne(users.id, userId)));
-      if (!otherAdmins[0] || Number(otherAdmins[0].count) === 0) {
-        throw new ConflictError('Cannot demote the last active admin', 'LAST_ADMIN');
-      }
-    }
-    return this.update(userId, { role: role as any, tokenVersion: sql`${users.tokenVersion} + 1` } as any);
+    await db
+      .update(users)
+      .set({
+        password: await hashPassword(newPassword),
+        tokenVersion: sql`${users.tokenVersion} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
   }
 
   async deleteUser(id: string): Promise<void> {
@@ -131,7 +125,7 @@ export class UserService extends BaseService<typeof users> {
       }
     }
 
-    await this.delete(id);
+    await db.delete(users).where(eq(users.id, id));
   }
 
   async getUsers(

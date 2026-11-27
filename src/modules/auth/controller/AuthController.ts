@@ -58,10 +58,8 @@ export const authController = new Elysia({ prefix: '/auth', tags: ['Auth'] })
             401: t.Any()
         },
         detail: { summary: 'Login user and get access/refresh tokens' }
-    }, async ({ body, jwt, request }) => {
-        const user = await authService.login(body, {
-            userAgent: request.headers.get('user-agent'),
-        });
+    }, async ({ body, jwt }) => {
+        const user = await authService.login(body);
     
         const basePayload = {
             sub: user.id,

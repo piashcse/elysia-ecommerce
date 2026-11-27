@@ -1,8 +1,8 @@
 import { Elysia, t } from 'elysia';
 import { NotificationService } from '../service/NotificationService';
-import { errorResponse, paginatedResponse, successResponse, successSchema, paginatedSchema, errorSchema } from '../../../core/responses';
+import { paginatedResponse, successResponse, successSchema, paginatedSchema, errorSchema } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
-import { PAGINATION } from '../../../core/constants';
+import { idParams, paginationQuery } from '../../../core/schemas';
 import { getPagination } from '../../../utils/validation';
 
 const notificationService = new NotificationService();
@@ -15,10 +15,7 @@ export const notificationController = new Elysia({ prefix: '/notifications', tag
 
   // Get all notifications for the authenticated user
   .get('/', {
-    query: t.Object({
-      page: t.Optional(t.Integer({ minimum: 1 })),
-      limit: t.Optional(t.Integer({ minimum: 1, maximum: PAGINATION.MAX_LIMIT })),
-    }),
+    query: paginationQuery,
     response: { 200: paginatedSchema() },
     detail: { summary: "Get all notifications for the authenticated user" },
   }, async ({ query, user }) => {
@@ -48,7 +45,7 @@ export const notificationController = new Elysia({ prefix: '/notifications', tag
 
   // Mark a notification as read
   .patch('/:id/read', {
-    params: t.Object({ id: t.String() }),
+    params: idParams,
     response: { 200: successSchema(), 404: errorSchema },
     detail: { summary: "Mark a notification as read" },
   }, async ({ params, user }) => {
@@ -67,7 +64,7 @@ export const notificationController = new Elysia({ prefix: '/notifications', tag
 
   // Delete a notification
   .delete('/:id', {
-    params: t.Object({ id: t.String() }),
+    params: idParams,
     response: { 200: successSchema(t.Null()), 404: errorSchema },
     detail: { summary: "Delete a notification" },
   }, async ({ params, user }) => {

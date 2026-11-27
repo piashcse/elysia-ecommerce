@@ -61,30 +61,3 @@ export class PaymentRequiredError extends AppError {
     super(message, 402, true, '', errorCode);
   }
 }
-
-export class TooManyRequestsError extends AppError {
-  constructor(message: string = 'Too many requests', errorCode = 'RATE_LIMIT_EXCEEDED') {
-    super(message, 429, true, '', errorCode);
-  }
-}
-
-export class InternalServerError extends AppError {
-  constructor(message: string = 'Internal server error', errorCode = 'INTERNAL_SERVER_ERROR') {
-    super(message, 500, true, '', errorCode);
-  }
-}
-
-// Error codes enum
-export enum ErrorCodes {
-  VALIDATION_ERROR = 'VALIDATION_ERROR',
-  NOT_FOUND = 'NOT_FOUND',
-  UNAUTHORIZED = 'UNAUTHORIZED',
-  FORBIDDEN = 'FORBIDDEN',
-  CONFLICT = 'CONFLICT',
-  RATE_LIMIT_EXCEEDED = 'RATE_LIMIT_EXCEEDED',
-  EMAIL_NOT_VERIFIED = 'EMAIL_NOT_VERIFIED',
-  INTERNAL_SERVER_ERROR = 'INTERNAL_SERVER_ERROR',
-  DATABASE_ERROR = 'DATABASE_ERROR',
-  AUTHENTICATION_ERROR = 'AUTHENTICATION_ERROR',
-  AUTHORIZATION_ERROR = 'AUTHORIZATION_ERROR',
-}
