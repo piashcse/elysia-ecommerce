@@ -10,102 +10,78 @@ export const cartController = new Elysia({ prefix: '/cart', tags: ['Cart'] })
   .guard({
     isAuth: true
   })
-  .get(
-    '/',
-    async ({ user }) => {
-      const cart = await cartService.getCartForUser(user!.sub);
-      return successResponse(cart || null, 'Cart retrieved successfully');
+  .get('/', {
+    response: {
+      200: successSchema(t.Nullable(t.Any()))
     },
-    {
-      response: {
-        200: successSchema(t.Nullable(t.Any()))
-      },
-      detail: { summary: "Get current user's cart" }
-    }
-  )
+    detail: { summary: "Get current user's cart" }
+  }, async ({ user }) => {
+    const cart = await cartService.getCartForUser(user!.sub);
+    return successResponse(cart || null, 'Cart retrieved successfully');
+  })
 
-  .get(
-    '/count',
-    async ({ user }) => {
-      const count = await cartService.getCartCount(user!.sub);
-      return successResponse(count, 'Cart count retrieved successfully');
-    },
-    {
-      response: { 200: successSchema() },
-      detail: { summary: "Get the current user's cart item count" }
-    }
-  )
+  .get('/count', {
+    response: { 200: successSchema() },
+    detail: { summary: "Get the current user's cart item count" }
+  }, async ({ user }) => {
+    const count = await cartService.getCartCount(user!.sub);
+    return successResponse(count, 'Cart count retrieved successfully');
+  })
 
-  .post(
-    '/items',
-    async ({ body, user }) => {
-      const cart = await cartService.addToCart(user!.sub, body);
-      return successResponse(cart, 'Item added to cart successfully');
+  .post('/items', {
+    body: t.Object({
+      productId: t.String({ format: 'uuid' }),
+      quantity: t.Integer({ minimum: 1, maximum: 100 })
+    }),
+    response: {
+      200: successSchema(),
+      400: errorSchema,
+      409: errorSchema,
+      422: errorSchema
     },
-    {
-      body: t.Object({
-        productId: t.String({ format: 'uuid' }),
-        quantity: t.Integer({ minimum: 1, maximum: 100 })
-      }),
-      response: {
-        200: successSchema(),
-        400: errorSchema,
-        409: errorSchema,
-        422: errorSchema
-      },
-      detail: { summary: 'Add item to cart' }
-    }
-  )
+    detail: { summary: 'Add item to cart' }
+  }, async ({ body, user }) => {
+    const cart = await cartService.addToCart(user!.sub, body);
+    return successResponse(cart, 'Item added to cart successfully');
+  })
 
-  .put(
-    '/items/:id',
-    async ({ params, body, user }) => {
-      const cart = await cartService.updateCartItem(user!.sub, params.id, body);
-      return successResponse(cart, 'Cart item updated successfully');
+  .put('/items/:id', {
+    params: t.Object({ id: t.String({ format: 'uuid' }) }),
+    body: t.Object({
+      quantity: t.Integer({ minimum: 1, maximum: 100 })
+    }),
+    response: {
+      200: successSchema(),
+      400: errorSchema,
+      404: errorSchema
     },
-    {
-      params: t.Object({ id: t.String({ format: 'uuid' }) }),
-      body: t.Object({
-        quantity: t.Integer({ minimum: 1, maximum: 100 })
-      }),
-      response: {
-        200: successSchema(),
-        400: errorSchema,
-        404: errorSchema
-      },
-      detail: { summary: 'Update cart item quantity' }
-    }
-  )
+    detail: { summary: 'Update cart item quantity' }
+  }, async ({ params, body, user }) => {
+    const cart = await cartService.updateCartItem(user!.sub, params.id, body);
+    return successResponse(cart, 'Cart item updated successfully');
+  })
 
-  .delete(
-    '/items/:id',
-    async ({ params, user }) => {
-      const cart = await cartService.removeCartItem(user!.sub, params.id);
-      return successResponse(cart, 'Item removed from cart successfully');
+  .delete('/items/:id', {
+    params: t.Object({ id: t.String({ format: 'uuid' }) }),
+    response: {
+      200: successSchema(),
+      404: errorSchema
     },
-    {
-      params: t.Object({ id: t.String({ format: 'uuid' }) }),
-      response: {
-        200: successSchema(),
-        404: errorSchema
-      },
-      detail: { summary: 'Remove item from cart' }
-    }
-  )
+    detail: { summary: 'Remove item from cart' }
+  }, async ({ params, user }) => {
+    const cart = await cartService.removeCartItem(user!.sub, params.id);
+    return successResponse(cart, 'Item removed from cart successfully');
+  })
 
-  .delete(
-    '/',
-    async ({ user }) => {
-      const cart = await cartService.getCartForUser(user!.sub);
-      if (cart) {
-        await cartService.clearCart(cart.id);
-      }
-      return successResponse(null, 'Cart cleared successfully');
+  .delete('/', {
+    response: {
+      200: successSchema(t.Null())
     },
-    {
-      response: {
-        200: successSchema(t.Null())
-      },
-      detail: { summary: 'Clear entire cart' }
+    detail: { summary: 'Clear entire cart' }
+  }, async ({ user }) => {
+    const cart = await cartService.getCartForUser(user!.sub);
+    if (cart) {
+      await cartService.clearCart(cart.id);
     }
-  );
+    return successResponse(null, 'Cart cleared successfully');
+  });

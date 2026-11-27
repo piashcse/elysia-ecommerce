@@ -22,54 +22,54 @@ const securityDetail = { security: [{ bearerAuth: [] }] };
 
 export const authPlugin = new Elysia({ name: 'auth-plugin' })
     .use(jwtPlugin)
-    .derive({ as: 'global' }, async ({ jwt, headers }): Promise<{ user: CurrentUser | null }> => {
-        const authHeader = headers['authorization'];
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    .derive('global', async ({ jwt, headers }): Promise<{ user: CurrentUser | null }> => {
+    const authHeader = headers['authorization'];
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return { user: null };
+    }
+
+    const token = authHeader.slice(7).trim();
+    if (!token) return { user: null };
+
+    try {
+        const payload = (await jwt.verify(token, {
+            issuer: JWT_ISSUER,
+            audience: JWT_AUDIENCE,
+        })) as JwtPayload | false;
+        if (!payload || payload.type !== 'access' || !payload.sub) {
             return { user: null };
         }
 
-        const token = authHeader.slice(7).trim();
-        if (!token) return { user: null };
+        // Always load the current user so role changes, deactivation, and
+        // logout-all (tokenVersion bump) take effect immediately.
+        const [current] = await db
+            .select({
+                id: users.id,
+                email: users.email,
+                role: users.role,
+                isActive: users.isActive,
+                tokenVersion: users.tokenVersion,
+            })
+            .from(users)
+            .where(eq(users.id, payload.sub))
+            .limit(1);
 
-        try {
-            const payload = (await jwt.verify(token, {
-                issuer: JWT_ISSUER,
-                audience: JWT_AUDIENCE,
-            })) as JwtPayload | false;
-            if (!payload || payload.type !== 'access' || !payload.sub) {
-                return { user: null };
-            }
-
-            // Always load the current user so role changes, deactivation, and
-            // logout-all (tokenVersion bump) take effect immediately.
-            const [current] = await db
-                .select({
-                    id: users.id,
-                    email: users.email,
-                    role: users.role,
-                    isActive: users.isActive,
-                    tokenVersion: users.tokenVersion,
-                })
-                .from(users)
-                .where(eq(users.id, payload.sub))
-                .limit(1);
-
-            if (!current || !current.isActive || current.tokenVersion !== payload.ver) {
-                return { user: null };
-            }
-
-            return {
-                user: {
-                    sub: current.id,
-                    email: current.email,
-                    role: current.role,
-                    ver: current.tokenVersion,
-                },
-            };
-        } catch {
+        if (!current || !current.isActive || current.tokenVersion !== payload.ver) {
             return { user: null };
         }
-    })
+
+        return {
+            user: {
+                sub: current.id,
+                email: current.email,
+                role: current.role,
+                ver: current.tokenVersion,
+            },
+        };
+    } catch {
+        return { user: null };
+    }
+})
     .macro({
         isAuth: (enabled: boolean) => {
             if (!enabled) return;

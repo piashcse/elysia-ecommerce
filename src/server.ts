@@ -1,7 +1,7 @@
-import { Elysia } from 'elysia';
-import { openapi } from '@elysiajs/openapi';
-import { cors } from '@elysiajs/cors';
-import { logger } from '@bogeychan/elysia-logger';
+import { Elysia, NotFound as ElysiaNotFound, ParseError as ElysiaParseError, ValidationError as ElysiaValidationError } from 'elysia';
+import { openapi } from '@elysia/openapi';
+import { cors } from '@elysia/cors';
+import { loggingMiddleware } from './middlewares/logging';
 import { connectDB, closeDB } from './config/database';
 import envConfig from './config/env';
 import { helmetMiddleware } from './middlewares/helmet';
@@ -51,85 +51,64 @@ app
     })
   )
   .use(helmetMiddleware)
-  .use(
-    logger({
-      level: envConfig.NODE_ENV === 'test' ? 'silent' : envConfig.LOG_LEVEL,
-      redact: {
-        paths: ['request.headers.authorization', 'req.headers.authorization'],
-        censor: '[REDACTED]',
-      },
-      autoLogging: envConfig.NODE_ENV === 'test'
-        ? false
-        : {
-            // Error contexts can contain request bodies (including passwords).
-            // The central error handler logs a redacted, structured summary instead.
-            ignore: (ctx: any) =>
-              ctx.isError === true ||
-              ctx.path === '/health' ||
-              ctx.path.includes('__server_sent_events__'),
-          },
-      customProps: (ctx: any) => ({
-        path: ctx.path,
-        method: ctx.request.method,
-        userAgent: ctx.request.headers.get('user-agent'),
-      }),
-    } as any)
-  )
+  .use(loggingMiddleware)
   .use(rateLimiterMiddleware)
   .use(requestIdMiddleware)
   .use(jwtPlugin)
-  .onAfterHandle(({ response }) => {
+  .onAfterHandle(({ responseValue }) => {
     if (
-      response &&
-      typeof response === 'object' &&
-      !(response instanceof ReadableStream) &&
-      !(response instanceof Response) &&
-      !(response instanceof Blob)
+      responseValue &&
+      typeof responseValue === 'object' &&
+      !(responseValue instanceof ReadableStream) &&
+      !(responseValue instanceof Response) &&
+      !(responseValue instanceof Blob)
     ) {
-      return sanitizeData(response);
+      return sanitizeData(responseValue);
     }
   });
 
 // Centralized error handler. Never return raw database errors, SQL, or request
 // bodies to clients.
-app.onError(({ code, error, set, request }) => {
+app.onError(({ error, set, request }) => {
   const requestId = getRequestId(set);
   const err = error as any;
 
-  if (code === 'NOT_FOUND') {
+  if (error instanceof ElysiaNotFound) {
     set.status = 404;
     return errorResponse('Route not found', 'NOT_FOUND', 404, { requestId });
   }
 
-  if (code === 'VALIDATION' || code === 'PARSE') {
-    set.status = 422;
+  if (error instanceof ElysiaParseError) {
+    set.status = 400;
+    return errorResponse('Invalid request body', 'PARSE_ERROR', 400, { requestId });
+  }
 
-    // Elysia includes the submitted values in its validation message. Only
-    // expose the field path and a safe message.
-    let fields: Array<{ path: string; message: string }> = [];
-    try {
-      const parsed = JSON.parse(err.message);
-      if (Array.isArray(parsed.errors)) {
-        fields = parsed.errors.map((item: any) => ({
-          path: String(item.path ?? '').replace(/^\//, ''),
+  if (error instanceof ElysiaValidationError) {
+    // 422 for request validation; 500 when a response fails its schema.
+    const status = error.status ?? 422;
+    set.status = status;
+
+    const fields = status === 422
+      ? (error.errors ?? []).map((item: any) => ({
+          path: String(item.instancePath ?? item.path ?? '').replace(/^\//, ''),
           message: String(item.message ?? 'Invalid value'),
-        }));
-      } else if (parsed.property) {
-        fields = [{ path: String(parsed.property).replace(/^\//, ''), message: String(parsed.message ?? 'Invalid value') }];
-      }
-    } catch {
-      // Not a JSON validation message; fall back to a generic message.
-    }
+        }))
+      : undefined;
 
     if (envConfig.NODE_ENV !== 'test') console.warn('Request validation failed', {
       requestId,
       method: request.method,
       path: new URL(request.url).pathname,
-      code,
-      fields: fields.map((field) => field.path),
+      code: 'VALIDATION_ERROR',
+      fields: fields?.map((field) => field.path),
     });
 
-    return errorResponse('Validation failed', 'VALIDATION_ERROR', 422, { requestId, fields });
+    return errorResponse(
+      status === 422 ? 'Validation failed' : 'Response validation failed',
+      status === 422 ? 'VALIDATION_ERROR' : 'RESPONSE_VALIDATION_ERROR',
+      status,
+      { requestId, ...(fields ? { fields } : {}) }
+    );
   }
 
   if (error instanceof AppError) {
@@ -138,7 +117,7 @@ app.onError(({ code, error, set, request }) => {
       requestId,
       method: request.method,
       path: new URL(request.url).pathname,
-      code: error.errorCode ?? code,
+      code: error.errorCode ?? 'APPLICATION_ERROR',
       status: error.statusCode,
       message: error.message,
     });

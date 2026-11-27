@@ -36,150 +36,126 @@ export const paymentController = new Elysia({ prefix: '/payments', tags: ['Payme
   .guard({
     isAuth: true
   })
-  .post(
-    '/',
-    async ({ body, set, user }) => {
-      const payment = await paymentService.createPayment(user!, body as any);
-      set.status = 201;
-      return successResponse(payment, 'Payment created successfully', 201);
+  .post('/', {
+    body: t.Object({
+      orderId: t.String({ format: 'uuid' }),
+      method: paymentMethodSchema,
+      amount: t.Number({ minimum: 0.01, maximum: 999999.99 }),
+      metadata: t.Optional(t.Record(t.String(), t.Any())),
+    }),
+    response: {
+      201: successSchema(),
+      400: errorSchema,
+      403: errorSchema,
+      409: errorSchema,
+      422: errorSchema
     },
-    {
-      body: t.Object({
-        orderId: t.String({ format: 'uuid' }),
-        method: paymentMethodSchema,
-        amount: t.Number({ minimum: 0.01, maximum: 999999.99 }),
-        metadata: t.Optional(t.Record(t.String(), t.Any())),
-      }),
-      response: {
-        201: successSchema(),
-        400: errorSchema,
-        403: errorSchema,
-        409: errorSchema,
-        422: errorSchema
-      },
-      detail: { summary: 'Create initial payment record' }
-    }
-  )
+    detail: { summary: 'Create initial payment record' }
+  }, async ({ body, set, user }) => {
+    const payment = await paymentService.createPayment(user!, body as any);
+    set.status = 201;
+    return successResponse(payment, 'Payment created successfully', 201);
+  })
 
-  .post(
-    '/process',
-    async ({ body, user }) => {
-      const payment = await paymentService.processPayment(user!, body as any);
-      return successResponse(payment, 'Payment processed successfully');
+  .post('/process', {
+    body: t.Object({
+      orderId: t.String({ format: 'uuid' }),
+      method: paymentMethodSchema,
+      amount: t.Number({ minimum: 0.01, maximum: 999999.99 }),
+      paymentDetails: paymentDetailsSchema,
+    }),
+    response: {
+      200: successSchema(),
+      400: errorSchema,
+      402: errorSchema,
+      403: errorSchema,
+      409: errorSchema,
+      422: errorSchema
     },
-    {
-      body: t.Object({
-        orderId: t.String({ format: 'uuid' }),
-        method: paymentMethodSchema,
-        amount: t.Number({ minimum: 0.01, maximum: 999999.99 }),
-        paymentDetails: paymentDetailsSchema,
-      }),
-      response: {
-        200: successSchema(),
-        400: errorSchema,
-        402: errorSchema,
-        403: errorSchema,
-        409: errorSchema,
-        422: errorSchema
-      },
-      detail: { summary: 'Process payment with gateway simulation' }
-    }
-  )
+    detail: { summary: 'Process payment with gateway simulation' }
+  }, async ({ body, user }) => {
+    const payment = await paymentService.processPayment(user!, body as any);
+    return successResponse(payment, 'Payment processed successfully');
+  })
 
-  .get(
-    '/',
-    async ({ query, user }) => {
-      const isAdmin = user?.role === UserRole.ADMIN;
-      const { page, limit } = getPagination(query);
-
-      const filters = {
-        status: query.status,
-        method: query.method,
-        dateFrom: query.dateFrom,
-        dateTo: query.dateTo,
-        orderId: query.orderId,
-        userId: isAdmin ? query.userId : (user!.sub as string),
-      };
-
-      const { items, total } = await paymentService.getPayments(page, limit, filters);
-
-      return paginatedResponse(
-        items,
-        { page, limit, total, totalPages: Math.ceil(total / limit) },
-        'Payments retrieved successfully'
-      );
+  .get('/', {
+    query: t.Object({
+      page: t.Optional(t.Integer({ minimum: 1 })),
+      limit: t.Optional(t.Integer({ minimum: 1, maximum: PAGINATION.MAX_LIMIT })),
+      status: t.Optional(paymentStatusSchema),
+      method: t.Optional(paymentMethodSchema),
+      dateFrom: t.Optional(t.String({ format: 'date-time' })),
+      dateTo: t.Optional(t.String({ format: 'date-time' })),
+      orderId: t.Optional(t.String({ format: 'uuid' })),
+      userId: t.Optional(t.String({ format: 'uuid' })),
+    }),
+    response: {
+      200: paginatedSchema()
     },
-    {
-      query: t.Object({
-        page: t.Optional(t.Integer({ minimum: 1 })),
-        limit: t.Optional(t.Integer({ minimum: 1, maximum: PAGINATION.MAX_LIMIT })),
-        status: t.Optional(paymentStatusSchema),
-        method: t.Optional(paymentMethodSchema),
-        dateFrom: t.Optional(t.String({ format: 'date-time' })),
-        dateTo: t.Optional(t.String({ format: 'date-time' })),
-        orderId: t.Optional(t.String({ format: 'uuid' })),
-        userId: t.Optional(t.String({ format: 'uuid' })),
-      }),
-      response: {
-        200: paginatedSchema()
-      },
-      detail: { summary: 'Get payments (Admin: all, Customer: own)' }
-    }
-  )
+    detail: { summary: 'Get payments (Admin: all, Customer: own)' }
+  }, async ({ query, user }) => {
+    const isAdmin = user?.role === UserRole.ADMIN;
+    const { page, limit } = getPagination(query);
+  
+    const filters = {
+      status: query.status,
+      method: query.method,
+      dateFrom: query.dateFrom,
+      dateTo: query.dateTo,
+      orderId: query.orderId,
+      userId: isAdmin ? query.userId : (user!.sub as string),
+    };
+  
+    const { items, total } = await paymentService.getPayments(page, limit, filters);
+  
+    return paginatedResponse(
+      items,
+      { page, limit, total, totalPages: Math.ceil(total / limit) },
+      'Payments retrieved successfully'
+    );
+  })
 
-  .get(
-    '/:id',
-    async ({ params, user }) => {
-      const payment = await paymentService.getPaymentById(user!, params.id);
-      return successResponse(payment, 'Payment retrieved successfully');
+  .get('/:id', {
+    params: t.Object({ id: t.String({ format: 'uuid' }) }),
+    response: {
+      200: successSchema(),
+      403: errorSchema,
+      404: errorSchema
     },
-    {
-      params: t.Object({ id: t.String({ format: 'uuid' }) }),
-      response: {
-        200: successSchema(),
-        403: errorSchema,
-        404: errorSchema
-      },
-      detail: { summary: 'Get payment details by ID' }
-    }
-  )
+    detail: { summary: 'Get payment details by ID' }
+  }, async ({ params, user }) => {
+    const payment = await paymentService.getPaymentById(user!, params.id);
+    return successResponse(payment, 'Payment retrieved successfully');
+  })
 
-  .post(
-    '/:id/refund',
-    async ({ params, body }) => {
-      const payment = await paymentService.refundPayment(params.id, body?.amount);
-      return successResponse(payment, 'Payment refunded successfully');
+  .post('/:id/refund', {
+    params: t.Object({ id: t.String({ format: 'uuid' }) }),
+    body: t.Optional(t.Object({
+      amount: t.Optional(t.Number({ minimum: 0.01, maximum: 999999.99 })),
+    })),
+    hasRole: UserRole.ADMIN,
+    response: {
+      200: successSchema(),
+      400: errorSchema,
+      404: errorSchema,
+      409: errorSchema
     },
-    {
-      params: t.Object({ id: t.String({ format: 'uuid' }) }),
-      body: t.Optional(t.Object({
-        amount: t.Optional(t.Number({ minimum: 0.01, maximum: 999999.99 })),
-      })),
-      hasRole: UserRole.ADMIN,
-      response: {
-        200: successSchema(),
-        400: errorSchema,
-        404: errorSchema,
-        409: errorSchema
-      },
-      detail: { summary: 'Refund a completed payment (Admin only)' }
-    }
-  )
+    detail: { summary: 'Refund a completed payment (Admin only)' }
+  }, async ({ params, body }) => {
+    const payment = await paymentService.refundPayment(params.id, body?.amount);
+    return successResponse(payment, 'Payment refunded successfully');
+  })
 
-  .post(
-    '/:id/complete',
-    async ({ params }) => {
-      const payment = await paymentService.completeOfflinePayment(params.id);
-      return successResponse(payment, 'Payment marked as completed');
+  .post('/:id/complete', {
+    params: t.Object({ id: t.String({ format: 'uuid' }) }),
+    hasRole: UserRole.ADMIN,
+    response: {
+      200: successSchema(),
+      404: errorSchema,
+      409: errorSchema
     },
-    {
-      params: t.Object({ id: t.String({ format: 'uuid' }) }),
-      hasRole: UserRole.ADMIN,
-      response: {
-        200: successSchema(),
-        404: errorSchema,
-        409: errorSchema
-      },
-      detail: { summary: 'Mark an offline payment as completed (Admin only)' }
-    }
-  );
+    detail: { summary: 'Mark an offline payment as completed (Admin only)' }
+  }, async ({ params }) => {
+    const payment = await paymentService.completeOfflinePayment(params.id);
+    return successResponse(payment, 'Payment marked as completed');
+  });

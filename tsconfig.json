@@ -10,7 +10,7 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "types": [
-      "bun-types"
+      "bun"
     ],
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true,
