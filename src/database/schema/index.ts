@@ -26,4 +26,4 @@ export * from './brand';
 export * from './reviewMedia';
 export * from './sellerPayout';
 export * from './auditLog';
-export * from './giftCard';
+export * from './giftCard';export * from './apiKey';

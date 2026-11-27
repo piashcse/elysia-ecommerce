@@ -1,6 +1,6 @@
 import { Elysia, t } from 'elysia';
 import { AuthService } from '../service/AuthService';
-import { successResponse } from '../../../core/responses';
+import { successResponse, successSchema, errorSchema } from '../../../core/responses';
 import { authPlugin } from '../../../core/auth';
 import { jwtPlugin } from '../../../core/jwt';
 import { TOKEN, PASSWORD, JWT_ISSUER, JWT_AUDIENCE } from '../../../core/constants';
@@ -43,6 +43,7 @@ export const authController = new Elysia({ prefix: '/auth', tags: ['Auth'] })
         body: t.Object({
             email: t.String({ format: 'email', maxLength: 255 }),
             password: t.String({ minLength: 1, maxLength: PASSWORD.MAX_LENGTH }),
+            twoFactorCode: t.Optional(t.String({ pattern: '^[0-9]{6}$' })),
         }),
         response: {
             200: t.Object({
@@ -140,7 +141,33 @@ export const authController = new Elysia({ prefix: '/auth', tags: ['Auth'] })
     
         return successResponse({ token, refreshToken }, 'Token refreshed successfully');
     })
-    .post('/logout', {
+    .post('/2fa/setup', {
+    isAuth: true,
+    response: { 200: successSchema(), 404: errorSchema },
+    detail: { summary: 'Start two-factor authentication setup' }
+  }, async ({ user }) => successResponse(await authService.setupTwoFactor(user!.sub), 'Two-factor setup started'))
+  .post('/2fa/enable', {
+    isAuth: true,
+    body: t.Object({ code: t.String({ pattern: '^[0-9]{6}$' }) }),
+    response: { 200: successSchema(), 401: errorSchema },
+    detail: { summary: 'Enable two-factor authentication' }
+  }, async ({ user, body }) => {
+    await authService.enableTwoFactor(user!.sub, body.code);
+    return successResponse(null, 'Two-factor authentication enabled');
+  })
+  .post('/2fa/disable', {
+    isAuth: true,
+    body: t.Object({
+      password: t.String({ minLength: 1, maxLength: PASSWORD.MAX_LENGTH }),
+      code: t.String({ pattern: '^[0-9]{6}$' }),
+    }),
+    response: { 200: successSchema(), 401: errorSchema },
+    detail: { summary: 'Disable two-factor authentication' }
+  }, async ({ user, body }) => {
+    await authService.disableTwoFactor(user!.sub, body.password, body.code);
+    return successResponse(null, 'Two-factor authentication disabled');
+  })
+  .post('/logout', {
         isAuth: true,
         response: { 200: t.Any() },
         detail: { summary: 'Invalidate all sessions for the current user' }

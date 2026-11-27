@@ -19,6 +19,7 @@ import {
 import { UserRole } from '../../../core/roles';
 import envConfig from '../../../config/env';
 import { mailService } from '../../../services/mail.service';
+import { generateTotpSecret, otpauthUrl, verifyTotp } from '../../../utils/totp';
 
 interface RegisterInput {
   email: string;
@@ -30,6 +31,7 @@ interface RegisterInput {
 interface LoginInput {
   email: string;
   password: string;
+  twoFactorCode?: string;
 }
 
 const VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
@@ -124,12 +126,21 @@ export class AuthService {
       throw new UnauthorizedError('Invalid email or password');
     }
 
-    if (!user.isActive) {
+    if (!user.isActive || user.deletedAt) {
       throw new UnauthorizedError('User account is deactivated');
     }
 
     if (envConfig.REQUIRE_EMAIL_VERIFICATION && !user.emailVerified) {
       throw new ForbiddenError('Email address has not been verified', 'EMAIL_NOT_VERIFIED');
+    }
+
+    if (user.twoFactorEnabled) {
+      if (!data.twoFactorCode) {
+        throw new ForbiddenError('Two-factor authentication code required', 'TWO_FACTOR_REQUIRED');
+      }
+      if (!user.twoFactorSecret || !verifyTotp(user.twoFactorSecret, data.twoFactorCode)) {
+        throw new UnauthorizedError('Invalid two-factor authentication code', 'INVALID_TWO_FACTOR_CODE');
+      }
     }
 
     let password = user.password;
@@ -164,6 +175,39 @@ export class AuthService {
     }
 
     return user;
+  }
+
+  async setupTwoFactor(userId: string) {
+    const user = await this.findById(userId);
+    if (!user) throw new NotFoundError('User not found');
+    const secret = generateTotpSecret();
+    await db.update(users).set({ twoFactorSecret: secret, updatedAt: new Date() }).where(eq(users.id, userId));
+    return {
+      secret,
+      otpauthUrl: otpauthUrl(secret, user.email),
+    };
+  }
+
+  async enableTwoFactor(userId: string, code: string) {
+    const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    if (!user?.twoFactorSecret) throw new NotFoundError('Two-factor setup not started');
+    if (!verifyTotp(user.twoFactorSecret, code)) throw new UnauthorizedError('Invalid two-factor code', 'INVALID_TWO_FACTOR_CODE');
+    await db.update(users).set({ twoFactorEnabled: true, tokenVersion: sql`${users.tokenVersion} + 1`, updatedAt: new Date() }).where(eq(users.id, userId));
+  }
+
+  async disableTwoFactor(userId: string, password: string, code: string) {
+    const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    if (!user) throw new NotFoundError('User not found');
+    if (!(await comparePassword(password, user.password))) throw new UnauthorizedError('Invalid password');
+    if (user.twoFactorEnabled && (!user.twoFactorSecret || !verifyTotp(user.twoFactorSecret, code))) {
+      throw new UnauthorizedError('Invalid two-factor code', 'INVALID_TWO_FACTOR_CODE');
+    }
+    await db.update(users).set({ twoFactorEnabled: false, twoFactorSecret: null, tokenVersion: sql`${users.tokenVersion} + 1`, updatedAt: new Date() }).where(eq(users.id, userId));
+  }
+
+  private async findById(userId: string) {
+    const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    return user ?? null;
   }
 
   async logout(userId: string): Promise<void> {

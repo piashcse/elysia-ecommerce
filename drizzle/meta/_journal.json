@@ -64,6 +64,13 @@
       "when": 1795759443962,
       "tag": "0010_marketplace_admin",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1795759704327,
+      "tag": "0011_security_platform",
+      "breakpoints": true
     }
   ]
 }

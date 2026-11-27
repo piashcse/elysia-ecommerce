@@ -7,6 +7,7 @@ import { JwtPayload, CurrentUser } from '../utils/jwt';
 import { UserRole } from './roles';
 import { jwtPlugin } from './jwt';
 import { JWT_AUDIENCE, JWT_ISSUER } from './constants';
+import { ApiKeyService } from '../modules/auth/service/ApiKeyService';
 
 const unauthorized = (set: any, message = 'Authentication required') => {
   set.status = 401;
@@ -19,11 +20,23 @@ const forbidden = (set: any, message = 'Access denied') => {
 };
 
 const securityDetail = { security: [{ bearerAuth: [] }] };
+const apiKeyService = new ApiKeyService();
 
 export const authPlugin = new Elysia({ name: 'auth-plugin' })
     .use(jwtPlugin)
     .derive('global', async ({ jwt, headers }): Promise<{ user: CurrentUser | null }> => {
     const authHeader = headers['authorization'];
+    const apiKeyHeader = headers['x-api-key'];
+
+    if (!authHeader?.startsWith('Bearer ') && typeof apiKeyHeader === 'string') {
+        const apiUser = await apiKeyService.resolve(apiKeyHeader);
+        return {
+            user: apiUser
+                ? { sub: apiUser.id, email: apiUser.email, role: apiUser.role, ver: apiUser.tokenVersion }
+                : null,
+        };
+    }
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return { user: null };
     }
@@ -49,12 +62,13 @@ export const authPlugin = new Elysia({ name: 'auth-plugin' })
                 role: users.role,
                 isActive: users.isActive,
                 tokenVersion: users.tokenVersion,
+                deletedAt: users.deletedAt,
             })
             .from(users)
             .where(eq(users.id, payload.sub))
             .limit(1);
 
-        if (!current || !current.isActive || current.tokenVersion !== payload.ver) {
+        if (!current || !current.isActive || current.deletedAt || current.tokenVersion !== payload.ver) {
             return { user: null };
         }
 

@@ -42,6 +42,8 @@ import { payoutController } from './modules/seller/controller/PayoutController';
 import { reportController } from './modules/admin/controller/ReportController';
 import { auditController } from './modules/admin/controller/AuditController';
 import { auditMiddleware } from './modules/admin/middleware/audit';
+import { apiKeyController } from './modules/auth/controller/ApiKeyController';
+import { metricsController } from './modules/system/controller/MetricsController';
 
 const app = new Elysia();
 
@@ -200,6 +202,8 @@ app
   .use(payoutController)
   .use(reportController)
   .use(auditController)
+  .use(apiKeyController)
+  .use(metricsController)
 ;
 
 // OpenAPI documentation. The bearer scheme is also attached per protected

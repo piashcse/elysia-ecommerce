@@ -124,6 +124,23 @@ export const userController = new Elysia({ prefix: '/users', tags: ['User'] })
     }, 'Users retrieved successfully');
   })
 
+  // GDPR data export
+  .get('/me/export', {
+    isAuth: true,
+    response: { 200: successSchema(), 404: errorSchema },
+    detail: { summary: 'Export the current user data' }
+  }, async ({ user }) => successResponse(await userService.exportData(user!.sub), 'User data exported successfully'))
+
+  // Delete/anonymize the current account
+  .delete('/me', {
+    isAuth: true,
+    response: { 200: successSchema(t.Null()), 404: errorSchema, 409: errorSchema },
+    detail: { summary: 'Delete the current account and anonymize personal data' }
+  }, async ({ user }) => {
+    await userService.deleteAccount(user!.sub);
+    return successResponse(null, 'Account deleted successfully');
+  })
+
   // Get user by ID (admin only or self)
   .get('/:id', {
     params: idParams,
