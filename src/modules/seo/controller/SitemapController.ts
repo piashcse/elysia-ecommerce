@@ -1,4 +1,4 @@
-import { Elysia } from 'elysia';
+import { Elysia, t } from 'elysia';
 import { eq } from 'drizzle-orm';
 import { db } from '../../../config/database';
 import { brands, categories, products } from '../../../database/schema';
@@ -7,7 +7,13 @@ import envConfig from '../../../config/env';
 const escape = (value: string) => value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
 
 export const sitemapController = new Elysia({ tags: ['SEO'] })
-  .get('/sitemap.xml', async () => {
+  .get('/sitemap.xml', {
+    response: { 200: t.String() },
+    detail: {
+      summary: 'SEO sitemap (XML)',
+      description: 'Returns an XML sitemap of active products, categories, and brands.',
+    },
+  }, async () => {
     const [productRows, categoryRows, brandRows] = await Promise.all([
       db.select({ slug: products.slug }).from(products).where(eq(products.isActive, true)),
       db.select({ slug: categories.slug }).from(categories).where(eq(categories.isActive, true)),

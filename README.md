@@ -6,11 +6,24 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-7.0.2-3178C6?style=flat)
 ![Zod](https://img.shields.io/badge/Zod-4.6.7-3E67B1?style=flat)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg?style=flat)](https://www.apache.org/licenses/LICENSE-2.0)
+[![Docs](https://github.com/piashcse/elysia-ecommerce/actions/workflows/docs.yml/badge.svg)](https://piashcse.github.io/elysia-ecommerce/)
 <a href="https://github.com/piashcse">
   <img alt="Author" src="https://img.shields.io/static/v1?label=GitHub&message=piashcse&color=C51162&style=flat"/>
 </a>
 
 A modern, high-performance eCommerce backend built with Elysia.js, Bun, and Drizzle ORM. This project is designed with a clean, modular architecture and production-ready best practices, providing a complete solution for e-commerce platforms.
+
+## 📚 Documentation
+
+Full documentation — including a generated reference for every endpoint — is published at
+**<https://piashcse.github.io/elysia-ecommerce/>**.
+
+Local docs:
+
+```bash
+pip install -r requirements-docs.txt
+bun run docs:serve
+```
 
 ## 🚀 Core Features
 
@@ -91,6 +104,15 @@ src/
 ├── server.ts        # Server setup and middleware registration
 └── index.ts         # Application entry point
 ```
+
+Documentation lives in `docs/` and is built with MkDocs Material. The endpoint
+reference is generated from `docs/openapi.json`:
+
+```bash
+bun run docs:snapshot   # refresh the OpenAPI snapshot (server must be running)
+bun run docs:generate   # regenerate the Markdown API reference
+```
+
 
 ## 🌐 API Endpoints
 

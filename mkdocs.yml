@@ -1,0 +1,118 @@
+site_name: Elysia E-Commerce
+site_description: Production-oriented e-commerce backend built with Elysia.js, Bun, Drizzle ORM, and PostgreSQL.
+site_url: https://piashcse.github.io/elysia-ecommerce/
+repo_url: https://github.com/piashcse/elysia-ecommerce
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  icon:
+    logo: material/storefront-outline
+    repo: fontawesome/brands/github
+  palette:
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: green
+      accent: green
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: green
+      accent: green
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to system preference
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.path
+    - navigation.top
+    - navigation.tracking
+    - navigation.instant
+    - navigation.instant.progress
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.select
+    - content.tabs.link
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.snippets
+  - attr_list
+  - md_in_html
+  - tables
+  - def_list
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+extra_css:
+  - css/extra.css
+
+plugins:
+  - search
+  - meta
+
+nav:
+  - Overview:
+      - Overview: index.md
+      - Architecture: architecture.md
+      - Development: development.md
+      - Configuration: configuration.md
+      - Errors & Status Codes: errors.md
+      - Changelog: changelog.md
+
+  - API Reference:
+      - Endpoint Index: api-reference/index.md
+      - Authentication & API Keys: authentication.md
+      - Users & Profiles: users.md
+      - Seller Portal: sellers.md
+      - Products & Variants: products.md
+      - Categories: categories.md
+      - Brands: brands.md
+      - Reviews & Ratings: reviews.md
+      - Translations: translations.md
+      - Search & Synonyms: search.md
+
+  - Cart & Checkout:
+      - Cart: cart.md
+      - Wishlist: wishlist.md
+      - Checkout: checkout.md
+      - Coupons & Discounts: coupons.md
+      - Gift Cards: gift-cards.md
+
+  - Orders & Logistics:
+      - Orders: orders.md
+      - Payments & Methods: payments.md
+      - Shipping Methods: shipping.md
+      - Taxes: taxes.md
+      - Addresses: addresses.md
+      - Returns & RMA: returns.md
+
+  - Platform:
+      - Notifications & Email: notifications.md
+      - Currencies & FX: currencies.md
+      - Media Uploads: media.md
+      - Admin Reports & Audit: admin.md
+      - System & Monitoring: system.md
+      - SEO & Sitemap: seo.md

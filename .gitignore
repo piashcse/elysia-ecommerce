@@ -56,3 +56,6 @@ Thumbs.db
 QWEN.md
 # Uploaded media
 uploads/
+
+# MkDocs build output
+site/
