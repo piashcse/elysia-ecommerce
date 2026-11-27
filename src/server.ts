@@ -291,7 +291,10 @@ app.use(
 );
 
 // Health check endpoint with diagnostics
-app.get('/health', async ({ set }) => {
+app.get('/health', {
+  tags: ['System'],
+  detail: { summary: 'Health check and database readiness' },
+}, async ({ set }) => {
   const healthStatus: any = {
     status: 'OK',
     timestamp: new Date().toISOString(),
